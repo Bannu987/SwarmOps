@@ -22,7 +22,7 @@ import {
 } from 'recharts';
 import './App.css';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 // Agent configurations - 10 agents with real integration endpoints
 const AGENTS = [
@@ -665,6 +665,10 @@ function App() {
         }}
         isFullscreen={isFullscreen}
         setIsFullscreen={setIsFullscreen}
+        smartRoutingMode={smartRoutingMode}
+        setSmartRoutingMode={setSmartRoutingMode}
+        feedbackLoopRunning={feedbackLoopRunning}
+        triggerFeedbackLoop={triggerFeedbackLoop}
       />
 
       {/* Main Layout Container */}
@@ -884,12 +888,13 @@ function App() {
 }
 
 // Header Component
-function Header({ 
+function Header({
   selectedAgent, agentDropdownOpen, setAgentDropdownOpen, agents, setSelectedAgent,
   darkMode, setDarkMode, notificationsOpen, setNotificationsOpen, notifications,
-  setNotifications, userMenuOpen, setUserMenuOpen, setSettingsOpen, 
+  setNotifications, userMenuOpen, setUserMenuOpen, setSettingsOpen,
   setCommandPaletteOpen, multiAgentMode, setMultiAgentMode,
-  isFullscreen, setIsFullscreen
+  isFullscreen, setIsFullscreen, smartRoutingMode, setSmartRoutingMode,
+  feedbackLoopRunning, triggerFeedbackLoop
 }) {
   const unreadCount = notifications.filter(n => !n.read).length;
 

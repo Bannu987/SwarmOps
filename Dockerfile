@@ -14,8 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose port
+# Set default port (Railway will override with PORT env var)
+ENV PORT=8000
 EXPOSE 8000
 
-# Run the application
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application using shell form to expand $PORT
+CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}

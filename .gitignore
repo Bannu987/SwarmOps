@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment files
+.env
+backend/.env
+*.env.local
+google_service_account.json
+
+# Build outputs
+frontend/build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Runtime generated
+*.json.bak
+memory.json
+enhanced_memory.json
+test_memory_report.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Exports (generated files)
+MarketingOS_Export_*
+
+# Test coverage
+coverage/
+.coverage
+htmlcov/

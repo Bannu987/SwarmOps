@@ -1,17 +1,21 @@
 """
 Research Agent - Web-Powered Information Gatherer
-Uses Brave Search + Ollama to research topics
+Uses Brave Search + Groq to research topics
 """
 
-from langchain_ollama import OllamaLLM
+import os
+from dotenv import load_dotenv
+from groq import Groq
 from langchain_core.prompts import PromptTemplate
 from web_search import WebSearch
 
-# Initialize Ollama for analysis
+load_dotenv()
+
+# Initialize Groq for analysis
 print("🔧 Initializing Research Agent...")
-llm = OllamaLLM(model="llama3.2")
+groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
 search = WebSearch()
-print("✅ Research Agent ready!")
+print("✅ Research Agent ready! (Powered by Groq)")
 
 # Create research prompt template
 research_template = """You are a research analyst who synthesizes web search results into clear, actionable insights.
@@ -35,52 +39,58 @@ prompt = PromptTemplate(
     template=research_template
 )
 
-# Create the research chain
-research_chain = prompt | llm
+
+def _groq_analyze(prompt_text):
+    """Use Groq API directly for analysis"""
+    response = groq_client.chat.completions.create(
+        model=os.getenv('PRIMARY_TECHNICAL_MODEL', 'llama-3.3-70b-versatile'),
+        messages=[{"role": "user", "content": prompt_text}],
+        temperature=0.7,
+        max_tokens=2000
+    )
+    return response.choices[0].message.content
 
 
 def research_topic(topic, num_results=5):
     """
     Research a topic using web search + AI analysis
-    
+
     Args:
         topic (str): The topic to research
         num_results (int): Number of search results to analyze
-        
+
     Returns:
         dict: Research results with search data and analysis
     """
     print(f"\n🔬 Research Agent researching: '{topic}'")
     print(f"📡 Step 1: Searching the web...")
-    
+
     # Step 1: Search the web
     search_results = search.search(topic, max_results=num_results)
-    
+
     if not search_results:
         return {
             'topic': topic,
             'search_results': [],
             'analysis': "No search results found. Unable to research this topic."
         }
-    
+
     # Step 2: Format search results for analysis
     formatted_results = ""
     for result in search_results:
         formatted_results += f"\n{result['rank']}. {result['title']}\n"
         formatted_results += f"   {result['description']}\n"
         formatted_results += f"   Source: {result['url']}\n"
-    
+
     print(f"✅ Found {len(search_results)} sources")
     print(f"🤖 Step 2: Analyzing findings with AI...")
-    
+
     # Step 3: Analyze with AI
-    analysis = research_chain.invoke({
-        "topic": topic,
-        "search_results": formatted_results
-    })
-    
+    filled_prompt = prompt.format(topic=topic, search_results=formatted_results)
+    analysis = _groq_analyze(filled_prompt)
+
     print(f"✅ Research complete!")
-    
+
     return {
         'topic': topic,
         'search_results': search_results,

@@ -444,8 +444,7 @@ function App() {
       if (smartRoutingMode) {
         try {
           const response = await axios.post(`${API_BASE}/api/task`, {
-            task: currentInput,
-            context: {}
+            goal: currentInput
           });
           const agentMessage = {
             id: Date.now() + Math.random(),
@@ -485,8 +484,9 @@ function App() {
                 max_length: 2000
               });
             } else if (agent.id === 'crm') {
-              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
-                purpose: currentInput
+              response = await axios.post(`${API_BASE}/api/crm/email-sequence`, {
+                topic: currentInput,
+                num_emails: 3
               });
             } else if (agent.id === 'brand') {
               response = await axios.post(`${API_BASE}${agent.endpoint}`, {
@@ -510,10 +510,8 @@ function App() {
                 goal: "Increase conversions"
               });
             } else if (agent.id === 'ppc') {
-              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
-                goal: currentInput,
-                budget: 1000,
-                audience: "target audience"
+              response = await axios.post(`${API_BASE}/api/task`, {
+                goal: "PPC campaign help: " + currentInput
               });
             } else if (agent.id === 'research') {
               response = await axios.post(`${API_BASE}${agent.endpoint}`, {
@@ -521,21 +519,23 @@ function App() {
                 depth: "comprehensive"
               });
             } else if (agent.id === 'seo') {
-              response = await axios.get(`${API_BASE}/api/seo/rankings`);
+              response = await axios.get(`${API_BASE}/api/seo/opportunities?topic=${encodeURIComponent(currentInput)}`);
             } else if (agent.id === 'analytics') {
               response = await axios.get(`${API_BASE}/api/analytics/dashboard`);
             } else if (agent.id === 'smm') {
-              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
-                content: currentInput,
-                platforms: ['twitter', 'linkedin', 'instagram'],
-                schedule: 'optimal'
+              response = await axios.post(`${API_BASE}/api/smm/post`, {
+                platform: "linkedin",
+                topic: currentInput,
+                brand_voice: "Professional and engaging",
+                goal: "Increase engagement",
+                brand_name: "Brand"
               });
             }
 
             const agentMessage = {
               id: Date.now() + Math.random(),
               role: 'agent',
-              content: response?.data?.result || JSON.stringify(response?.data, null, 2) || 'Response received',
+              content: response?.data?.result || response?.data?.data?.analysis || response?.data?.post || (typeof response?.data === 'object' ? JSON.stringify(response?.data, null, 2) : String(response?.data)) || 'Response received',
               agentId: agent.id,
               agentName: agent.name,
               agentIcon: agent.iconEmoji,
@@ -552,7 +552,7 @@ function App() {
             const errorMsg = {
               id: Date.now() + Math.random(),
               role: 'agent',
-              content: `⚠️ ${agent.name} encountered an issue: ${agentErr.response?.data?.detail || 'Service temporarily unavailable'}`,
+              content: `⚠️ ${agent.name} encountered an issue: ${typeof agentErr.response?.data?.detail === 'string' ? agentErr.response.data.detail : agentErr.message || 'Service temporarily unavailable. Please try again.'}`,
               agentId: agent.id,
               agentName: agent.name,
               agentIcon: agent.iconEmoji,
@@ -570,7 +570,7 @@ function App() {
       const errorMessage = {
         id: Date.now(),
         role: 'system',
-        content: `Error: ${err.response?.data?.detail || 'Failed to connect to API. Make sure backend is running on port 8000.'}`,
+        content: `Error: ${typeof err.response?.data?.detail === 'string' ? err.response.data.detail : err.message || 'Failed to connect to API. Make sure backend is running.'}`,
         timestamp: new Date().toISOString()
       };
       addMessage(errorMessage);

@@ -37,6 +37,27 @@ def get_nexus():
         _nexus = Nexus()
     return _nexus
 
+
+def _extract_text(result):
+    """Extract displayable text from any agent result (str, dict, list, None)."""
+    if result is None:
+        return None
+    if isinstance(result, str):
+        return result
+    if isinstance(result, dict):
+        # Try common text keys in order
+        for key in ("analysis", "ai_analysis", "report", "result", "content", "post", "calendar"):
+            if key in result and isinstance(result[key], str):
+                return result[key]
+        # Return full dict as formatted string
+        import json
+        return json.dumps(result, indent=2, default=str)
+    if isinstance(result, list):
+        import json
+        return json.dumps(result, indent=2, default=str)
+    return str(result)
+
+
 # ============================================================================
 # REQUEST MODELS
 # ============================================================================
@@ -176,7 +197,7 @@ def execute_task(request: TaskRequest):
     try:
         nexus = get_nexus()
         result = nexus.execute_task(request.goal)
-        return {"success": True, "goal": request.goal, "result": result}
+        return {"success": True, "goal": request.goal, "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -195,7 +216,7 @@ def run_debate(request: DebateRequest):
     try:
         nexus = get_nexus()
         result = nexus.resolve_conflict(request.topic, request.agent_positions)
-        return {"success": True, "debate": result}
+        return {"success": True, "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -209,7 +230,7 @@ def run_feedback_loop(request: FeedbackLoopRequest = None):
     try:
         nexus = get_nexus()
         result = nexus.run_feedback_loop()
-        return {"success": True, "result": result, "trigger": request.trigger if request else "manual"}
+        return {"success": True, "result": _extract_text(result), "trigger": request.trigger if request else "manual"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -236,20 +257,25 @@ def publish_content_endpoint(request: ContentPublishRequest):
             status=request.status,
             seo_keywords=request.seo_keywords
         )
-        return {"success": True, "agent": "content", "result": result}
+        return {"success": True, "agent": "content", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
-# ANALYTICS AGENT
+# ANALYTICS AGENT — falls back to AI analysis if GA4 not connected
 # ============================================================================
 
 @app.get("/api/analytics/dashboard")
 def analytics_dashboard(days: int = 30):
     try:
-        from analytics_agent import get_live_dashboard
+        from analytics_agent import get_live_dashboard, analyze_performance
         result = get_live_dashboard(days=days)
-        return {"success": True, "agent": "analytics", "data": result}
+        if result is None:
+            result = analyze_performance(
+                f"Marketing analytics dashboard for last {days} days",
+                "GA4 not connected. Generating sample analysis with AI."
+            )
+        return {"success": True, "agent": "analytics", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -258,51 +284,61 @@ def detect_anomalies(days: int = 7):
     try:
         from analytics_agent import detect_live_anomalies
         result = detect_live_anomalies(days=days)
-        return {"success": True, "agent": "analytics", "anomalies": result}
+        if result is None:
+            result = "Anomaly detection requires Google Analytics 4 to be connected. Please configure GA4 in your environment variables."
+        return {"success": True, "agent": "analytics", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
-# SEO AGENT
+# SEO AGENT — falls back to AI analysis if integrations not connected
 # ============================================================================
 
 @app.get("/api/seo/rankings")
 def get_rankings(days: int = 28):
     try:
-        from seo_agent import get_real_rankings
+        from seo_agent import get_real_rankings, analyze_seo
         result = get_real_rankings(days=days)
-        return {"success": True, "agent": "seo", "data": result}
+        if result is None:
+            result = analyze_seo("website SEO performance")
+        return {"success": True, "agent": "seo", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/seo/keywords/{keyword}")
 def get_keyword_data(keyword: str, location_code: int = 2840):
     try:
-        from seo_agent import get_real_keyword_data
+        from seo_agent import get_real_keyword_data, find_keywords
         result = get_real_keyword_data(keyword, location_code=location_code)
-        return {"success": True, "agent": "seo", "data": result}
+        if result is None:
+            result = find_keywords(keyword)
+        return {"success": True, "agent": "seo", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/seo/opportunities")
 def keyword_opportunities(topic: str = "marketing"):
     try:
-        from seo_agent import find_keyword_opportunities
+        from seo_agent import find_keyword_opportunities, find_keywords
         result = find_keyword_opportunities(topic)
-        return {"success": True, "agent": "seo", "data": result}
+        if result is None:
+            result = find_keywords(topic)
+        return {"success": True, "agent": "seo", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
-# PPC AGENT
+# PPC AGENT — falls back to AI strategy if Google Ads not connected
 # ============================================================================
 
 @app.get("/api/ppc/campaigns")
 def get_campaigns(days: int = 7):
     try:
-        from ppc_agent import get_real_campaign_performance
+        from ppc_agent import get_real_campaign_performance, create_campaign_strategy
         result = get_real_campaign_performance(days=days)
-        return {"success": True, "agent": "ppc", "campaigns": result}
+        if result is None:
+            result = create_campaign_strategy("PPC campaign performance overview")
+        return {"success": True, "agent": "ppc", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -318,7 +354,7 @@ def create_campaign(request: CampaignRequest):
             descriptions=request.descriptions,
             landing_url=request.landing_url
         )
-        return {"success": True, "agent": "ppc", "data": result}
+        return {"success": True, "agent": "ppc", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -327,12 +363,14 @@ def optimize_campaigns(days: int = 7):
     try:
         from ppc_agent import auto_optimize_campaigns
         result = auto_optimize_campaigns(days=days)
-        return {"success": True, "agent": "ppc", "recommendations": result}
+        if result is None:
+            result = "Google Ads not connected. Connect Google Ads to get optimization recommendations."
+        return {"success": True, "agent": "ppc", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
-# CRM AGENT
+# CRM AGENT — falls back to AI email writing if HubSpot not connected
 # ============================================================================
 
 @app.get("/api/crm/contacts")
@@ -340,7 +378,9 @@ def get_contacts(limit: int = 100):
     try:
         from crm_agent import get_real_contacts
         result = get_real_contacts(limit=limit)
-        return {"success": True, "agent": "crm", "contacts": result}
+        if result is None:
+            result = "HubSpot CRM not connected. Configure HUBSPOT_ACCESS_TOKEN to pull real contacts."
+        return {"success": True, "agent": "crm", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -354,7 +394,7 @@ def add_contact(request: ContactRequest):
             last_name=request.last_name,
             company=request.company
         )
-        return {"success": True, "agent": "crm", "contact": result}
+        return {"success": True, "agent": "crm", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -363,7 +403,9 @@ def email_performance():
     try:
         from crm_agent import get_real_email_performance
         result = get_real_email_performance()
-        return {"success": True, "agent": "crm", "stats": result}
+        if result is None:
+            result = "HubSpot not connected. Configure HUBSPOT_ACCESS_TOKEN to see email performance."
+        return {"success": True, "agent": "crm", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -385,7 +427,7 @@ def get_social_trends(industry: str = "marketing"):
     try:
         from smm_agent import analyze_trends
         result = analyze_trends(industry=industry, platforms=["instagram", "linkedin", "twitter"])
-        return {"success": True, "agent": "smm", "trends": result}
+        return {"success": True, "agent": "smm", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -400,7 +442,7 @@ def create_social_post(request: SocialPostRequest):
             goal=request.goal,
             brand_name=request.brand_name
         )
-        return {"success": True, "agent": "smm", "post": result}
+        return {"success": True, "agent": "smm", "result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -415,7 +457,7 @@ def get_content_calendar(brand_name: str = "Brand", industry: str = "General", p
             posts_per_week=posts_per_week,
             target_audience="General audience"
         )
-        return {"success": True, "agent": "smm", "calendar": result}
+        return {"success": True, "agent": "smm", "result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -482,7 +524,7 @@ def research_topic_endpoint(request: ResearchRequest):
     try:
         from research_agent import research_topic
         result = research_topic(request.topic)
-        return {"success": True, "agent": "research", "result": result}
+        return {"success": True, "agent": "research", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -491,7 +533,7 @@ def research_topic_get(topic: str):
     try:
         from research_agent import research_topic
         result = research_topic(topic)
-        return {"success": True, "agent": "research", "result": result}
+        return {"success": True, "agent": "research", "result": _extract_text(result)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

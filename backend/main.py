@@ -151,6 +151,17 @@ def root():
 def health():
     return {"status": "healthy", "agents": 10}
 
+@app.get("/api/test-providers")
+def test_providers():
+    """Test all AI model providers and search engines"""
+    try:
+        from model_router import test_all_providers
+        results = test_all_providers()
+        working = sum(1 for v in results.values() if v == "ok")
+        return {"providers": results, "working": working, "total": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/integrations/status")
 def integration_status():
     """Check which integrations are connected"""

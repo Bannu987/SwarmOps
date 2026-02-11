@@ -114,11 +114,11 @@ def _get_gemini():
 # ---------------------------------------------------------------------------
 
 OPENROUTER_MODELS = {
-    "deepseek-chat-v3": "deepseek/deepseek-chat-v3-0324:free",
-    "deepseek-r1-zero": "deepseek/deepseek-r1-zero:free",
-    "gemini-2.5-pro": "google/gemini-2.5-pro-exp-03-25:free",
+    "deepseek-r1": "deepseek/deepseek-r1-0528:free",
     "llama-3.3-70b": "meta-llama/llama-3.3-70b-instruct:free",
     "mistral-small": "mistralai/mistral-small-3.1-24b-instruct:free",
+    "hermes-405b": "nousresearch/hermes-3-llama-3.1-405b:free",
+    "qwen3-coder": "qwen/qwen3-coder:free",
 }
 
 NVIDIA_MODELS = {
@@ -154,7 +154,8 @@ def _call_groq(prompt: str, system_prompt: str = "", model: str = "llama-3.3-70b
 
 def _call_openai_compat(client, model: str, prompt: str, system_prompt: str = "",
                         max_tokens: int = 4096, temperature: float = 0.7) -> Optional[str]:
-    """Call any OpenAI-compatible API (OpenRouter, NVIDIA, DeepSeek)."""
+    """Call any OpenAI-compatible API (OpenRouter, NVIDIA, DeepSeek).
+    Handles reasoning models that put output in reasoning_content."""
     if client is None:
         return None
     messages = []
@@ -165,11 +166,16 @@ def _call_openai_compat(client, model: str, prompt: str, system_prompt: str = ""
         model=model, messages=messages,
         max_tokens=max_tokens, temperature=temperature,
     )
-    return resp.choices[0].message.content
+    msg = resp.choices[0].message
+    content = msg.content
+    # Reasoning models (Kimi K2.5, DeepSeek R1) may put output in reasoning_content
+    if not content:
+        content = getattr(msg, "reasoning_content", None)
+    return content
 
 
 def _call_openrouter(prompt: str, system_prompt: str = "",
-                     model_key: str = "deepseek-chat-v3",
+                     model_key: str = "llama-3.3-70b",
                      max_tokens: int = 4096, temperature: float = 0.7) -> Optional[str]:
     client = _get_openrouter()
     model_id = OPENROUTER_MODELS.get(model_key, model_key)
@@ -292,26 +298,28 @@ def _build_tier_chain(tier: int):
         return [
             (lambda p, s, mt, t: _call_groq(p, s, "llama-3.3-70b-versatile", mt, t),
              "llama-3.3-70b-versatile", "groq"),
-            (lambda p, s, mt, t: _call_openrouter(p, s, "deepseek-chat-v3", mt, t),
-             "deepseek-chat-v3-0324:free", "openrouter"),
             (lambda p, s, mt, t: _call_openrouter(p, s, "llama-3.3-70b", mt, t),
              "llama-3.3-70b-instruct:free", "openrouter"),
+            (lambda p, s, mt, t: _call_openrouter(p, s, "mistral-small", mt, t),
+             "mistral-small-3.1-24b:free", "openrouter"),
         ]
     elif tier == 2:  # Content generation
         return [
             (lambda p, s, mt, t: _call_groq(p, s, "llama-3.3-70b-versatile", mt, t),
              "llama-3.3-70b-versatile", "groq"),
-            (lambda p, s, mt, t: _call_openrouter(p, s, "deepseek-chat-v3", mt, t),
-             "deepseek-chat-v3-0324:free", "openrouter"),
+            (lambda p, s, mt, t: _call_openrouter(p, s, "llama-3.3-70b", mt, t),
+             "llama-3.3-70b-instruct:free", "openrouter"),
             (lambda p, s, mt, t: _call_openrouter(p, s, "mistral-small", mt, t),
              "mistral-small-3.1-24b:free", "openrouter"),
+            (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
+             "gemini-2.0-flash", "gemini"),
         ]
     elif tier == 3:  # Strategic reasoning
         return [
-            (lambda p, s, mt, t: _call_openrouter(p, s, "gemini-2.5-pro", mt, t),
-             "gemini-2.5-pro-exp:free", "openrouter"),
-            (lambda p, s, mt, t: _call_openrouter(p, s, "deepseek-r1-zero", mt, t),
-             "deepseek-r1-zero:free", "openrouter"),
+            (lambda p, s, mt, t: _call_openrouter(p, s, "deepseek-r1", mt, t),
+             "deepseek-r1-0528:free", "openrouter"),
+            (lambda p, s, mt, t: _call_openrouter(p, s, "hermes-405b", mt, t),
+             "hermes-3-llama-3.1-405b:free", "openrouter"),
             (lambda p, s, mt, t: _call_nvidia(p, s, "kimi-k2.5", mt, t),
              "kimi-k2.5", "nvidia"),
             (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
@@ -321,6 +329,8 @@ def _build_tier_chain(tier: int):
         return [
             (lambda p, s, mt, t: _call_nvidia(p, s, "kimi-k2.5", mt, t),
              "kimi-k2.5", "nvidia"),
+            (lambda p, s, mt, t: _call_openrouter(p, s, "deepseek-r1", mt, t),
+             "deepseek-r1-0528:free", "openrouter"),
             (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
              "gemini-2.0-flash", "gemini"),
             (lambda p, s, mt, t: _call_groq(p, s, "llama-3.3-70b-versatile", mt, t),
@@ -571,20 +581,27 @@ def test_all_providers() -> dict:
     except Exception as e:
         results["gemini"] = f"error: {e}"
 
-    # OpenRouter
+    # OpenRouter — try multiple free models in case one is rate-limited
     if os.getenv("OPENROUTER_API_KEY"):
-        try:
-            r = _call_openrouter(test_prompt, model_key="deepseek-chat-v3", max_tokens=50)
-            results["openrouter"] = "ok" if r else "no response"
-        except Exception as e:
-            results["openrouter"] = f"error: {e}"
+        or_ok = False
+        for or_model in ["llama-3.3-70b", "mistral-small", "qwen3-coder"]:
+            try:
+                r = _call_openrouter(test_prompt, model_key=or_model, max_tokens=50)
+                if r:
+                    results["openrouter"] = f"ok (via {or_model})"
+                    or_ok = True
+                    break
+            except Exception:
+                continue
+        if not or_ok:
+            results["openrouter"] = "all free models rate-limited, try again later"
     else:
         results["openrouter"] = "skipped - no key"
 
     # NVIDIA
     if os.getenv("NVIDIA_API_KEY"):
         try:
-            r = _call_nvidia(test_prompt, model_key="kimi-k2.5", max_tokens=50)
+            r = _call_nvidia(test_prompt, model_key="kimi-k2.5", max_tokens=512)
             results["nvidia"] = "ok" if r else "no response"
         except Exception as e:
             results["nvidia"] = f"error: {e}"

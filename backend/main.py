@@ -9,6 +9,13 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import sys
 import os
+import io
+
+# Fix Windows encoding — agent modules print emoji that crash charmap codec
+if sys.stdout and hasattr(sys.stdout, 'buffer'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+if sys.stderr and hasattr(sys.stderr, 'buffer'):
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -270,10 +277,10 @@ def analytics_dashboard(days: int = 30):
     try:
         from analytics_agent import get_live_dashboard, analyze_performance
         result = get_live_dashboard(days=days)
-        if result is None:
+        if result is None or (isinstance(result, str) and "❌" in result):
             result = analyze_performance(
                 f"Marketing analytics dashboard for last {days} days",
-                "GA4 not connected. Generating sample analysis with AI."
+                "GA4 not connected. Generating AI-powered sample analysis based on industry benchmarks."
             )
         return {"success": True, "agent": "analytics", "result": _extract_text(result)}
     except Exception as e:
@@ -534,6 +541,98 @@ def research_topic_get(topic: str):
         from research_agent import research_topic
         result = research_topic(topic)
         return {"success": True, "agent": "research", "result": _extract_text(result)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# UNIFIED CHAT ENDPOINT — single entry point for all agents
+# ============================================================================
+
+class ChatRequest(BaseModel):
+    message: str
+    agent: str = "nexus"
+
+@app.post("/api/chat")
+def chat(request: ChatRequest):
+    """Unified chat endpoint — routes message to the appropriate agent"""
+    try:
+        agent = request.agent.lower().strip()
+        msg = request.message
+
+        if agent == "content":
+            from content_agent import generate_content
+            result = generate_content(msg)
+            return {"success": True, "agent": "content", "result": result}
+
+        elif agent == "seo":
+            from seo_agent import find_keyword_opportunities, find_keywords
+            result = find_keyword_opportunities(msg)
+            if result is None:
+                result = find_keywords(msg)
+            return {"success": True, "agent": "seo", "result": _extract_text(result)}
+
+        elif agent == "analytics":
+            from analytics_agent import get_live_dashboard, analyze_performance
+            result = get_live_dashboard(days=30)
+            if result is None or (isinstance(result, str) and "❌" in result):
+                result = analyze_performance(msg, "No GA4 data available. Analyze based on the request using industry benchmarks.")
+            return {"success": True, "agent": "analytics", "result": _extract_text(result)}
+
+        elif agent == "ppc":
+            from ppc_agent import get_real_campaign_performance, create_campaign_strategy
+            result = get_real_campaign_performance(days=7)
+            if result is None:
+                result = create_campaign_strategy(msg)
+            return {"success": True, "agent": "ppc", "result": _extract_text(result)}
+
+        elif agent == "crm":
+            from crm_agent import create_email_sequence
+            result = create_email_sequence(msg, num_emails=3)
+            return {"success": True, "agent": "crm", "result": result}
+
+        elif agent == "smm":
+            from smm_agent import write_platform_post
+            result = write_platform_post(
+                platform="linkedin", topic=msg,
+                brand_voice="Professional and engaging",
+                goal="engagement", brand_name="Brand"
+            )
+            return {"success": True, "agent": "smm", "result": result}
+
+        elif agent == "brand":
+            from brand_strategist_agent import create_brand_strategy
+            result = create_brand_strategy(
+                company_name="Company", industry="General",
+                target_audience="General audience", unique_value=msg
+            )
+            return {"success": True, "agent": "brand", "result": result}
+
+        elif agent in ("web_ux", "webux"):
+            from web_ux_agent import design_landing_page
+            result = design_landing_page(
+                product=msg, target_audience="General audience",
+                goal="conversions"
+            )
+            return {"success": True, "agent": "web_ux", "result": result}
+
+        elif agent == "cro":
+            from cro_agent import analyze_funnel
+            result = analyze_funnel(
+                funnel_steps=msg, conversion_data="",
+                goal="increase conversions"
+            )
+            return {"success": True, "agent": "cro", "result": result}
+
+        elif agent == "research":
+            from research_agent import research_topic
+            result = research_topic(msg)
+            return {"success": True, "agent": "research", "result": _extract_text(result)}
+
+        else:  # "nexus" or anything else → smart routing
+            nexus = get_nexus()
+            result = nexus.execute_task(msg)
+            return {"success": True, "agent": "nexus", "result": _extract_text(result)}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

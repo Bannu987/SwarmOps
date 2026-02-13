@@ -1,11 +1,11 @@
 """
 The Nexus - Master Orchestrator (UPGRADED v4.0 → 2.0)
 Smart routing to 10 specialized agents with advanced workflows
-+ Budget Management + Agent Debate + Performance Tracking
++ Budget Management + Agent Debate + Performance Tracking + Pipeline Execution
 """
 
-from langchain_ollama import OllamaLLM
-from langchain_core.prompts import PromptTemplate
+import asyncio
+from model_router import call_model_sync
 from content_agent import generate_content
 from research_agent import research_topic, quick_research
 from seo_agent import analyze_seo, find_keywords, competitor_analysis
@@ -175,7 +175,6 @@ class Nexus:
     def __init__(self, budget_limit: float = 10000):
         """Initialize The Nexus with enhanced capabilities"""
         print("🧠 Initializing The Nexus (Master Orchestrator - v4.0 → 2.0 UPGRADE)...")
-        self.brain = OllamaLLM(model="llama3.2")
         self.memory = MemorySystem()
         
         # NEW: MarketingOS 2.0 Features
@@ -208,13 +207,295 @@ class Nexus:
         for agent_name, description in self.available_agents.items():
             print(f"   - {agent_name}: {description}")
     
+    def detect_pipeline(self, user_goal: str) -> dict:
+        """
+        Detect if the task requires multiple agents in a pipeline.
+
+        Args:
+            user_goal: The user's high-level goal
+
+        Returns:
+            {
+                "is_pipeline": bool,
+                "pipeline": list of agent names or False,
+                "reasoning": str
+            }
+        """
+        goal_lower = user_goal.lower()
+
+        # FULL CAMPAIGN
+        if any(phrase in goal_lower for phrase in ["full campaign", "complete campaign", "entire campaign", "full marketing"]):
+            return {
+                "is_pipeline": True,
+                "pipeline": ["seo", "content", "ppc", "smm", "crm"],
+                "reasoning": "Full marketing campaign detected — SEO → Content → PPC/SMM/CRM in parallel"
+            }
+
+        # SEO + CONTENT
+        if any(phrase in goal_lower for phrase in [
+            "find keywords and write",
+            "keywords and blog",
+            "seo and content",
+            "keyword research and write"
+        ]) or ("keywords for" in goal_lower and "write" in goal_lower):
+            return {
+                "is_pipeline": True,
+                "pipeline": ["seo", "content"],
+                "reasoning": "SEO keyword research needed before content creation"
+            }
+
+        # RESEARCH + PPC
+        if ("research" in goal_lower and "ad" in goal_lower) or ("research" in goal_lower and "ppc" in goal_lower):
+            return {
+                "is_pipeline": True,
+                "pipeline": ["research", "ppc"],
+                "reasoning": "Market research needed before ad campaign creation"
+            }
+
+        # CONTENT + SMM
+        if ("write" in goal_lower or "content" in goal_lower) and ("post it" in goal_lower or "share" in goal_lower or "social" in goal_lower):
+            return {
+                "is_pipeline": True,
+                "pipeline": ["content", "smm"],
+                "reasoning": "Content creation followed by social media distribution"
+            }
+
+        # ANALYTICS + CRO
+        if ("analyze" in goal_lower and "optimize" in goal_lower) or ("performance" in goal_lower and "conversion" in goal_lower):
+            return {
+                "is_pipeline": True,
+                "pipeline": ["analytics", "cro"],
+                "reasoning": "Analytics analysis followed by conversion optimization"
+            }
+
+        # No pipeline detected
+        return {
+            "is_pipeline": False,
+            "pipeline": False,
+            "reasoning": "Single-agent task"
+        }
+
+    async def run_pipeline(self, departments: list, instruction: str) -> dict:
+        """
+        Run agents in sequence/parallel pipeline, passing output between steps.
+
+        Pipeline rules:
+        - ["seo", "content"] → serial (SEO keywords → Content with keywords)
+        - ["seo", "content", "ppc", "smm", "crm"] → SEO serial, Content serial, then PPC/SMM/CRM parallel
+        - ["analytics", "cro"] → serial (Analytics → CRO with insights)
+
+        Args:
+            departments: List of agent names in execution order
+            instruction: The user's original instruction
+
+        Returns:
+            {
+                "pipeline": true,
+                "steps": [{"department": "seo", "result": "...", "confidence": 0.82, "latency_ms": 1200}, ...],
+                "total_latency_ms": 8500,
+                "departments_used": ["seo", "content", "ppc"]
+            }
+        """
+        import time
+
+        print(f"\n🔗 PIPELINE EXECUTION: {' → '.join(departments)}")
+        print("=" * 60)
+
+        steps = []
+        total_start = time.time()
+        context = ""  # Accumulated context from previous steps
+
+        # Determine parallel execution points
+        # For full campaign: SEO (serial) → Content (serial) → PPC/SMM/CRM (parallel)
+        if departments == ["seo", "content", "ppc", "smm", "crm"]:
+            serial_agents = ["seo", "content"]
+            parallel_agents = ["ppc", "smm", "crm"]
+        else:
+            # Default: all serial
+            serial_agents = departments
+            parallel_agents = []
+
+        # Execute serial agents
+        for dept in serial_agents:
+            step_start = time.time()
+            print(f"\n--- Step: {dept.upper()} Agent ---")
+
+            # Build prompt with context from previous steps
+            if context:
+                prompt = f"{context}\n\nNow, based on the above context: {instruction}"
+            else:
+                prompt = instruction
+
+            try:
+                # Execute agent
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None, self._execute_single_step, dept, prompt
+                )
+
+                latency = int((time.time() - step_start) * 1000)
+
+                # Extract confidence from Skeptic if available
+                confidence = 0.75  # Default confidence
+
+                steps.append({
+                    "department": dept,
+                    "result": result[:500] + "..." if len(result) > 500 else result,
+                    "full_result": result,  # Keep full result for next step's context
+                    "confidence": confidence,
+                    "latency_ms": latency
+                })
+
+                # Add to context for next step
+                context += f"\n\n[{dept.upper()} OUTPUT]:\n{result[:300]}..."
+
+                print(f"✅ {dept.upper()} completed ({latency}ms)")
+
+            except Exception as e:
+                print(f"❌ {dept.upper()} failed: {e}")
+                steps.append({
+                    "department": dept,
+                    "result": f"Error: {e}",
+                    "full_result": f"Error: {e}",
+                    "confidence": 0.0,
+                    "latency_ms": int((time.time() - step_start) * 1000)
+                })
+
+        # Execute parallel agents
+        if parallel_agents:
+            print(f"\n--- Parallel Execution: {', '.join([a.upper() for a in parallel_agents])} ---")
+
+            parallel_tasks = []
+            for dept in parallel_agents:
+                # Build prompt with accumulated context
+                if context:
+                    prompt = f"{context}\n\nNow, based on the above context: {instruction}"
+                else:
+                    prompt = instruction
+
+                # Create async task
+                task = asyncio.get_event_loop().run_in_executor(
+                    None, self._execute_single_step, dept, prompt
+                )
+                parallel_tasks.append((dept, task, time.time()))
+
+            # Wait for all parallel tasks to complete
+            for dept, task, start_time in parallel_tasks:
+                try:
+                    result = await task
+                    latency = int((time.time() - start_time) * 1000)
+                    confidence = 0.75
+
+                    steps.append({
+                        "department": dept,
+                        "result": result[:500] + "..." if len(result) > 500 else result,
+                        "full_result": result,
+                        "confidence": confidence,
+                        "latency_ms": latency
+                    })
+
+                    print(f"✅ {dept.upper()} completed ({latency}ms)")
+
+                except Exception as e:
+                    print(f"❌ {dept.upper()} failed: {e}")
+                    steps.append({
+                        "department": dept,
+                        "result": f"Error: {e}",
+                        "full_result": f"Error: {e}",
+                        "confidence": 0.0,
+                        "latency_ms": int((time.time() - time.time()) * 1000)
+                    })
+
+        total_latency = int((time.time() - total_start) * 1000)
+
+        print("\n" + "=" * 60)
+        print(f"✅ PIPELINE COMPLETE ({total_latency}ms total)")
+
+        # Log to memory
+        try:
+            self.memory.log_task(
+                task_description=f"PIPELINE: {instruction}",
+                result_summary=f"Executed {len(steps)} agents: {', '.join(departments)}",
+                agent_used="pipeline:" + "+".join(departments)
+            )
+        except Exception:
+            pass
+
+        return {
+            "pipeline": True,
+            "steps": steps,
+            "total_latency_ms": total_latency,
+            "departments_used": departments
+        }
+
+    def _execute_single_step(self, department: str, prompt: str) -> str:
+        """
+        Execute a single agent synchronously (called from run_pipeline).
+
+        Args:
+            department: Agent name (e.g., "seo", "content")
+            prompt: The prompt for this agent
+
+        Returns:
+            Result string from the agent
+        """
+        # Map department name to agent function
+        if department == "seo":
+            from seo_agent import find_keywords
+            return find_keywords(prompt)
+
+        elif department == "content":
+            from content_agent import generate_content
+            return generate_content(prompt)
+
+        elif department == "ppc":
+            from ppc_agent import create_campaign_strategy
+            return create_campaign_strategy(prompt)
+
+        elif department == "smm":
+            from smm_agent import write_platform_post
+            return write_platform_post(
+                platform="linkedin", topic=prompt,
+                brand_voice="Professional", goal="engagement",
+                brand_name="Brand"
+            )
+
+        elif department == "crm":
+            from crm_agent import create_email_sequence
+            return create_email_sequence(prompt, num_emails=3)
+
+        elif department == "analytics":
+            from analytics_agent import analyze_performance
+            return analyze_performance(prompt, "Pipeline analysis step")
+
+        elif department == "cro":
+            from cro_agent import analyze_funnel
+            return analyze_funnel(prompt, "", "Optimize conversion")
+
+        elif department == "research":
+            from research_agent import research_topic
+            result = research_topic(prompt)
+            if isinstance(result, dict):
+                return result.get("analysis", str(result))
+            return str(result)
+
+        elif department == "brand":
+            from brand_strategist_agent import create_brand_strategy
+            return create_brand_strategy("Brand", "General", "General", prompt)
+
+        elif department == "webux":
+            from web_ux_agent import design_landing_page
+            return design_landing_page(prompt, "General", "conversions")
+
+        else:
+            return f"Unknown department: {department}"
+
     def smart_route(self, user_goal):
         """
         Intelligently analyze the goal and decide which agent(s) to use
-        
+
         Args:
             user_goal (str): The user's high-level goal
-            
+
         Returns:
             str: The name of the best agent for this task
         """

@@ -1,12 +1,12 @@
 """
 Brand Strategist Agent - MarketingOS 2.0
 Guardian of brand DNA and market positioning
-Now using Groq Cloud AI
+Uses model_router for multi-provider AI with automatic fallback
 """
 
-from groq import Groq
 import os
 from dotenv import load_dotenv
+from model_router import call_model_sync
 
 # Load environment variables
 load_dotenv()
@@ -16,15 +16,13 @@ class BrandStrategistAgent:
     """
     Brand Strategist Agent
     Ensures brand consistency and develops positioning strategies
-    Powered by Groq Cloud AI (llama-3.3-70b-versatile)
+    Uses multi-provider model router with automatic fallback
     """
-    
+
     def __init__(self):
-        """Initialize the Brand Strategist Agent with Groq"""
+        """Initialize the Brand Strategist Agent"""
         print("🎨 Initializing Brand Strategist Agent...")
-        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.model = "llama-3.3-70b-versatile"  # Best for creative strategy
-        print("✅ Brand Strategist Agent ready (Groq - Cloud AI)!")
+        print("✅ Brand Strategist Agent ready (Multi-Provider Router)!")
     
     def create_brand_strategy(self, company_name: str, industry: str, target_audience: str, unique_value: str = "") -> str:
         """
@@ -82,14 +80,8 @@ Provide a detailed brand strategy including:
 Make it actionable, specific, and professional."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2500,
-                temperature=0.7
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.7)
+            result = result_data["content"]
             print("✅ Brand strategy created!")
             return result
             
@@ -149,14 +141,8 @@ Create detailed tone of voice guidelines including:
 Make it practical and easy to follow."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000,
-                temperature=0.7
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2000, temperature=0.7)
+            result = result_data["content"]
             print("✅ Tone of voice defined!")
             return result
             
@@ -215,14 +201,8 @@ Provide a detailed analysis:
 Be specific and constructive."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1500,
-                temperature=0.5
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=1500, temperature=0.5)
+            result = result_data["content"]
             print("✅ Brand consistency analyzed!")
             return result
             

@@ -4,13 +4,13 @@ MarketingOS 2.0 — The 9th Main Agent
 
 Handles platform-specific social media strategy, content creation,
 trend analysis, and engagement planning.
-Uses Groq (creative writing) + Brave Search (trend research).
+Uses model_router (multi-provider AI) + web search (trend research).
 """
 
 import os
-from groq import Groq
 from dotenv import load_dotenv
 from web_search import WebSearch
+from model_router import call_model_sync
 
 load_dotenv()
 
@@ -18,21 +18,14 @@ load_dotenv()
 class SMMAgent:
     def __init__(self):
         print("📱 Initializing SMM Agent...")
-        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.model = "llama-3.3-70b-versatile"
         self.search = WebSearch()
-        print("✅ SMM Agent ready (Groq + Brave Search)!")
+        print("✅ SMM Agent ready (Multi-Provider Router + Web Search)!")
 
-    def _call(self, prompt, max_tokens=2500, temperature=0.8):
-        """Groq call helper."""
+    def _call(self, prompt, max_tokens=2500, temperature=0.8, tier=2):
+        """Model router call helper."""
         try:
-            resp = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-            return resp.choices[0].message.content
+            result = call_model_sync(prompt=prompt, tier=tier, max_tokens=max_tokens, temperature=temperature)
+            return result["content"]
         except Exception as e:
             return f"❌ SMM Agent error: {e}"
 
@@ -137,7 +130,7 @@ Provide:
 
 Be specific and actionable."""
 
-        result = self._call(prompt, max_tokens=2500, temperature=0.7)
+        result = self._call(prompt, max_tokens=2500, temperature=0.7, tier=4)
         print("✅ Trend analysis complete!")
         return result
 
@@ -237,7 +230,7 @@ Cover:
 
 Be specific and actionable."""
 
-        result = self._call(prompt, max_tokens=3000, temperature=0.7)
+        result = self._call(prompt, max_tokens=3000, temperature=0.7, tier=4)
         print("✅ Engagement strategy ready!")
         return result
 

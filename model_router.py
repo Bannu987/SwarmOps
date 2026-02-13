@@ -20,11 +20,25 @@ Usage:
 import os
 import time
 import asyncio
+import threading
 import requests
 from typing import Optional
 from dotenv import load_dotenv
+from rate_limiter import get_rate_limiter
 
 load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Call tracking — thread-local so concurrent requests don't collide
+# ---------------------------------------------------------------------------
+
+_last_call_info = threading.local()
+
+
+def get_last_call_info() -> dict:
+    """Get metadata from the most recent call_model_sync call in this thread."""
+    return getattr(_last_call_info, 'info', {"model": "unknown", "provider": "unknown", "latency_ms": 0})
+
 
 # ---------------------------------------------------------------------------
 # Provider clients — initialised lazily (only when first used)
@@ -266,9 +280,23 @@ def search_serper(query: str, max_results: int = 5) -> list[dict]:
 def web_search_multi(query: str, max_results: int = 5) -> list[dict]:
     """
     Search using BOTH Brave and Serper, de-duplicate by URL, return combined results.
+    Respects rate limits for search APIs.
     """
-    brave_results = search_brave(query, max_results)
-    serper_results = search_serper(query, max_results)
+    rate_limiter = get_rate_limiter()
+    brave_results = []
+    serper_results = []
+
+    # Try Brave if not rate-limited
+    if rate_limiter.can_call("brave"):
+        brave_results = search_brave(query, max_results)
+        if brave_results:
+            rate_limiter.record_call("brave")
+
+    # Try Serper if not rate-limited
+    if rate_limiter.can_call("serper"):
+        serper_results = search_serper(query, max_results)
+        if serper_results:
+            rate_limiter.record_call("serper")
 
     seen_urls = set()
     combined = []
@@ -314,16 +342,16 @@ def _build_tier_chain(tier: int):
             (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
              "gemini-2.0-flash", "gemini"),
         ]
-    elif tier == 3:  # Strategic reasoning
+    elif tier == 3:  # Strategic reasoning (fast — no reasoning models)
         return [
-            (lambda p, s, mt, t: _call_openrouter(p, s, "deepseek-r1", mt, t),
-             "deepseek-r1-0528:free", "openrouter"),
-            (lambda p, s, mt, t: _call_openrouter(p, s, "hermes-405b", mt, t),
-             "hermes-3-llama-3.1-405b:free", "openrouter"),
+            (lambda p, s, mt, t: _call_groq(p, s, "llama-3.3-70b-versatile", mt, t),
+             "llama-3.3-70b-versatile", "groq"),
+            (lambda p, s, mt, t: _call_openrouter(p, s, "llama-3.3-70b", mt, t),
+             "llama-3.3-70b-instruct:free", "openrouter"),
+            (lambda p, s, mt, t: _call_openrouter(p, s, "mistral-small", mt, t),
+             "mistral-small-3.1-24b:free", "openrouter"),
             (lambda p, s, mt, t: _call_nvidia(p, s, "kimi-k2.5", mt, t),
              "kimi-k2.5", "nvidia"),
-            (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
-             "gemini-2.0-flash", "gemini"),
         ]
     elif tier == 4:  # Deep research (search + model)
         return [
@@ -354,7 +382,7 @@ async def call_model(
     temperature: float = 0.7,
 ) -> dict:
     """
-    Unified model call with tiered fallback.
+    Unified model call with tiered fallback + rate limiting.
 
     Args:
         prompt:        The user/task prompt.
@@ -369,25 +397,37 @@ async def call_model(
     For tier 4 (deep research), web search results are automatically prepended
     to the prompt before sending to the model.
     """
+    rate_limiter = get_rate_limiter()
+
     # Tier 4: prepend web search context
     actual_prompt = prompt
     search_results = []
     if tier == 4:
-        search_results = web_search_multi(prompt, max_results=5)
-        if search_results:
-            search_text = "\n".join(
-                f"{r['rank']}. {r['title']}\n   {r['description']}\n   URL: {r['url']}"
-                for r in search_results
-            )
-            actual_prompt = (
-                f"Web Search Results:\n{search_text}\n\n"
-                f"Based on these search results, {prompt}"
-            )
+        # Rate-limit search APIs
+        if rate_limiter.can_call("serper") or rate_limiter.can_call("brave"):
+            search_results = web_search_multi(prompt, max_results=5)
+            if search_results:
+                search_text = "\n".join(
+                    f"{r['rank']}. {r['title']}\n   {r['description']}\n   URL: {r['url']}"
+                    for r in search_results
+                )
+                actual_prompt = (
+                    f"Web Search Results:\n{search_text}\n\n"
+                    f"Based on these search results, {prompt}"
+                )
 
     chain = _build_tier_chain(tier)
     last_error = None
+    rate_limited_providers = []
 
     for call_fn, model_name, provider_name in chain:
+        # Check rate limit before attempting call
+        if not rate_limiter.can_call(provider_name):
+            wait = rate_limiter.wait_time(provider_name)
+            print(f"[model_router] {provider_name} rate-limited (wait {wait:.1f}s), skipping to next")
+            rate_limited_providers.append((provider_name, wait))
+            continue
+
         t0 = time.time()
         try:
             # Run synchronous call in thread pool to keep async-compatible
@@ -396,6 +436,8 @@ async def call_model(
             )
             if content:
                 latency = int((time.time() - t0) * 1000)
+                # Record successful call
+                rate_limiter.record_call(provider_name)
                 return {
                     "content": content,
                     "model": model_name,
@@ -406,6 +448,33 @@ async def call_model(
             last_error = e
             print(f"[model_router] {provider_name}/{model_name} failed: {e}")
             continue
+
+    # If ALL providers were rate-limited, wait for shortest time and retry once
+    if rate_limited_providers and len(rate_limited_providers) == len(chain):
+        shortest_wait = min(wait for _, wait in rate_limited_providers)
+        print(f"[model_router] All providers rate-limited, waiting {shortest_wait:.1f}s and retrying...")
+        await asyncio.sleep(shortest_wait + 0.5)  # Add small buffer
+
+        # Retry with first provider that should now be available
+        for call_fn, model_name, provider_name in chain:
+            if rate_limiter.can_call(provider_name):
+                t0 = time.time()
+                try:
+                    content = await asyncio.get_event_loop().run_in_executor(
+                        None, call_fn, actual_prompt, system_prompt, max_tokens, temperature
+                    )
+                    if content:
+                        latency = int((time.time() - t0) * 1000)
+                        rate_limiter.record_call(provider_name)
+                        return {
+                            "content": content,
+                            "model": model_name,
+                            "provider": provider_name,
+                            "latency_ms": latency,
+                        }
+                except Exception as e:
+                    last_error = e
+                    continue
 
     # All providers failed
     return {
@@ -424,41 +493,84 @@ def call_model_sync(
     temperature: float = 0.7,
 ) -> dict:
     """
-    Synchronous version of call_model for use in non-async contexts.
+    Synchronous version of call_model for use in non-async contexts + rate limiting.
     Same interface and return format.
     """
+    rate_limiter = get_rate_limiter()
+
     actual_prompt = prompt
     if tier == 4:
-        search_results = web_search_multi(prompt, max_results=5)
-        if search_results:
-            search_text = "\n".join(
-                f"{r['rank']}. {r['title']}\n   {r['description']}\n   URL: {r['url']}"
-                for r in search_results
-            )
-            actual_prompt = (
-                f"Web Search Results:\n{search_text}\n\n"
-                f"Based on these search results, {prompt}"
-            )
+        # Rate-limit search APIs
+        if rate_limiter.can_call("serper") or rate_limiter.can_call("brave"):
+            search_results = web_search_multi(prompt, max_results=5)
+            if search_results:
+                search_text = "\n".join(
+                    f"{r['rank']}. {r['title']}\n   {r['description']}\n   URL: {r['url']}"
+                    for r in search_results
+                )
+                actual_prompt = (
+                    f"Web Search Results:\n{search_text}\n\n"
+                    f"Based on these search results, {prompt}"
+                )
 
     chain = _build_tier_chain(tier)
     last_error = None
+    rate_limited_providers = []
 
     for call_fn, model_name, provider_name in chain:
+        # Check rate limit before attempting call
+        if not rate_limiter.can_call(provider_name):
+            wait = rate_limiter.wait_time(provider_name)
+            print(f"[model_router] {provider_name} rate-limited (wait {wait:.1f}s), skipping to next")
+            rate_limited_providers.append((provider_name, wait))
+            continue
+
         t0 = time.time()
         try:
             content = call_fn(actual_prompt, system_prompt, max_tokens, temperature)
             if content:
                 latency = int((time.time() - t0) * 1000)
-                return {
+                # Record successful call
+                rate_limiter.record_call(provider_name)
+                info = {
                     "content": content,
                     "model": model_name,
                     "provider": provider_name,
                     "latency_ms": latency,
                 }
+                _last_call_info.info = info
+                return info
         except Exception as e:
             last_error = e
             print(f"[model_router] {provider_name}/{model_name} failed: {e}")
             continue
+
+    # If ALL providers were rate-limited, wait for shortest time and retry once
+    if rate_limited_providers and len(rate_limited_providers) == len(chain):
+        shortest_wait = min(wait for _, wait in rate_limited_providers)
+        print(f"[model_router] All providers rate-limited, waiting {shortest_wait:.1f}s and retrying...")
+        time.sleep(shortest_wait + 0.5)  # Add small buffer
+
+        # Retry with first provider that should now be available
+        for call_fn, model_name, provider_name in chain:
+            if rate_limiter.can_call(provider_name):
+                t0 = time.time()
+                try:
+                    content = call_fn(actual_prompt, system_prompt, max_tokens, temperature)
+                    if content:
+                        latency = int((time.time() - t0) * 1000)
+                        rate_limiter.record_call(provider_name)
+                        info = {
+                            "content": content,
+                            "model": model_name,
+                            "provider": provider_name,
+                            "latency_ms": latency,
+                        }
+                        _last_call_info.info = info
+                        return info
+                except Exception as e:
+                    last_error = e
+                    continue
 
     return {
         "content": f"All providers failed. Last error: {last_error}",

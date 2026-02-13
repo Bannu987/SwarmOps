@@ -2,12 +2,12 @@
 Web/UX Agent - MarketingOS 2.0
 Full-stack architect of the digital experience
 Creates Linear/Emergent-style designs
-Now using Groq Cloud AI
+Uses model_router for multi-provider AI with automatic fallback
 """
 
-from groq import Groq
 import os
 from dotenv import load_dotenv
+from model_router import call_model_sync
 
 # Load environment variables
 load_dotenv()
@@ -17,15 +17,13 @@ class WebUXAgent:
     """
     Web/UX Agent
     Designs and optimizes digital experiences for maximum conversion
-    Powered by Groq Cloud AI (qwen/qwen3-32b - best for technical specs)
+    Uses multi-provider model router with automatic fallback
     """
-    
+
     def __init__(self):
-        """Initialize the Web/UX Agent with Groq"""
+        """Initialize the Web/UX Agent"""
         print("🌐 Initializing Web/UX Agent...")
-        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.model = "qwen/qwen3-32b"  # Best for technical/structural tasks
-        print("✅ Web/UX Agent ready (Groq - Cloud AI)!")
+        print("✅ Web/UX Agent ready (Multi-Provider Router)!")
     
     def design_landing_page(self, product: str, target_audience: str, goal: str, 
                            style: str = "modern", key_benefits: str = "") -> str:
@@ -139,14 +137,8 @@ Create a DETAILED landing page specification including:
 Make it production-ready, specific, and inspired by {style} aesthetics."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=3000,
-                temperature=0.7
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=3000, temperature=0.7)
+            result = result_data["content"]
             print("✅ Landing page designed!")
             return result
             
@@ -215,14 +207,8 @@ Provide:
 Be specific and data-driven."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000,
-                temperature=0.6
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2000, temperature=0.6)
+            result = result_data["content"]
             print("✅ User flow optimized!")
             return result
             
@@ -315,14 +301,8 @@ etc.
 Be specific and ready to hand off to developers."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2500,
-                temperature=0.5
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=2500, temperature=0.5)
+            result = result_data["content"]
             print("✅ Wireframe spec created!")
             return result
             
@@ -401,14 +381,8 @@ For top 3 issues, show:
 Be ruthlessly honest and specific."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000,
-                temperature=0.6
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2000, temperature=0.6)
+            result = result_data["content"]
             print("✅ UX analysis complete!")
             return result
             

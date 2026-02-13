@@ -1,32 +1,19 @@
 """
 PPC Agent - Paid Advertising Specialist
-Uses Gemini AI + Web Search for ad campaign strategy
+Uses model_router (multi-provider AI) + Web Search for ad campaign strategy
 """
 
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import PromptTemplate
 from web_search import WebSearch
+from model_router import call_model_sync
 
 # Load environment variables
 load_dotenv()
 
-# Initialize Gemini
 print("🔧 Initializing PPC Agent...")
-gemini_api_key = os.getenv('GEMINI_API_KEY')
-
-if not gemini_api_key:
-    raise ValueError("GEMINI_API_KEY not found in .env file!")
-
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
-    google_api_key=gemini_api_key,
-    temperature=0.7
-)
-
 search = WebSearch()
-print("✅ PPC Agent ready! (Powered by Gemini)")
+print("✅ PPC Agent ready! (Multi-Provider Router)")
 
 # PPC Campaign Strategy Prompt
 ppc_strategy_template = """You are an expert PPC (Pay-Per-Click) advertising strategist with deep knowledge of Google Ads, Facebook Ads, and digital advertising best practices.
@@ -75,13 +62,10 @@ Be specific, data-driven, and actionable. Format clearly with headers and bullet
 
 Your PPC Strategy:"""
 
-prompt = PromptTemplate(
-    input_variables=["request", "search_results"],
-    template=ppc_strategy_template
-)
-
-# Create PPC strategy chain
-ppc_chain = prompt | llm
+def _ppc_call(prompt_text, tier=2, max_tokens=4096, temperature=0.7):
+    """Route through model_router with automatic fallback."""
+    result = call_model_sync(prompt=prompt_text, tier=tier, max_tokens=max_tokens, temperature=temperature)
+    return result["content"]
 
 
 def create_campaign_strategy(campaign_request, budget=None):
@@ -119,13 +103,9 @@ def create_campaign_strategy(campaign_request, budget=None):
     print(f"✅ Research complete")
     print(f"🤖 Generating campaign strategy with Gemini...")
     
-    # Generate strategy
-    response = ppc_chain.invoke({
-        "request": campaign_request,
-        "search_results": formatted_results
-    })
-    
-    result = response.content if hasattr(response, 'content') else str(response)
+    # Generate strategy (tier 3 = strategic reasoning)
+    full_prompt = ppc_strategy_template.format(request=campaign_request, search_results=formatted_results)
+    result = _ppc_call(full_prompt, tier=3)
     
     print(f"✅ Campaign strategy created!")
     return result
@@ -173,8 +153,7 @@ CTA: [call-to-action]
 
 Make each variation test different angles (price, quality, urgency, benefit, etc.)."""
 
-    response = llm.invoke(prompt)
-    result = response.content if hasattr(response, 'content') else str(response)
+    result = _ppc_call(prompt, tier=2)
     
     print(f"✅ Created {num_variations} ad variations!")
     return result
@@ -235,8 +214,7 @@ Provide detailed targeting recommendations:
 
 Be specific and data-driven."""
 
-    response = llm.invoke(prompt)
-    result = response.content if hasattr(response, 'content') else str(response)
+    result = _ppc_call(prompt, tier=2)
     
     print(f"✅ Targeting strategy ready!")
     return result
@@ -284,8 +262,7 @@ As a PPC expert, provide:
 
 Be specific and prioritize actions by potential impact."""
 
-    response = llm.invoke(prompt)
-    result = response.content if hasattr(response, 'content') else str(response)
+    result = _ppc_call(prompt, tier=2)
     
     print(f"✅ Optimization plan ready!")
     return result

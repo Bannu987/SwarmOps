@@ -1,30 +1,17 @@
 """
 Analytics Agent - Marketing Data Analyst
-Uses Gemini AI for data analysis and insights
+Uses model_router for multi-provider AI with automatic fallback
 """
 
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import PromptTemplate
+from model_router import call_model_sync
 
 # Load environment variables
 load_dotenv()
 
-# Initialize Gemini
 print("🔧 Initializing Analytics Agent...")
-gemini_api_key = os.getenv('GEMINI_API_KEY')
-
-if not gemini_api_key:
-    raise ValueError("GEMINI_API_KEY not found in .env file!")
-
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
-    google_api_key=gemini_api_key,
-    temperature=0.3  # Lower temperature for more analytical responses
-)
-
-print("✅ Analytics Agent ready! (Powered by Gemini)")
+print("✅ Analytics Agent ready! (Multi-Provider Router)")
 
 # Analytics Report Template
 analytics_template = """You are an expert marketing analytics consultant with deep expertise in data analysis, metrics interpretation, and performance optimization.
@@ -71,12 +58,10 @@ Be specific with numbers, percentages, and concrete recommendations. Use clear f
 
 Your Analysis:"""
 
-prompt = PromptTemplate(
-    input_variables=["request", "data"],
-    template=analytics_template
-)
-
-analytics_chain = prompt | llm
+def _analytics_call(prompt_text, tier=2, max_tokens=4096, temperature=0.3):
+    """Route through model_router with automatic fallback."""
+    result = call_model_sync(prompt=prompt_text, tier=tier, max_tokens=max_tokens, temperature=temperature)
+    return result["content"]
 
 
 def analyze_performance(data_description, metrics_data):
@@ -99,14 +84,10 @@ def analyze_performance(data_description, metrics_data):
     else:
         formatted_data = str(metrics_data)
     
-    print(f"🤖 Generating insights with Gemini...")
-    
-    response = analytics_chain.invoke({
-        "request": data_description,
-        "data": formatted_data
-    })
-    
-    result = response.content if hasattr(response, 'content') else str(response)
+    print(f"🤖 Generating insights with AI...")
+
+    full_prompt = analytics_template.format(request=data_description, data=formatted_data)
+    result = _analytics_call(full_prompt, tier=2)
     
     print(f"✅ Analysis complete!")
     return result
@@ -163,8 +144,7 @@ Analysis:
 
 Be data-driven and specific."""
 
-    response = llm.invoke(prompt_text)
-    result = response.content if hasattr(response, 'content') else str(response)
+    result = _analytics_call(prompt_text, tier=3)
     
     print(f"✅ Comparison complete!")
     return result
@@ -233,8 +213,7 @@ Provide:
 
 Be specific with numbers and percentages."""
 
-    response = llm.invoke(prompt_text)
-    result = response.content if hasattr(response, 'content') else str(response)
+    result = _analytics_call(prompt_text, tier=3)
     
     print(f"✅ ROI analysis complete!")
     print(f"📊 ROI: {roi:.2f}%")
@@ -295,8 +274,7 @@ Provide:
 
 Calculate specific percentages and provide concrete recommendations."""
 
-    response = llm.invoke(prompt_text)
-    result = response.content if hasattr(response, 'content') else str(response)
+    result = _analytics_call(prompt_text, tier=3)
     
     print(f"✅ Bottleneck analysis complete!")
     return result
@@ -355,8 +333,7 @@ Provide:
 
 Be specific with numbers and timelines."""
 
-    response = llm.invoke(prompt_text)
-    result = response.content if hasattr(response, 'content') else str(response)
+    result = _analytics_call(prompt_text, tier=3)
     
     print(f"✅ Forecast complete!")
     return result

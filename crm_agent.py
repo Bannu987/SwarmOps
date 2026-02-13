@@ -1,12 +1,12 @@
 """
 CRM Agent - MarketingOS 2.0
 Email sequences and customer relationship management
-Now using Groq Cloud AI
+Uses model_router for multi-provider AI with automatic fallback
 """
 
-from groq import Groq
 import os
 from dotenv import load_dotenv
+from model_router import call_model_sync
 
 # Load environment variables
 load_dotenv()
@@ -15,15 +15,13 @@ load_dotenv()
 class CRMAgent:
     """
     CRM Agent - Specialized in email marketing and customer nurture
-    Powered by Groq Cloud AI (llama-3.3-70b-versatile)
+    Uses multi-provider model router with automatic fallback
     """
-    
+
     def __init__(self):
-        """Initialize the CRM Agent with Groq"""
+        """Initialize the CRM Agent"""
         print("📧 Initializing CRM Agent...")
-        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.model = "llama-3.3-70b-versatile"  # Best for personalized content
-        print("✅ CRM Agent ready (Groq - Cloud AI)!")
+        print("✅ CRM Agent ready (Multi-Provider Router)!")
     
     def create_email_sequence(self, topic: str, num_emails: int = 3) -> str:
         """
@@ -61,34 +59,28 @@ etc.
 Create the sequence now:"""
         
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000,
-                temperature=0.7
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=2000, temperature=0.7)
+            result = result_data["content"]
             print("✅ Email sequence created!")
             return result
-            
+
         except Exception as e:
             error_msg = f"❌ Error creating sequence: {str(e)}"
             print(error_msg)
             return error_msg
-    
+
     def write_single_email(self, purpose: str) -> str:
         """
         Write a single email
-        
+
         Args:
             purpose: Purpose of the email
-            
+
         Returns:
             Complete email
         """
         print(f"\n✉️ Writing email: {purpose}")
-        
+
         prompt = f"""You are an expert email copywriter. Write a professional email for this purpose: {purpose}
 
 Include:
@@ -99,19 +91,13 @@ Include:
 - Professional closing
 
 Write the email now:"""
-        
+
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1000,
-                temperature=0.7
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=1, max_tokens=1000, temperature=0.7)
+            result = result_data["content"]
             print("✅ Email written!")
             return result
-            
+
         except Exception as e:
             error_msg = f"❌ Error writing email: {str(e)}"
             print(error_msg)

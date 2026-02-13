@@ -293,6 +293,12 @@ function App() {
   const [smartRoutingMode, setSmartRoutingMode] = useState(false);
   const [realTimeAnalytics, setRealTimeAnalytics] = useState(null);
   const [feedbackLoopRunning, setFeedbackLoopRunning] = useState(false);
+  const [rateLimits, setRateLimits] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [memoryDepartment, setMemoryDepartment] = useState('content');
+  const [memories, setMemories] = useState([]);
+  const [taskHistory, setTaskHistory] = useState([]);
+  const [historyDays, setHistoryDays] = useState(7);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -382,6 +388,64 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch rate limits
+  useEffect(() => {
+    const fetchRateLimits = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/rate-limits`);
+        setRateLimits(response.data);
+      } catch (err) {
+        console.log('Rate limits unavailable');
+      }
+    };
+    fetchRateLimits();
+    const interval = setInterval(fetchRateLimits, 30000); // Refresh every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/stats`);
+        setStats(response.data);
+      } catch (err) {
+        console.log('Stats unavailable');
+      }
+    };
+    fetchStats();
+  }, [messages]); // Refresh after each message
+
+  // Fetch memories when department changes
+  useEffect(() => {
+    const fetchMemories = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/memory/${memoryDepartment}`);
+        setMemories(response.data.memories || []);
+      } catch (err) {
+        console.log('Memories unavailable');
+      }
+    };
+    if (rightPanelTab === 'memory') {
+      fetchMemories();
+    }
+  }, [memoryDepartment, rightPanelTab]);
+
+  // Fetch task history
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/history?days=${historyDays}`);
+        setTaskHistory(response.data.tasks || []);
+      } catch (err) {
+        console.log('History unavailable');
+      }
+    };
+    if (rightPanelTab === 'history') {
+      fetchHistory();
+    }
+  }, [historyDays, rightPanelTab]);
+
   // Trigger feedback loop
   const triggerFeedbackLoop = async () => {
     if (feedbackLoopRunning) return;
@@ -443,24 +507,30 @@ function App() {
       // Smart Routing Mode - Let Nexus decide which agent to use
       if (smartRoutingMode) {
         try {
-          const response = await axios.post(`${API_BASE}/api/task`, {
-            goal: currentInput
+          const response = await axios.post(`${API_BASE}/api/chat`, {
+            message: currentInput,
+            agent: 'nexus'
           });
           const agentMessage = {
             id: Date.now() + Math.random(),
             role: 'agent',
             content: response?.data?.result || 'Task completed',
-            agentId: 'nexus',
+            agentId: response?.data?.agent || 'nexus',
             agentName: 'Nexus Orchestrator',
             agentIcon: '🧠',
             agentColor: '#818CF8',
             agentGradientFrom: '#6366F1',
             agentGradientTo: '#8B5CF6',
-            model: 'Smart Routing',
+            model: response?.data?.model || 'Smart Routing',
+            provider: response?.data?.provider,
+            latency_ms: response?.data?.latency_ms,
+            quality: response?.data?.quality,
+            pipeline: response?.data?.pipeline,
+            result: response?.data?.result,
             timestamp: new Date().toISOString(),
             metadata: {
               selectedAgent: response?.data?.agent,
-              confidence: response?.data?.confidence
+              confidence: response?.data?.quality?.confidence
             }
           };
           addMessage(agentMessage);
@@ -669,6 +739,7 @@ function App() {
         setSmartRoutingMode={setSmartRoutingMode}
         feedbackLoopRunning={feedbackLoopRunning}
         triggerFeedbackLoop={triggerFeedbackLoop}
+        rateLimits={rateLimits}
       />
 
       {/* Main Layout Container */}
@@ -799,21 +870,35 @@ function App() {
           <div className="right-panel">
             <div className="panel-header">
               <div className="panel-tabs">
-                <button 
+                <button
                   className={`panel-tab ${rightPanelTab === 'analytics' ? 'active' : ''}`}
                   onClick={() => setRightPanelTab('analytics')}
                 >
                   <BarChart3 size={16} />
                   <span>Analytics</span>
                 </button>
-                <button 
-                  className={`panel-tab ${rightPanelTab === 'activity' ? 'active' : ''}`}
-                  onClick={() => setRightPanelTab('activity')}
+                <button
+                  className={`panel-tab ${rightPanelTab === 'stats' ? 'active' : ''}`}
+                  onClick={() => setRightPanelTab('stats')}
                 >
                   <Activity size={16} />
-                  <span>Activity</span>
+                  <span>Stats</span>
                 </button>
-                <button 
+                <button
+                  className={`panel-tab ${rightPanelTab === 'memory' ? 'active' : ''}`}
+                  onClick={() => setRightPanelTab('memory')}
+                >
+                  <HardDrive size={16} />
+                  <span>Memory</span>
+                </button>
+                <button
+                  className={`panel-tab ${rightPanelTab === 'history' ? 'active' : ''}`}
+                  onClick={() => setRightPanelTab('history')}
+                >
+                  <Clock size={16} />
+                  <span>History</span>
+                </button>
+                <button
                   className={`panel-tab ${rightPanelTab === 'insights' ? 'active' : ''}`}
                   onClick={() => setRightPanelTab('insights')}
                 >
@@ -830,7 +915,33 @@ function App() {
               {rightPanelTab === 'analytics' && (
                 <AnalyticsPanel trafficData={trafficData} conversionData={conversionData} realTimeData={realTimeAnalytics} />
               )}
-              {rightPanelTab === 'activity' && <ActivityPanel agents={AGENTS} />}
+              {rightPanelTab === 'stats' && (
+                <StatsPanel stats={stats} />
+              )}
+              {rightPanelTab === 'memory' && (
+                <MemoryPanel
+                  memories={memories}
+                  department={memoryDepartment}
+                  setDepartment={setMemoryDepartment}
+                  agents={AGENTS}
+                  onClearMemory={async () => {
+                    try {
+                      await axios.delete(`${API_BASE}/api/memory`);
+                      setMemories([]);
+                    } catch (err) {
+                      console.error('Failed to clear memory');
+                    }
+                  }}
+                />
+              )}
+              {rightPanelTab === 'history' && (
+                <HistoryPanel
+                  history={taskHistory}
+                  days={historyDays}
+                  setDays={setHistoryDays}
+                  agents={AGENTS}
+                />
+              )}
               {rightPanelTab === 'insights' && <InsightsPanel agents={AGENTS} />}
             </div>
           </div>
@@ -894,7 +1005,7 @@ function Header({
   setNotifications, userMenuOpen, setUserMenuOpen, setSettingsOpen,
   setCommandPaletteOpen, multiAgentMode, setMultiAgentMode,
   isFullscreen, setIsFullscreen, smartRoutingMode, setSmartRoutingMode,
-  feedbackLoopRunning, triggerFeedbackLoop
+  feedbackLoopRunning, triggerFeedbackLoop, rateLimits
 }) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -1020,6 +1131,9 @@ function Header({
       </div>
 
       <div className="header-right">
+        {/* Rate Limit Monitor */}
+        {rateLimits && <RateLimitMonitor rateLimits={rateLimits} />}
+
         <button className="header-icon-btn" onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Light Mode' : 'Dark Mode'}>
           {darkMode ? <Sun size={18} /> : <Moon size={18} />}
         </button>
@@ -1148,15 +1262,20 @@ function EmptyState({ suggestedPrompts, setInput, setSelectedAgent, agents }) {
   );
 }
 
-// Message Bubble
+// Message Bubble (Enhanced with metadata and pipeline support)
 function MessageBubble({ message, isLatest }) {
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState(null);
+  const [expandedSteps, setExpandedSteps] = useState({});
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const toggleStep = (index) => {
+    setExpandedSteps(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
   if (message.role === 'user') {
@@ -1187,9 +1306,13 @@ function MessageBubble({ message, isLatest }) {
     );
   }
 
+  // Check if this is a pipeline response
+  const isPipeline = message.pipeline || (message.result && typeof message.result === 'object' && message.result.pipeline);
+  const pipelineData = isPipeline ? (message.result || message) : null;
+
   return (
-    <div className={`message agent-message ${isLatest ? 'latest' : ''}`}>
-      <div 
+    <div className={`message agent-message ${isLatest ? 'latest' : ''} ${isPipeline ? 'pipeline-message' : ''}`}>
+      <div
         className="agent-avatar"
         style={{ background: `linear-gradient(135deg, ${message.agentGradientFrom}, ${message.agentGradientTo})` }}
       >
@@ -1200,11 +1323,67 @@ function MessageBubble({ message, isLatest }) {
           <span className="agent-name">{message.agentName}</span>
           <span className="agent-model-tag">{message.model}</span>
         </div>
-        <div className="agent-message-bubble">
-          <div className="agent-message-text">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-          </div>
-        </div>
+
+        {/* Pipeline Visualization */}
+        {isPipeline && pipelineData.steps && (
+          <PipelineVisualization
+            steps={pipelineData.steps}
+            totalLatency={pipelineData.total_latency_ms}
+            expandedSteps={expandedSteps}
+            toggleStep={toggleStep}
+          />
+        )}
+
+        {/* Regular message content */}
+        {!isPipeline && (
+          <>
+            <div className="agent-message-bubble">
+              <div className="agent-message-text">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+              </div>
+            </div>
+
+            {/* Enhanced Metadata Bar */}
+            {(message.provider || message.latency_ms || message.quality) && (
+              <div className="message-metadata-bar">
+                {/* Model & Provider */}
+                {message.provider && message.model && (
+                  <div className="metadata-item">
+                    <Cpu size={12} />
+                    <span className="metadata-model">{message.model}</span>
+                    <span className="metadata-provider">via {message.provider}</span>
+                  </div>
+                )}
+
+                {/* Latency */}
+                {message.latency_ms && (
+                  <div className="metadata-item">
+                    <Clock size={12} />
+                    <span>{(message.latency_ms / 1000).toFixed(1)}s</span>
+                  </div>
+                )}
+
+                {/* Quality Badge */}
+                {message.quality && (
+                  <div className="metadata-item">
+                    <div className={`quality-badge confidence-${getConfidenceLevel(message.quality.confidence)}`}>
+                      <div className="quality-dot" />
+                      <span>{(message.quality.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Revised Badge */}
+                {message.quality && message.quality.revised && (
+                  <div className="metadata-item">
+                    <span className="revised-badge">✨ Revised</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
         <div className="message-actions">
           <button className={`action-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
             {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -1222,6 +1401,113 @@ function MessageBubble({ message, isLatest }) {
           <button className="action-btn icon-only"><RotateCcw size={14} /></button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Helper: Get confidence level for styling
+function getConfidenceLevel(confidence) {
+  if (confidence >= 0.7) return 'high';
+  if (confidence >= 0.5) return 'medium';
+  return 'low';
+}
+
+// Pipeline Visualization Component
+function PipelineVisualization({ steps, totalLatency, expandedSteps, toggleStep }) {
+  if (!steps || steps.length === 0) return null;
+
+  // Calculate average confidence
+  const avgConfidence = steps.reduce((sum, step) => sum + (step.confidence || 0), 0) / steps.length;
+
+  // Identify parallel steps (those with similar start times)
+  const serialSteps = steps.slice(0, 2); // Usually SEO and Content are serial
+  const parallelSteps = steps.slice(2); // Rest are parallel
+
+  return (
+    <div className="pipeline-visualization">
+      {/* Pipeline Flow Diagram */}
+      <div className="pipeline-flow">
+        {serialSteps.map((step, index) => (
+          <React.Fragment key={index}>
+            <PipelineStep step={step} />
+            {index < serialSteps.length - 1 && <div className="pipeline-arrow">→</div>}
+          </React.Fragment>
+        ))}
+
+        {parallelSteps.length > 0 && (
+          <>
+            <div className="pipeline-arrow">→</div>
+            <div className="pipeline-parallel-group">
+              {parallelSteps.map((step, index) => (
+                <PipelineStep key={index} step={step} isParallel />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Pipeline Stats */}
+      <div className="pipeline-stats">
+        <div className="pipeline-stat">
+          <Layers size={14} />
+          <span>{steps.length} agents</span>
+        </div>
+        <div className="pipeline-stat">
+          <Clock size={14} />
+          <span>{(totalLatency / 1000).toFixed(1)}s total</span>
+        </div>
+        <div className="pipeline-stat">
+          <Target size={14} />
+          <span>{(avgConfidence * 100).toFixed(0)}% avg confidence</span>
+        </div>
+      </div>
+
+      {/* Collapsible Step Details */}
+      <div className="pipeline-steps-accordion">
+        {steps.map((step, index) => (
+          <div key={index} className={`pipeline-step-card ${expandedSteps[index] ? 'expanded' : ''}`}>
+            <button className="pipeline-step-header" onClick={() => toggleStep(index)}>
+              <div className="step-header-left">
+                <div className={`step-icon confidence-${getConfidenceLevel(step.confidence)}`}>
+                  <CheckCircle2 size={14} />
+                </div>
+                <span className="step-department">{step.department.toUpperCase()}</span>
+                <span className="step-confidence">{(step.confidence * 100).toFixed(0)}%</span>
+              </div>
+              <div className="step-header-right">
+                <span className="step-latency">{step.latency_ms}ms</span>
+                <ChevronDown size={16} className={`chevron ${expandedSteps[index] ? 'open' : ''}`} />
+              </div>
+            </button>
+            {expandedSteps[index] && (
+              <div className="pipeline-step-content">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {step.full_result || step.result}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Pipeline Step Component
+function PipelineStep({ step, isParallel }) {
+  const getStatusColor = () => {
+    if (step.result && step.result.includes('Error')) return '#EF4444';
+    return '#10B981';
+  };
+
+  return (
+    <div className={`pipeline-step-box ${isParallel ? 'parallel' : ''}`}>
+      <div className="pipeline-step-name">{step.department.toUpperCase()}</div>
+      <div className="pipeline-step-status">
+        <div className="pipeline-status-dot" style={{ background: getStatusColor() }} />
+        <span className="pipeline-step-latency">{(step.latency_ms / 1000).toFixed(1)}s</span>
+      </div>
+      <div className="pipeline-step-confidence">{(step.confidence * 100).toFixed(0)}%</div>
     </div>
   );
 }
@@ -1638,6 +1924,328 @@ function SettingsToggle({ icon: Icon, label, description, checked, onChange }) {
         <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
         <span className="toggle-slider" />
       </label>
+    </div>
+  );
+}
+
+// Rate Limit Monitor Component
+function RateLimitMonitor({ rateLimits }) {
+  if (!rateLimits || !rateLimits.status) return null;
+
+  const providers = Object.entries(rateLimits.status).filter(([_, info]) => info.used > 0 || !info.available);
+
+  if (providers.length === 0) return null;
+
+  const hasWarning = providers.some(([_, info]) => !info.available);
+
+  return (
+    <div className="rate-limit-monitor">
+      {providers.slice(0, 3).map(([provider, info]) => {
+        const percentage = (info.used / info.limit) * 100;
+        let statusClass = 'good';
+        if (percentage >= 80 || !info.available) statusClass = 'critical';
+        else if (percentage >= 50) statusClass = 'warning';
+
+        return (
+          <div key={provider} className={`rate-limit-badge ${statusClass}`}>
+            <span className="provider-name">{provider}</span>
+            <span className="rate-count">{info.used}/{info.limit}</span>
+          </div>
+        );
+      })}
+      {hasWarning && (
+        <div className="rate-limit-warning">
+          <AlertCircle size={12} />
+          <span>Using fallbacks</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Stats Panel Component
+function StatsPanel({ stats }) {
+  if (!stats) {
+    return (
+      <div className="stats-panel">
+        <div className="panel-loading">
+          <Loader2 size={24} className="spinner" />
+          <span>Loading stats...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const modelUsage = stats.model_usage || {};
+  const departmentUsage = stats.department_usage || {};
+  const providerUsage = stats.provider_usage || {};
+
+  const maxModelCount = Math.max(...Object.values(modelUsage), 1);
+  const maxDeptCount = Math.max(...Object.values(departmentUsage), 1);
+  const maxProviderCount = Math.max(...Object.values(providerUsage), 1);
+
+  return (
+    <div className="stats-panel">
+      {/* Big Numbers */}
+      <div className="stats-big-numbers">
+        <div className="stats-big-card">
+          <div className="stats-big-label">Total Tasks</div>
+          <div className="stats-big-value">{stats.total_tasks || 0}</div>
+        </div>
+        <div className="stats-big-card">
+          <div className="stats-big-label">Tasks Today</div>
+          <div className="stats-big-value">{stats.tasks_today || 0}</div>
+        </div>
+        <div className="stats-big-card">
+          <div className="stats-big-label">Avg Confidence</div>
+          <div className={`stats-big-value confidence-${getConfidenceLevel((stats.avg_confidence || 0))}`}>
+            {((stats.avg_confidence || 0) * 100).toFixed(0)}%
+          </div>
+        </div>
+      </div>
+
+      {/* Model Usage Chart */}
+      <div className="stats-chart-section">
+        <h4 className="stats-section-title">Model Usage</h4>
+        <div className="stats-bar-chart">
+          {Object.entries(modelUsage).map(([model, count]) => (
+            <div key={model} className="stats-bar-item">
+              <div className="stats-bar-label">{model}</div>
+              <div className="stats-bar-wrapper">
+                <div
+                  className="stats-bar-fill"
+                  style={{ width: `${(count / maxModelCount) * 100}%` }}
+                />
+                <span className="stats-bar-count">{count}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Department Usage Chart */}
+      <div className="stats-chart-section">
+        <h4 className="stats-section-title">Department Usage</h4>
+        <div className="stats-bar-chart">
+          {Object.entries(departmentUsage).map(([dept, count]) => (
+            <div key={dept} className="stats-bar-item">
+              <div className="stats-bar-label">{dept.toUpperCase()}</div>
+              <div className="stats-bar-wrapper">
+                <div
+                  className="stats-bar-fill dept-fill"
+                  style={{ width: `${(count / maxDeptCount) * 100}%` }}
+                />
+                <span className="stats-bar-count">{count}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Provider Distribution */}
+      <div className="stats-chart-section">
+        <h4 className="stats-section-title">Provider Distribution</h4>
+        <div className="stats-bar-chart">
+          {Object.entries(providerUsage).map(([provider, count]) => (
+            <div key={provider} className="stats-bar-item">
+              <div className="stats-bar-label">{provider}</div>
+              <div className="stats-bar-wrapper">
+                <div
+                  className="stats-bar-fill provider-fill"
+                  style={{ width: `${(count / maxProviderCount) * 100}%` }}
+                />
+                <span className="stats-bar-count">{count}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Memory Panel Component
+function MemoryPanel({ memories, department, setDepartment, agents, onClearMemory }) {
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  return (
+    <div className="memory-panel">
+      {/* Department Selector */}
+      <div className="memory-header">
+        <h4>Agent Memory</h4>
+        <select
+          value={department}
+          onChange={(e) => setDepartment(e.target.value)}
+          className="memory-department-select"
+        >
+          {agents.map(agent => (
+            <option key={agent.id} value={agent.id}>{agent.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Memory List */}
+      <div className="memory-list">
+        {memories.length === 0 ? (
+          <div className="memory-empty">
+            <HardDrive size={32} />
+            <p>No memories yet for {department}</p>
+          </div>
+        ) : (
+          memories.map((memory, index) => (
+            <div key={index} className="memory-card">
+              <div className="memory-card-header">
+                <span className={`memory-type-badge ${memory.type}`}>
+                  {memory.type}
+                </span>
+                <span className="memory-time">
+                  {new Date(memory.timestamp).toLocaleString()}
+                </span>
+              </div>
+              <div className="memory-content">{memory.content}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Clear Memory Button */}
+      <div className="memory-actions">
+        {!showClearConfirm ? (
+          <button
+            className="memory-clear-btn"
+            onClick={() => setShowClearConfirm(true)}
+          >
+            <RefreshCw size={16} />
+            <span>Clear All Memory</span>
+          </button>
+        ) : (
+          <div className="memory-confirm">
+            <span>Are you sure?</span>
+            <button
+              className="memory-confirm-yes"
+              onClick={() => {
+                onClearMemory();
+                setShowClearConfirm(false);
+              }}
+            >
+              Yes, Clear
+            </button>
+            <button
+              className="memory-confirm-no"
+              onClick={() => setShowClearConfirm(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// History Panel Component
+function HistoryPanel({ history, days, setDays, agents }) {
+  const [expandedTask, setExpandedTask] = useState(null);
+  const [filterDepartment, setFilterDepartment] = useState('all');
+
+  const filteredHistory = filterDepartment === 'all'
+    ? history
+    : history.filter(task => task.department === filterDepartment);
+
+  const getRelativeTime = (timestamp) => {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diff = Math.floor((now - time) / 1000);
+
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  };
+
+  return (
+    <div className="history-panel">
+      {/* Filters */}
+      <div className="history-filters">
+        <select
+          value={filterDepartment}
+          onChange={(e) => setFilterDepartment(e.target.value)}
+          className="history-filter-select"
+        >
+          <option value="all">All Departments</option>
+          {agents.map(agent => (
+            <option key={agent.id} value={agent.id}>{agent.name}</option>
+          ))}
+        </select>
+
+        <select
+          value={days}
+          onChange={(e) => setDays(parseInt(e.target.value))}
+          className="history-filter-select"
+        >
+          <option value={1}>Today</option>
+          <option value={7}>Last 7 days</option>
+          <option value={30}>Last 30 days</option>
+        </select>
+      </div>
+
+      {/* History Table */}
+      <div className="history-table">
+        {filteredHistory.length === 0 ? (
+          <div className="history-empty">
+            <Clock size={32} />
+            <p>No task history yet</p>
+          </div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Department</th>
+                <th>Model</th>
+                <th>Provider</th>
+                <th>Confidence</th>
+                <th>Latency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredHistory.map((task, index) => (
+                <React.Fragment key={index}>
+                  <tr
+                    className={`history-row ${expandedTask === index ? 'expanded' : ''}`}
+                    onClick={() => setExpandedTask(expandedTask === index ? null : index)}
+                  >
+                    <td className="history-time">{getRelativeTime(task.timestamp)}</td>
+                    <td className="history-dept">{task.department?.toUpperCase() || 'N/A'}</td>
+                    <td className="history-model">{task.model || 'N/A'}</td>
+                    <td className="history-provider">{task.provider || 'N/A'}</td>
+                    <td className={`history-confidence confidence-${getConfidenceLevel(task.confidence || 0)}`}>
+                      {((task.confidence || 0) * 100).toFixed(0)}%
+                    </td>
+                    <td className="history-latency">{task.latency_ms || 0}ms</td>
+                  </tr>
+                  {expandedTask === index && (
+                    <tr className="history-details-row">
+                      <td colSpan={6}>
+                        <div className="history-details">
+                          <div className="history-detail-section">
+                            <h5>Input:</h5>
+                            <p>{task.task_input}</p>
+                          </div>
+                          <div className="history-detail-section">
+                            <h5>Output:</h5>
+                            <p>{task.task_output}</p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

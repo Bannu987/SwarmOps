@@ -1,21 +1,19 @@
 """
 Research Agent - Web-Powered Information Gatherer
-Uses Brave Search + Groq to research topics
+Uses web search + model_router for multi-provider AI analysis
 """
 
 import os
 from dotenv import load_dotenv
-from groq import Groq
 from langchain_core.prompts import PromptTemplate
 from web_search import WebSearch
+from model_router import call_model_sync
 
 load_dotenv()
 
-# Initialize Groq for analysis
 print("🔧 Initializing Research Agent...")
-groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
 search = WebSearch()
-print("✅ Research Agent ready! (Powered by Groq)")
+print("✅ Research Agent ready! (Multi-Provider Router)")
 
 # Create research prompt template
 research_template = """You are a research analyst who synthesizes web search results into clear, actionable insights.
@@ -41,14 +39,9 @@ prompt = PromptTemplate(
 
 
 def _groq_analyze(prompt_text):
-    """Use Groq API directly for analysis"""
-    response = groq_client.chat.completions.create(
-        model=os.getenv('PRIMARY_TECHNICAL_MODEL', 'llama-3.3-70b-versatile'),
-        messages=[{"role": "user", "content": prompt_text}],
-        temperature=0.7,
-        max_tokens=2000
-    )
-    return response.choices[0].message.content
+    """Use model router (tier 4 = deep research) for analysis"""
+    result = call_model_sync(prompt=prompt_text, tier=4, max_tokens=2000, temperature=0.7)
+    return result["content"]
 
 
 def research_topic(topic, num_results=5):
@@ -85,8 +78,19 @@ def research_topic(topic, num_results=5):
     print(f"✅ Found {len(search_results)} sources")
     print(f"🤖 Step 2: Analyzing findings with AI...")
 
+    # Check memory for past research on this topic
+    past_context = ""
+    try:
+        from memory_store import get_memory_store
+        past = get_memory_store().search_memories("research", topic, limit=3)
+        if past:
+            past_lines = "\n".join(f"  - {m['content']}" for m in past)
+            past_context = f"\n\nPREVIOUS RESEARCH ON THIS TOPIC:\n{past_lines}\nBuild on this and find NEW information.\n"
+    except Exception:
+        pass
+
     # Step 3: Analyze with AI
-    filled_prompt = prompt.format(topic=topic, search_results=formatted_results)
+    filled_prompt = prompt.format(topic=topic, search_results=formatted_results) + past_context
     analysis = _groq_analyze(filled_prompt)
 
     print(f"✅ Research complete!")

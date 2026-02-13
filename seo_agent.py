@@ -1,32 +1,19 @@
 """
-SEO Agent - Gemini-Powered SEO Expert
-Uses Gemini AI + Web Search for SEO analysis and recommendations
+SEO Agent - Multi-Provider SEO Expert
+Uses model_router (multi-provider AI) + Web Search for SEO analysis
 """
 
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import PromptTemplate
 from web_search import WebSearch
+from model_router import call_model_sync
 
 # Load environment variables
 load_dotenv()
 
-# Initialize Gemini
 print("🔧 Initializing SEO Agent...")
-gemini_api_key = os.getenv('GEMINI_API_KEY')
-
-if not gemini_api_key:
-    raise ValueError("GEMINI_API_KEY not found in .env file!")
-
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
-    google_api_key=gemini_api_key,
-    temperature=0.7
-)
-
 search = WebSearch()
-print("✅ SEO Agent ready! (Powered by Gemini)")
+print("✅ SEO Agent ready! (Multi-Provider Router)")
 
 # SEO Analysis Prompt
 seo_analysis_template = """You are an expert SEO consultant with deep knowledge of search engine optimization, keyword research, and content strategy.
@@ -61,13 +48,10 @@ Be specific, data-driven, and actionable. Format your response clearly with head
 
 Your SEO Analysis:"""
 
-prompt = PromptTemplate(
-    input_variables=["task", "search_results"],
-    template=seo_analysis_template
-)
-
-# Create SEO analysis chain
-seo_chain = prompt | llm
+def _seo_call(prompt_text, tier=2, max_tokens=4096, temperature=0.7):
+    """Route through model_router with automatic fallback."""
+    result = call_model_sync(prompt=prompt_text, tier=tier, max_tokens=max_tokens, temperature=temperature)
+    return result["content"]
 
 
 def analyze_seo(topic, num_results=5):
@@ -112,16 +96,10 @@ def analyze_seo(topic, num_results=5):
     print(f"✅ Gathered {len(all_results)} data points")
     print(f"🤖 Step 2: Analyzing with Gemini AI...")
     
-    # Analyze with Gemini
+    # Analyze with AI (tier 4 = deep research)
     task = f"Perform comprehensive SEO analysis for: {topic}"
-    
-    response = seo_chain.invoke({
-        "task": task,
-        "search_results": formatted_results
-    })
-    
-    # Extract text from response
-    analysis = response.content if hasattr(response, 'content') else str(response)
+    full_prompt = seo_analysis_template.format(task=task, search_results=formatted_results)
+    analysis = _seo_call(full_prompt, tier=4)
     
     print(f"✅ SEO analysis complete!")
     
@@ -158,10 +136,21 @@ def find_keywords(topic, num_keywords=10):
         for r in results
     ])
     
+    # Check memory for past keyword research on this topic
+    past_context = ""
+    try:
+        from memory_store import get_memory_store
+        past = get_memory_store().search_memories("seo", topic, limit=3)
+        if past:
+            past_lines = "\n".join(f"  - {m['content']}" for m in past)
+            past_context = f"\n\nPREVIOUS KEYWORD RESEARCH:\n{past_lines}\nFind NEW angles and keywords we haven't targeted yet.\n"
+    except Exception:
+        pass
+
     keyword_prompt = f"""Based on these search results about "{topic}":
 
 {formatted_results}
-
+{past_context}
 Provide a list of {num_keywords} SEO keywords for {topic}, formatted as:
 
 **Primary Keywords (High Priority):**
@@ -175,9 +164,8 @@ Provide a list of {num_keywords} SEO keywords for {topic}, formatted as:
 
 Include realistic search volume estimates and practical difficulty assessments."""
 
-    response = llm.invoke(keyword_prompt)
-    result = response.content if hasattr(response, 'content') else str(response)
-    
+    result = _seo_call(keyword_prompt, tier=2)
+
     print(f"✅ Found keyword opportunities!")
     return result
 
@@ -221,9 +209,8 @@ Provide:
 
 Be specific and actionable."""
 
-    response = llm.invoke(analysis_prompt)
-    result = response.content if hasattr(response, 'content') else str(response)
-    
+    result = _seo_call(analysis_prompt, tier=4)
+
     print(f"✅ Competitor analysis complete!")
     return result
 
@@ -265,9 +252,8 @@ Identify:
 
 Be creative and specific."""
 
-    response = llm.invoke(gap_prompt)
-    result = response.content if hasattr(response, 'content') else str(response)
-    
+    result = _seo_call(gap_prompt, tier=2)
+
     print(f"✅ Content gap analysis complete!")
     return result
 

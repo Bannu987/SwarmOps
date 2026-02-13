@@ -3,7 +3,7 @@ MarketingOS 2.0 - FastAPI Backend
 Full Nexus orchestrator + 10 agents + real integrations
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -43,6 +43,20 @@ def get_nexus():
         from nexus import Nexus
         _nexus = Nexus()
     return _nexus
+
+
+def _chat_response(agent: str, result):
+    """Build a chat response dict with model/provider metadata."""
+    from model_router import get_last_call_info
+    info = get_last_call_info()
+    return {
+        "success": True,
+        "agent": agent,
+        "result": _extract_text(result),
+        "model": info.get("model", "unknown"),
+        "provider": info.get("provider", "unknown"),
+        "latency_ms": info.get("latency_ms", 0),
+    }
 
 
 def _extract_text(result):
@@ -159,6 +173,30 @@ def test_providers():
         results = test_all_providers()
         working = sum(1 for v in results.values() if v == "ok")
         return {"providers": results, "working": working, "total": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/rate-limits")
+def get_rate_limits():
+    """Get current rate limit status for all providers"""
+    try:
+        from rate_limiter import get_rate_limiter
+        limiter = get_rate_limiter()
+        status = limiter.get_status()
+
+        # Calculate summary stats
+        total_providers = len(status)
+        available = sum(1 for v in status.values() if v["available"])
+        rate_limited = total_providers - available
+
+        return {
+            "status": status,
+            "summary": {
+                "total_providers": total_providers,
+                "available": available,
+                "rate_limited": rate_limited
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -564,42 +602,78 @@ class ChatRequest(BaseModel):
     agent: str = "nexus"
 
 @app.post("/api/chat")
-def chat(request: ChatRequest):
-    """Unified chat endpoint — routes message to the appropriate agent"""
+async def chat(request: ChatRequest, skip_review: bool = Query(False)):
+    """Unified chat endpoint — routes message to the appropriate agent, with Skeptic QA + memory + pipelines"""
     try:
         agent = request.agent.lower().strip()
         msg = request.message
 
+        # --- Check if this is a nexus request and if it needs a pipeline ---
+        if agent == "nexus" or agent == "":
+            nexus = get_nexus()
+            pipeline_detection = nexus.detect_pipeline(msg)
+
+            if pipeline_detection["is_pipeline"]:
+                # Execute pipeline
+                print(f"\n🔗 PIPELINE DETECTED: {pipeline_detection['reasoning']}")
+                result = await nexus.run_pipeline(pipeline_detection["pipeline"], msg)
+
+                # Return pipeline result
+                return {
+                    "success": True,
+                    "agent": "nexus",
+                    "pipeline": True,
+                    "result": result,
+                    "model": "pipeline",
+                    "provider": "multi-agent",
+                    "latency_ms": result.get("total_latency_ms", 0)
+                }
+
+        # --- recall past memories and prepend context ---
+        try:
+            from memory_store import get_memory_store
+            memory = get_memory_store()
+            memories = memory.recall_memories(department=agent, limit=3)
+            if memories:
+                memory_lines = "\n".join(f"- {m['content']}" for m in memories)
+                msg = f"CONTEXT FROM PREVIOUS WORK:\n{memory_lines}\n\nNEW TASK: {msg}"
+        except Exception:
+            memory = None
+
+        # --- dispatch to the correct agent and capture a revision callable ---
+        result = None
+        agent_fn = None  # callable(prompt) -> str for revisions
+
         if agent == "content":
             from content_agent import generate_content
             result = generate_content(msg)
-            return {"success": True, "agent": "content", "result": result}
+            agent_fn = generate_content
 
         elif agent == "seo":
             from seo_agent import find_keyword_opportunities, find_keywords
             result = find_keyword_opportunities(msg)
             if result is None:
                 result = find_keywords(msg)
-            return {"success": True, "agent": "seo", "result": _extract_text(result)}
+            agent_fn = find_keywords
 
         elif agent == "analytics":
             from analytics_agent import get_live_dashboard, analyze_performance
             result = get_live_dashboard(days=30)
             if result is None or (isinstance(result, str) and "❌" in result):
                 result = analyze_performance(msg, "No GA4 data available. Analyze based on the request using industry benchmarks.")
-            return {"success": True, "agent": "analytics", "result": _extract_text(result)}
+            agent_fn = lambda p: analyze_performance(p, "Revision requested by quality control.")
 
         elif agent == "ppc":
             from ppc_agent import get_real_campaign_performance, create_campaign_strategy
             result = get_real_campaign_performance(days=7)
             if result is None:
                 result = create_campaign_strategy(msg)
-            return {"success": True, "agent": "ppc", "result": _extract_text(result)}
+            agent_fn = create_campaign_strategy
 
         elif agent == "crm":
             from crm_agent import create_email_sequence
             result = create_email_sequence(msg, num_emails=3)
-            return {"success": True, "agent": "crm", "result": result}
+            agent_fn = lambda p: create_email_sequence(p, num_emails=3)
 
         elif agent == "smm":
             from smm_agent import write_platform_post
@@ -608,7 +682,11 @@ def chat(request: ChatRequest):
                 brand_voice="Professional and engaging",
                 goal="engagement", brand_name="Brand"
             )
-            return {"success": True, "agent": "smm", "result": result}
+            agent_fn = lambda p: write_platform_post(
+                platform="linkedin", topic=p,
+                brand_voice="Professional and engaging",
+                goal="engagement", brand_name="Brand"
+            )
 
         elif agent == "brand":
             from brand_strategist_agent import create_brand_strategy
@@ -616,7 +694,10 @@ def chat(request: ChatRequest):
                 company_name="Company", industry="General",
                 target_audience="General audience", unique_value=msg
             )
-            return {"success": True, "agent": "brand", "result": result}
+            agent_fn = lambda p: create_brand_strategy(
+                company_name="Company", industry="General",
+                target_audience="General audience", unique_value=p
+            )
 
         elif agent in ("web_ux", "webux"):
             from web_ux_agent import design_landing_page
@@ -624,7 +705,11 @@ def chat(request: ChatRequest):
                 product=msg, target_audience="General audience",
                 goal="conversions"
             )
-            return {"success": True, "agent": "web_ux", "result": result}
+            agent = "web_ux"
+            agent_fn = lambda p: design_landing_page(
+                product=p, target_audience="General audience",
+                goal="conversions"
+            )
 
         elif agent == "cro":
             from cro_agent import analyze_funnel
@@ -632,18 +717,133 @@ def chat(request: ChatRequest):
                 funnel_steps=msg, conversion_data="",
                 goal="increase conversions"
             )
-            return {"success": True, "agent": "cro", "result": result}
+            agent_fn = lambda p: analyze_funnel(
+                funnel_steps=p, conversion_data="",
+                goal="increase conversions"
+            )
 
         elif agent == "research":
             from research_agent import research_topic
             result = research_topic(msg)
-            return {"success": True, "agent": "research", "result": _extract_text(result)}
+            agent_fn = research_topic
 
         else:  # "nexus" or anything else → smart routing
             nexus = get_nexus()
             result = nexus.execute_task(msg)
-            return {"success": True, "agent": "nexus", "result": _extract_text(result)}
+            agent = "nexus"
+            agent_fn = nexus.execute_task
 
+        # --- build base response with model/provider info ---
+        from model_router import get_last_call_info
+        info = get_last_call_info()
+        result_text = _extract_text(result)
+
+        # --- Skeptic QA review (skip if requested or if result is empty) ---
+        quality = None
+        final_text = result_text
+        if not skip_review and result_text and len(result_text) > 20:
+            try:
+                from skeptic_agent import SkepticAgent
+                skeptic = SkepticAgent()
+                review = skeptic.review_and_improve(agent, msg, result_text, agent_fn)
+                final_text = review["output"]
+                quality = {
+                    "confidence": review["critique"]["confidence"],
+                    "approved": review["critique"]["approved"],
+                    "revised": review["revised"],
+                    "strengths": review["critique"]["strengths"],
+                    "weaknesses": review["critique"]["weaknesses"],
+                }
+                # If revised, update model/provider info from the latest call
+                if review["revised"]:
+                    info = get_last_call_info()
+            except Exception:
+                # Skeptic failed — return original without blocking
+                pass
+
+        # --- save memory + log task ---
+        confidence = quality["confidence"] if quality else 0.0
+        if memory and final_text and len(final_text) > 20:
+            try:
+                original_msg = request.message  # use the raw message, not the memory-augmented one
+                memory.save_memory(
+                    department=agent,
+                    memory_type="decision",
+                    content=f"Task: {original_msg[:100]} | Result: {final_text[:200]}",
+                    metadata={
+                        "model": info.get("model", ""),
+                        "provider": info.get("provider", ""),
+                        "confidence": confidence,
+                    },
+                )
+                memory.log_task(
+                    department=agent,
+                    task_input=original_msg,
+                    task_output=final_text[:500],
+                    model=info.get("model", ""),
+                    provider=info.get("provider", ""),
+                    confidence=confidence,
+                    latency_ms=info.get("latency_ms", 0),
+                )
+            except Exception:
+                pass  # never block on memory save
+
+        response = {
+            "success": True,
+            "agent": agent,
+            "result": final_text,
+            "model": info.get("model", "unknown"),
+            "provider": info.get("provider", "unknown"),
+            "latency_ms": info.get("latency_ms", 0),
+        }
+        if quality is not None:
+            response["quality"] = quality
+
+        return response
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# MEMORY & STATS ENDPOINTS
+# ============================================================================
+
+@app.get("/api/stats")
+def get_stats():
+    """Aggregate usage stats (tasks, models, departments)"""
+    try:
+        from memory_store import get_memory_store
+        return get_memory_store().get_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/history")
+def get_history(department: str = None, days: int = 7, limit: int = 20):
+    """Recent task history, optionally filtered by department"""
+    try:
+        from memory_store import get_memory_store
+        tasks = get_memory_store().get_task_history(department=department, days=days, limit=limit)
+        return {"tasks": tasks, "count": len(tasks)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/memory/{department}")
+def get_memory(department: str, limit: int = 10):
+    """Recall memories for a specific agent department"""
+    try:
+        from memory_store import get_memory_store
+        memories = get_memory_store().recall_memories(department=department, limit=limit)
+        return {"department": department, "memories": memories, "count": len(memories)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/memory")
+def clear_memory():
+    """Clear all memories and task logs (reset button)"""
+    try:
+        from memory_store import get_memory_store
+        get_memory_store().clear_all()
+        return {"success": True, "message": "All memories and task logs cleared."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

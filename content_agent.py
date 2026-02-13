@@ -1,20 +1,17 @@
 """
 Content Agent - MarketingOS 2.0
-Now using Groq Cloud AI instead of Ollama
+Uses model_router for multi-provider AI with automatic fallback
 """
 
-from groq import Groq
 import os
 from dotenv import load_dotenv
+from model_router import call_model_sync
 
 # Load environment variables
 load_dotenv()
 
-# Initialize Groq client
 print("🔧 Initializing Content Agent...")
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-model = "llama-3.3-70b-versatile"  # Best for creative content
-print("✅ Content Agent ready (Groq - Cloud AI)!")
+print("✅ Content Agent ready (Multi-Provider Router)!")
 
 # Function to use the agent
 def generate_content(user_request, max_length=2000):
@@ -32,26 +29,28 @@ def generate_content(user_request, max_length=2000):
     print("⏳ Generating content... (this may take 5-15 seconds)")
     
     try:
+        # Check memory for past content to avoid repetition
+        past_context = ""
+        try:
+            from memory_store import get_memory_store
+            past = get_memory_store().recall_memories("content", limit=5)
+            if past:
+                past_lines = "\n".join(f"  - {m['content']}" for m in past)
+                past_context = f"\n\nWe already wrote about:\n{past_lines}\nTake a fresh angle or cover something we haven't addressed.\n"
+        except Exception:
+            pass
+
         # Create the prompt
         prompt = f"""You are a helpful content writing assistant.
 Your job is to write high-quality content based on the user's request.
-
+{past_context}
 User Request: {user_request}
 
 Please write the content now:"""
         
-        # Call Groq API
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=max_length,
-            temperature=0.7
-        )
-        
-        # Extract the result
-        result = response.choices[0].message.content
+        # Call model router (tier 2 = content generation)
+        result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=max_length, temperature=0.7)
+        result = result_data["content"]
         
         print("✅ Content generated!\n")
         return result

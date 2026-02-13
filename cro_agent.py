@@ -1,12 +1,12 @@
 """
 CRO Agent - MarketingOS 2.0
 Conversion Rate Optimization Specialist
-Now using Groq Cloud AI
+Uses model_router for multi-provider AI with automatic fallback
 """
 
-from groq import Groq
 import os
 from dotenv import load_dotenv
+from model_router import call_model_sync
 
 # Load environment variables
 load_dotenv()
@@ -16,15 +16,13 @@ class CROAgent:
     """
     CRO (Conversion Rate Optimization) Agent
     Identifies friction and optimizes conversion funnels
-    Powered by Groq Cloud AI (qwen/qwen3-32b - best for analytical tasks)
+    Uses multi-provider model router with automatic fallback
     """
-    
+
     def __init__(self):
-        """Initialize the CRO Agent with Groq"""
+        """Initialize the CRO Agent"""
         print("📊 Initializing CRO Agent...")
-        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.model = "qwen/qwen3-32b"  # Best for analysis and optimization
-        print("✅ CRO Agent ready (Groq - Cloud AI)!")
+        print("✅ CRO Agent ready (Multi-Provider Router)!")
     
     def analyze_funnel(self, funnel_steps: str, conversion_data: str = "", 
                       goal: str = "increase conversions") -> str:
@@ -112,14 +110,8 @@ Prioritize top 5-7 tests:
 Be specific, data-driven, and actionable."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2500,
-                temperature=0.6
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.6)
+            result = result_data["content"]
             print("✅ Funnel analysis complete!")
             return result
             
@@ -230,14 +222,8 @@ Plan to analyze by:
 Be thorough and scientifically rigorous."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2500,
-                temperature=0.6
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.6)
+            result = result_data["content"]
             print("✅ A/B test plan created!")
             return result
             
@@ -355,14 +341,8 @@ Rank by:
 Be ruthlessly honest about friction sources."""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2500,
-                temperature=0.6
-            )
-            
-            result = response.choices[0].message.content
+            result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.6)
+            result = result_data["content"]
             print("✅ Friction points identified!")
             return result
             

@@ -594,6 +594,61 @@ def research_topic_get(topic: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
+# DEEP RESEARCH ENDPOINT — intensive multi-step research with reasoning model
+# ============================================================================
+
+class DeepResearchRequest(BaseModel):
+    topic: str
+
+@app.post("/api/deep-research")
+async def deep_research_endpoint(request: DeepResearchRequest):
+    """
+    Execute deep research with 5-step process:
+    1. Generate 3 smart search queries
+    2. Execute searches on Brave + Serper
+    3. Compile results
+    4. Analyze with Kimi K2.5 reasoning model
+    5. Return structured data
+    """
+    try:
+        from deep_research_agent import get_deep_research_agent
+        import os
+
+        deep_research = get_deep_research_agent(
+            brave_api_key=os.getenv("BRAVE_API_KEY"),
+            serper_api_key=os.getenv("SERPER_API_KEY")
+        )
+
+        result = await deep_research.research(request.topic)
+
+        if result.get("success"):
+            return {
+                "success": True,
+                "agent": "deep_research",
+                "result": result,
+                "model": result.get("models_used", {}).get("analysis", "unknown"),
+                "provider": "multi-step",
+                "latency_ms": result.get("total_latency_ms", 0),
+                "quality": {
+                    "confidence": result.get("confidence", 0.0),
+                    "approved": True,
+                    "revised": False
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "agent": "deep_research",
+                "error": result.get("error", "Deep research failed"),
+                "result": result
+            }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
 # UNIFIED CHAT ENDPOINT — single entry point for all agents
 # ============================================================================
 
@@ -726,6 +781,40 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             from research_agent import research_topic
             result = research_topic(msg)
             agent_fn = research_topic
+
+        elif agent == "deep_research" or agent == "deep-research":
+            from deep_research_agent import get_deep_research_agent
+            import os
+            deep_research = get_deep_research_agent(
+                brave_api_key=os.getenv("BRAVE_API_KEY"),
+                serper_api_key=os.getenv("SERPER_API_KEY")
+            )
+            result = await deep_research.research(msg)
+            # For deep research, result is already structured, so we'll handle it differently
+            # We'll skip the Skeptic review for deep research since it has its own quality scoring
+            if result.get("success"):
+                # Return immediately with structured data
+                return {
+                    "success": True,
+                    "agent": "deep_research",
+                    "result": result,
+                    "model": result.get("models_used", {}).get("analysis", "unknown"),
+                    "provider": "multi-step",
+                    "latency_ms": result.get("total_latency_ms", 0),
+                    "quality": {
+                        "confidence": result.get("confidence", 0.0),
+                        "approved": True,
+                        "revised": False
+                    }
+                }
+            else:
+                # Return error
+                return {
+                    "success": False,
+                    "agent": "deep_research",
+                    "error": result.get("error", "Deep research failed"),
+                    "result": result.get("summary", "Research unavailable")
+                }
 
         else:  # "nexus" or anything else → smart routing
             nexus = get_nexus()

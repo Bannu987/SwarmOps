@@ -109,6 +109,26 @@ const AGENTS = [
     status: 'online'
   },
   {
+    id: 'deep_research',
+    name: 'Deep Research',
+    shortName: 'Deep Research',
+    icon: Search,
+    iconEmoji: '🔬',
+    description: 'Intensive multi-step research with Kimi K2.5 reasoning model',
+    capabilities: ['Multi-Source Search', 'Reasoning Analysis', 'Structured Findings', 'Recommendations'],
+    model: 'Kimi K2.5',
+    provider: 'Multi-Step',
+    color: '#A78BFA',
+    gradientFrom: '#8B5CF6',
+    gradientTo: '#A78BFA',
+    bgColor: 'rgba(139, 92, 246, 0.15)',
+    endpoint: '/api/deep-research',
+    tasks: 0,
+    successRate: 99.0,
+    avgResponseTime: '5.2s',
+    status: 'online'
+  },
+  {
     id: 'crm',
     name: 'CRM Agent',
     shortName: 'CRM',
@@ -485,6 +505,74 @@ function App() {
     }
   };
 
+  // Format deep research results into readable text
+  const formatDeepResearchResult = (result) => {
+    if (!result || typeof result !== 'object') return String(result);
+
+    let formatted = '';
+
+    // Summary
+    if (result.summary) {
+      formatted += `## 📊 SUMMARY\n\n${result.summary}\n\n`;
+    }
+
+    // Key Findings
+    if (result.key_findings && Array.isArray(result.key_findings)) {
+      formatted += `## 🔍 KEY FINDINGS\n\n`;
+      result.key_findings.forEach((finding, i) => {
+        formatted += `${i + 1}. ${finding}\n`;
+      });
+      formatted += '\n';
+    }
+
+    // Sources
+    if (result.sources && Array.isArray(result.sources) && result.sources.length > 0) {
+      formatted += `## 📚 SOURCES\n\n`;
+      result.sources.slice(0, 10).forEach((source, i) => {
+        formatted += `${i + 1}. [${source.title}](${source.url})\n`;
+        if (source.snippet) {
+          formatted += `   > ${source.snippet}\n`;
+        }
+      });
+      formatted += '\n';
+    }
+
+    // Recommendations
+    if (result.recommendations && Array.isArray(result.recommendations)) {
+      formatted += `## 💡 RECOMMENDATIONS\n\n`;
+      result.recommendations.forEach((rec, i) => {
+        formatted += `${i + 1}. ${rec}\n`;
+      });
+      formatted += '\n';
+    }
+
+    // Metadata
+    if (result.search_queries_used && Array.isArray(result.search_queries_used)) {
+      formatted += `## 🔎 SEARCH QUERIES USED\n\n`;
+      result.search_queries_used.forEach((query, i) => {
+        formatted += `- ${query}\n`;
+      });
+      formatted += '\n';
+    }
+
+    if (result.models_used) {
+      formatted += `## 🤖 MODELS USED\n\n`;
+      if (result.models_used.query_generation) {
+        formatted += `- Query Generation: ${result.models_used.query_generation}\n`;
+      }
+      if (result.models_used.analysis) {
+        formatted += `- Analysis: ${result.models_used.analysis}\n`;
+      }
+      formatted += '\n';
+    }
+
+    if (result.confidence !== undefined) {
+      formatted += `## ✅ CONFIDENCE: ${(result.confidence * 100).toFixed(0)}%\n`;
+    }
+
+    return formatted;
+  };
+
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -511,10 +599,19 @@ function App() {
             message: currentInput,
             agent: 'nexus'
           });
+
+          // Format content based on agent type
+          let messageContent = response?.data?.result || 'Task completed';
+          if (response?.data?.agent === 'deep_research' && typeof messageContent === 'object') {
+            messageContent = formatDeepResearchResult(messageContent);
+          } else if (typeof messageContent === 'object') {
+            messageContent = JSON.stringify(messageContent, null, 2);
+          }
+
           const agentMessage = {
             id: Date.now() + Math.random(),
             role: 'agent',
-            content: response?.data?.result || 'Task completed',
+            content: messageContent,
             agentId: response?.data?.agent || 'nexus',
             agentName: 'Nexus Orchestrator',
             agentIcon: '🧠',
@@ -588,6 +685,10 @@ function App() {
                 topic: currentInput,
                 depth: "comprehensive"
               });
+            } else if (agent.id === 'deep_research') {
+              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
+                topic: currentInput
+              });
             } else if (agent.id === 'seo') {
               response = await axios.get(`${API_BASE}/api/seo/opportunities?topic=${encodeURIComponent(currentInput)}`);
             } else if (agent.id === 'analytics') {
@@ -602,17 +703,28 @@ function App() {
               });
             }
 
+            // Special formatting for deep research results
+            let messageContent;
+            if (agent.id === 'deep_research' && response?.data?.result && typeof response.data.result === 'object') {
+              messageContent = formatDeepResearchResult(response.data.result);
+            } else {
+              messageContent = response?.data?.result || response?.data?.data?.analysis || response?.data?.post || (typeof response?.data === 'object' ? JSON.stringify(response?.data, null, 2) : String(response?.data)) || 'Response received';
+            }
+
             const agentMessage = {
               id: Date.now() + Math.random(),
               role: 'agent',
-              content: response?.data?.result || response?.data?.data?.analysis || response?.data?.post || (typeof response?.data === 'object' ? JSON.stringify(response?.data, null, 2) : String(response?.data)) || 'Response received',
+              content: messageContent,
               agentId: agent.id,
               agentName: agent.name,
               agentIcon: agent.iconEmoji,
               agentColor: agent.color,
               agentGradientFrom: agent.gradientFrom,
               agentGradientTo: agent.gradientTo,
-              model: agent.model,
+              model: response?.data?.model || agent.model,
+              provider: response?.data?.provider,
+              latency_ms: response?.data?.latency_ms,
+              quality: response?.data?.quality,
               timestamp: new Date().toISOString()
             };
 

@@ -31,6 +31,10 @@ Thumbs.db
 memory.json
 enhanced_memory.json
 test_memory_report.json
+marketingos.db
+test_output.json
+NUL
+backend/memory.json
 
 # Logs
 *.log

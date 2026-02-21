@@ -39,27 +39,32 @@ class SkepticAgent:
         # Truncate very long outputs to keep the critique prompt manageable
         truncated = agent_output[:3000] if len(agent_output) > 3000 else agent_output
 
-        prompt = f"""You are The Skeptic, quality control for MarketingOS.
-You received output from the {department} agent for this task: {original_task}
+        prompt = f"""You are The Skeptic, a strict quality control reviewer for MarketingOS.
+You received output from the {department} agent for this task: "{original_task}"
 
-The output:
+OUTPUT TO REVIEW:
+---
 {truncated}
+---
 
-Evaluate on:
-1. RELEVANCE — does it address what the user asked?
-2. ACTIONABILITY — can someone execute this today?
-3. COMPLETENESS — any obvious gaps?
-4. REALISM — are claims and estimates reasonable?
-5. QUALITY — is this specific and useful, or generic filler?
+Score each dimension 0.0-1.0, then average for final confidence:
+1. RELEVANCE — Does it directly address what the user asked? (0.0=off-topic, 1.0=perfect match)
+2. SPECIFICITY — Does it include real data, numbers, names, or actionable details? (0.0=generic platitudes, 1.0=highly specific)
+3. COMPLETENESS — Are there obvious missing sections or gaps? (0.0=barely started, 1.0=thorough)
+4. ACTIONABILITY — Could someone execute this immediately? (0.0=vague advice, 1.0=step-by-step ready)
+5. ACCURACY — Are claims realistic and well-reasoned? (0.0=made-up numbers, 1.0=well-supported)
 
-Rate confidence 0.0 to 1.0.
-Below 0.5 = needs major rework
-0.5-0.7 = has issues, suggest improvements
-0.7-0.85 = good with minor gaps
-Above 0.85 = excellent
+SCORING RULES:
+- Generic advice with no specifics (e.g. "use keywords", "create quality content") = 0.4-0.55
+- Decent structure but uses placeholder data or lacks depth = 0.6-0.72
+- Good analysis with real insights and minor gaps = 0.73-0.85
+- Exceptional output with specific data, clear strategy, and complete coverage = 0.86-0.95
+- NEVER score above 0.95 — nothing is perfect
+
+Calculate: confidence = average of your 5 dimension scores. Do NOT default to 0.8.
 
 Respond ONLY as valid JSON (no markdown, no code fences):
-{{"confidence":0.8,"approved":true,"strengths":["..."],"weaknesses":["..."],"suggestions":["..."]}}"""
+{{"confidence":0.73,"approved":true,"strengths":["specific strength 1","specific strength 2"],"weaknesses":["specific weakness 1"],"suggestions":["specific improvement 1"]}}"""
 
         try:
             result = call_model_sync(prompt=prompt, tier=1, max_tokens=500, temperature=0.3)

@@ -20,6 +20,10 @@ if sys.stderr and hasattr(sys.stderr, 'buffer'):
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Load .env before anything else (Railway sets real env vars, this is for local dev)
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+
 # ---------------------------------------------------------------------------
 # Startup ENV check — prints to Railway logs so you can verify keys are loaded
 # ---------------------------------------------------------------------------

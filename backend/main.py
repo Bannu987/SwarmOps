@@ -20,6 +20,33 @@ if sys.stderr and hasattr(sys.stderr, 'buffer'):
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# ---------------------------------------------------------------------------
+# Startup ENV check — prints to Railway logs so you can verify keys are loaded
+# ---------------------------------------------------------------------------
+_ENV_KEYS = [
+    "GROQ_API_KEY",
+    "GEMINI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "NVIDIA_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "SERPER_API_KEY",
+    "BRAVE_API_KEY",
+]
+
+def _env_check():
+    parts = []
+    for key in _ENV_KEYS:
+        short = key.replace("_API_KEY", "").replace("_KEY", "")
+        found = bool(os.getenv(key))
+        icon = "\u2705" if found else "\u274c"
+        parts.append(f"{short}={icon}")
+    line = "  ".join(parts)
+    print(f"\n{'='*60}")
+    print(f"ENV CHECK: {line}")
+    print(f"{'='*60}\n")
+
+_env_check()
+
 # Initialize FastAPI first (before heavy imports)
 app = FastAPI(
     title="MarketingOS 2.0 API",
@@ -164,6 +191,16 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy", "agents": 10}
+
+@app.get("/api/debug-env")
+def debug_env():
+    """Check which API keys are present (true/false only, never exposes values)"""
+    result = {}
+    for key in _ENV_KEYS:
+        val = os.getenv(key)
+        result[key] = bool(val and val.strip())
+    found = sum(1 for v in result.values() if v)
+    return {"keys": result, "found": found, "total": len(result)}
 
 @app.get("/api/test-providers")
 def test_providers():

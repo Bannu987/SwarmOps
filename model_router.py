@@ -72,6 +72,7 @@ def _get_openrouter():
         _openrouter_client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=key,
+            timeout=15.0,
             default_headers={
                 "HTTP-Referer": "https://marketingos.app",
                 "X-Title": "MarketingOS",
@@ -90,6 +91,7 @@ def _get_nvidia():
         _nvidia_client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
             api_key=key,
+            timeout=15.0,
         )
     return _nvidia_client
 
@@ -104,6 +106,7 @@ def _get_deepseek():
         _deepseek_client = OpenAI(
             base_url="https://api.deepseek.com",
             api_key=key,
+            timeout=15.0,
         )
     return _deepseek_client
 
@@ -169,17 +172,31 @@ def _call_groq(prompt: str, system_prompt: str = "", model: str = "llama-3.3-70b
 def _call_openai_compat(client, model: str, prompt: str, system_prompt: str = "",
                         max_tokens: int = 4096, temperature: float = 0.7) -> Optional[str]:
     """Call any OpenAI-compatible API (OpenRouter, NVIDIA, DeepSeek).
-    Handles reasoning models that put output in reasoning_content."""
+    Handles reasoning models that put output in reasoning_content.
+    Uses threading timeout as a safety net since OpenAI client timeout
+    may not work reliably on all Python versions."""
     if client is None:
         return None
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
-    resp = client.chat.completions.create(
+
+    import concurrent.futures
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(
+        client.chat.completions.create,
         model=model, messages=messages,
         max_tokens=max_tokens, temperature=temperature,
     )
+    try:
+        resp = future.result(timeout=20)  # Hard 20s timeout
+    except (concurrent.futures.TimeoutError, TimeoutError):
+        print(f"[model_router] {model} timed out after 20s")
+        executor.shutdown(wait=False, cancel_futures=True)
+        return None
+    executor.shutdown(wait=False)
+
     msg = resp.choices[0].message
     content = msg.content
     # Reasoning models (Kimi K2.5, DeepSeek R1) may put output in reasoning_content

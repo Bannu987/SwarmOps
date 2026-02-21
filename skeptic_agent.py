@@ -1,5 +1,5 @@
 """
-Skeptic Agent - MarketingOS 2.0 Quality Control
+Skeptic Agent - SwarmOps Quality Control
 Reviews every agent's output before it reaches the user.
 Catches generic, low-quality, or incomplete responses and forces a revision.
 Uses tier 1 (Groq) for fast evaluation.
@@ -11,7 +11,7 @@ from model_router import call_model_sync
 
 class SkepticAgent:
     """
-    The Skeptic — quality control layer for MarketingOS.
+    The Skeptic — quality control layer for SwarmOps.
     Critiques agent outputs and triggers revisions when needed.
     """
 
@@ -39,7 +39,7 @@ class SkepticAgent:
         # Truncate very long outputs to keep the critique prompt manageable
         truncated = agent_output[:3000] if len(agent_output) > 3000 else agent_output
 
-        prompt = f"""You are The Skeptic, a strict quality control reviewer for MarketingOS.
+        prompt = f"""You are The Skeptic, a strict quality control reviewer for SwarmOps.
 You received output from the {department} agent for this task: "{original_task}"
 
 OUTPUT TO REVIEW:

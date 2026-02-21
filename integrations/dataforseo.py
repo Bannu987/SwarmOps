@@ -1,5 +1,5 @@
 """
-DataForSEO Integration - MarketingOS 2.0
+DataForSEO Integration - SwarmOps
 Real keyword research: search volume, competition, CPC, SERP snapshots.
 
 Requires:

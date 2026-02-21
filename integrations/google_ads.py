@@ -1,5 +1,5 @@
 """
-Google Ads Integration - MarketingOS 2.0
+Google Ads Integration - SwarmOps
 Create and manage real Google Ads search campaigns.
 
 Requires:

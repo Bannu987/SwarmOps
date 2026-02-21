@@ -1,5 +1,5 @@
 """
-Google Analytics 4 Integration - MarketingOS 2.0
+Google Analytics 4 Integration - SwarmOps
 Pulls real traffic, conversion, and behavioral data from GA4.
 
 Requires:

@@ -1,5 +1,5 @@
 """
-CRO Agent - MarketingOS 2.0
+CRO Agent - SwarmOps
 Conversion Rate Optimization Specialist
 Uses model_router for multi-provider AI with automatic fallback
 """

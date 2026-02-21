@@ -215,6 +215,6 @@ if __name__ == "__main__":
         print("\nMake sure you:")
         print("1. Have BRAVE_API_KEY in your .env file")
         print("2. The API key is correct")
-        print("3. You're in the MarketingOS folder")
+        print("3. You're in the SwarmOps folder")
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")

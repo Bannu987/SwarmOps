@@ -269,7 +269,7 @@ Be specific and prioritize actions by potential impact."""
 
 
 # ==============================================================
-# REAL EXECUTION LAYER — MarketingOS 2.0 Upgrade
+# REAL EXECUTION LAYER — SwarmOps Upgrade
 # Creates and manages real Google Ads campaigns.
 # Falls back to strategy-only mode if Google Ads is not configured.
 # ==============================================================

@@ -1,5 +1,5 @@
 """
-Memory Store - MarketingOS 2.0
+Memory Store - SwarmOps
 Persistent SQLite memory so agents learn from past work.
 """
 
@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 
 class MemoryStore:
-    """Persistent memory for all MarketingOS agents using SQLite."""
+    """Persistent memory for all SwarmOps agents using SQLite."""
 
     def __init__(self, db_path="marketingos.db"):
         self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), db_path)
@@ -166,6 +166,41 @@ class MemoryStore:
     # ------------------------------------------------------------------
     # Reset
     # ------------------------------------------------------------------
+
+    def export_all(self) -> dict:
+        """Export all data as JSON-serializable dict."""
+        conn = self._get_conn()
+        memories = [
+            dict(r) for r in conn.execute(
+                "SELECT department, memory_type, content, metadata, created_at FROM agent_memory ORDER BY id"
+            ).fetchall()
+        ]
+        tasks = [
+            dict(r) for r in conn.execute(
+                "SELECT department, task_input, task_output, model, provider, confidence, latency_ms, created_at FROM task_log ORDER BY id"
+            ).fetchall()
+        ]
+        return {"agent_memory": memories, "task_log": tasks}
+
+    def import_all(self, data: dict) -> dict:
+        """Import data from an export. Appends to existing data."""
+        conn = self._get_conn()
+        mem_count = 0
+        task_count = 0
+        for m in data.get("agent_memory", []):
+            conn.execute(
+                "INSERT INTO agent_memory (department, memory_type, content, metadata, created_at) VALUES (?, ?, ?, ?, ?)",
+                (m["department"], m["memory_type"], m["content"], m.get("metadata"), m.get("created_at")),
+            )
+            mem_count += 1
+        for t in data.get("task_log", []):
+            conn.execute(
+                "INSERT INTO task_log (department, task_input, task_output, model, provider, confidence, latency_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (t["department"], t["task_input"], t["task_output"], t.get("model", ""), t.get("provider", ""), t.get("confidence", 0), t.get("latency_ms", 0), t.get("created_at")),
+            )
+            task_count += 1
+        conn.commit()
+        return {"memories_imported": mem_count, "tasks_imported": task_count}
 
     def clear_all(self):
         """Delete all memories and task logs."""

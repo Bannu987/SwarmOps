@@ -1,6 +1,6 @@
 """
 SMM Agent - Social Media Marketing Specialist
-MarketingOS 2.0 — The 9th Main Agent
+SwarmOps — The 9th Main Agent
 
 Handles platform-specific social media strategy, content creation,
 trend analysis, and engagement planning.
@@ -315,7 +315,7 @@ if __name__ == "__main__":
             topic="How AI is changing digital marketing",
             brand_voice="professional",
             goal="engagement",
-            brand_name="MarketingOS",
+            brand_name="SwarmOps",
         )
         print(post[:600] + "...")
 

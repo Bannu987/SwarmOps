@@ -21,6 +21,8 @@ import {
   Cell
 } from 'recharts';
 import './App.css';
+import LandingPage from './LandingPage';
+import './LandingPage.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -287,10 +289,13 @@ function App() {
     clearMessages
   } = useChatStore();
 
+  const [showLanding, setShowLanding] = useState(() => {
+    return !localStorage.getItem('swarmops-launched');
+  });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('marketingos-darkmode');
+    const saved = localStorage.getItem('swarmops-darkmode');
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
@@ -806,6 +811,10 @@ function App() {
     { icon: Zap, text: 'Optimize my conversion funnel', agent: 'cro' }
   ];
 
+  if (showLanding) {
+    return <LandingPage onLaunch={() => { localStorage.setItem('swarmops-launched', '1'); setShowLanding(false); }} />;
+  }
+
   return (
     <div className={`maestro-app ${darkMode ? 'dark' : 'light'}`}>
       {/* Ambient Background */}
@@ -1133,7 +1142,7 @@ function Header({
             <Sparkles size={20} />
           </div>
           <div className="logo-text">
-            <span className="logo-name">MarketingOS</span>
+            <span className="logo-name">SwarmOps</span>
             <span className="logo-badge">PRO</span>
           </div>
         </div>

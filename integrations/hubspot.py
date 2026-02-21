@@ -1,5 +1,5 @@
 """
-HubSpot Integration - MarketingOS 2.0
+HubSpot Integration - SwarmOps
 Contact management, email sending, and CRM data.
 
 Requires:

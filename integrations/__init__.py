@@ -1,5 +1,5 @@
 """
-MarketingOS 2.0 - Integration Layer
+SwarmOps - Integration Layer
 Real API connections to marketing platforms.
 
 Each integration checks for credentials at init time.

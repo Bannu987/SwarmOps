@@ -340,7 +340,7 @@ Be specific with numbers and timelines."""
 
 
 # ==============================================================
-# REAL DATA LAYER — MarketingOS 2.0 Upgrade
+# REAL DATA LAYER — SwarmOps Upgrade
 # Pulls LIVE data from Google Analytics 4.
 # Falls back gracefully if GA4 is not configured.
 # ==============================================================

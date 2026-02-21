@@ -1,5 +1,5 @@
 """
-CRM Agent - MarketingOS 2.0
+CRM Agent - SwarmOps
 Email sequences and customer relationship management
 Uses model_router for multi-provider AI with automatic fallback
 """
@@ -118,7 +118,7 @@ def write_single_email(purpose: str) -> str:
 
 
 # ==============================================================
-# REAL EXECUTION LAYER — MarketingOS 2.0 Upgrade
+# REAL EXECUTION LAYER — SwarmOps Upgrade
 # Sends emails and manages contacts via HubSpot.
 # Falls back to text-only mode if HubSpot is not configured.
 # ==============================================================

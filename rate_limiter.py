@@ -1,5 +1,5 @@
 """
-Rate Limiter - MarketingOS 2.0
+Rate Limiter - SwarmOps
 In-memory rate limiter to prevent hitting provider API limits
 """
 

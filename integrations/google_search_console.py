@@ -1,5 +1,5 @@
 """
-Google Search Console Integration - MarketingOS 2.0
+Google Search Console Integration - SwarmOps
 Pulls real organic search performance: rankings, clicks, impressions, CTR.
 
 Requires:

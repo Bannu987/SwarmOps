@@ -1,4 +1,4 @@
-# MarketingOS 2.0 Deployment Guide
+# SwarmOps Deployment Guide
 
 ## Architecture
 - **Backend**: FastAPI (Python) → Deploy to Railway
@@ -110,8 +110,8 @@ npm start
 ### Production Build Test
 ```bash
 # Backend
-docker build -t marketingos-backend .
-docker run -p 8000:8000 --env-file .env marketingos-backend
+docker build -t swarmops-backend .
+docker run -p 8000:8000 --env-file .env swarmops-backend
 
 # Frontend
 cd frontend

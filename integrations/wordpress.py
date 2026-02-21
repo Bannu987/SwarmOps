@@ -1,5 +1,5 @@
 """
-WordPress Integration - MarketingOS 2.0
+WordPress Integration - SwarmOps
 Publish posts and pages directly to WordPress via the REST API.
 
 Requires:

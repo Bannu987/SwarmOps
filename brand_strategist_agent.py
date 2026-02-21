@@ -1,5 +1,5 @@
 """
-Brand Strategist Agent - MarketingOS 2.0
+Brand Strategist Agent - SwarmOps
 Guardian of brand DNA and market positioning
 Uses model_router for multi-provider AI with automatic fallback
 """

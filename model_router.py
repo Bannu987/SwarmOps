@@ -1,5 +1,5 @@
 """
-Model Router - MarketingOS 2.0
+Model Router - SwarmOps
 Unified multi-provider AI model routing with tiered fallback.
 
 Providers:
@@ -74,8 +74,8 @@ def _get_openrouter():
             api_key=key,
             timeout=15.0,
             default_headers={
-                "HTTP-Referer": "https://marketingos.app",
-                "X-Title": "MarketingOS",
+                "HTTP-Referer": "https://swarmops.app",
+                "X-Title": "SwarmOps",
             },
         )
     return _openrouter_client

@@ -41,7 +41,7 @@ backend/memory.json
 npm-debug.log*
 
 # Exports (generated files)
-MarketingOS_Export_*
+SwarmOps_Export_*
 
 # Test coverage
 coverage/

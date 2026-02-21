@@ -1,5 +1,5 @@
 """
-MarketingOS 2.0 - FastAPI Backend
+SwarmOps - FastAPI Backend
 Full Nexus orchestrator + 10 agents + real integrations
 """
 
@@ -53,8 +53,8 @@ _env_check()
 
 # Initialize FastAPI first (before heavy imports)
 app = FastAPI(
-    title="MarketingOS 2.0 API",
-    description="AI-Powered Marketing with 10 Agents + Real Integrations",
+    title="SwarmOps API",
+    description="Multi-Agent AI Marketing Intelligence",
     version="2.0.0"
 )
 
@@ -74,20 +74,6 @@ def get_nexus():
         from nexus import Nexus
         _nexus = Nexus()
     return _nexus
-
-
-def _chat_response(agent: str, result):
-    """Build a chat response dict with model/provider metadata."""
-    from model_router import get_last_call_info
-    info = get_last_call_info()
-    return {
-        "success": True,
-        "agent": agent,
-        "result": _extract_text(result),
-        "model": info.get("model", "unknown"),
-        "provider": info.get("provider", "unknown"),
-        "latency_ms": info.get("latency_ms", 0),
-    }
 
 
 def _extract_text(result):
@@ -141,11 +127,6 @@ class ContactRequest(BaseModel):
     last_name: Optional[str] = ""
     company: Optional[str] = ""
 
-class EmailRequest(BaseModel):
-    contact_id: str
-    email_template_id: str
-    template_variables: Optional[Dict] = None
-
 class SocialPostRequest(BaseModel):
     platform: str
     topic: str
@@ -186,7 +167,7 @@ class EmailSequenceRequest(BaseModel):
 def root():
     return {
         "status": "operational",
-        "message": "MarketingOS 2.0 API",
+        "message": "SwarmOps API",
         "version": "2.0.0",
         "agents": 10,
         "docs": "/docs"
@@ -974,6 +955,30 @@ def clear_memory():
         from memory_store import get_memory_store
         get_memory_store().clear_all()
         return {"success": True, "message": "All memories and task logs cleared."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/memory/export")
+def export_memory():
+    """Export all agent memory and task logs as JSON (for backup before redeploy)"""
+    try:
+        from memory_store import get_memory_store
+        data = get_memory_store().export_all()
+        return {"success": True, **data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class MemoryImportRequest(BaseModel):
+    agent_memory: list = []
+    task_log: list = []
+
+@app.post("/api/memory/import")
+def import_memory(request: MemoryImportRequest):
+    """Import agent memory and task logs from a previous export"""
+    try:
+        from memory_store import get_memory_store
+        result = get_memory_store().import_all({"agent_memory": request.agent_memory, "task_log": request.task_log})
+        return {"success": True, **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

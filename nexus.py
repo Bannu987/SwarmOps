@@ -23,7 +23,7 @@ from typing import Dict, List, Any, Optional
 from enum import Enum
 
 """
-MARKETINGOS 2.0 ENHANCEMENTS
+SWARMOPS ENHANCEMENTS
 """
 
 class TaskPriority(Enum):
@@ -177,7 +177,7 @@ class Nexus:
         print("🧠 Initializing The Nexus (Master Orchestrator - v4.0 → 2.0 UPGRADE)...")
         self.memory = MemorySystem()
         
-        # NEW: MarketingOS 2.0 Features
+        # NEW: SwarmOps Features
         self.debate_system = AgentDebate()
         self.budget_manager = BudgetManager(total_budget=budget_limit)
         self.performance_metrics = {
@@ -187,7 +187,7 @@ class Nexus:
             'agent_usage': {}
         }
         
-        # Available agents (10 AGENTS — MarketingOS 2.0)
+        # Available agents (10 AGENTS — SwarmOps)
         self.available_agents = {
             "content": "Content Agent - writes blog posts, articles, emails, social media, copy",
             "research": "Research Agent - searches web, gathers information, analyzes trends",
@@ -1055,7 +1055,7 @@ class Nexus:
         report = self.get_performance_report()
         
         print("\n" + "="*70)
-        print("📊 THE NEXUS - SYSTEM DASHBOARD (MarketingOS 2.0)")
+        print("📊 THE NEXUS - SYSTEM DASHBOARD (SwarmOps)")
         print("="*70)
         
         print(f"\n💰 BUDGET STATUS:")
@@ -1328,7 +1328,7 @@ if __name__ == "__main__":
     nexus.display_dashboard()
     
     print("\n" + "="*60)
-    print("✅ All tests complete! MarketingOS 2.0 with 9 agents ready!")
+    print("✅ All tests complete! SwarmOps with 9 agents ready!")
     print("\nStarting interactive mode...")
     print("="*60)
     

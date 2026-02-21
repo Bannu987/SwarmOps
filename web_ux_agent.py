@@ -1,5 +1,5 @@
 """
-Web/UX Agent - MarketingOS 2.0
+Web/UX Agent - SwarmOps
 Full-stack architect of the digital experience
 Creates Linear/Emergent-style designs
 Uses model_router for multi-provider AI with automatic fallback

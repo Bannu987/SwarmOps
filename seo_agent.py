@@ -259,7 +259,7 @@ Be creative and specific."""
 
 
 # ==============================================================
-# REAL DATA LAYER — MarketingOS 2.0 Upgrade
+# REAL DATA LAYER — SwarmOps Upgrade
 # Pulls LIVE data from Google Search Console + DataForSEO.
 # Falls back to web-search mode if not configured.
 # ==============================================================

@@ -1,5 +1,5 @@
 """
-Content Agent - MarketingOS 2.0
+Content Agent - SwarmOps
 Uses model_router for multi-provider AI with automatic fallback
 """
 
@@ -62,7 +62,7 @@ Please write the content now:"""
 
 
 # ==============================================================
-# REAL EXECUTION LAYER — MarketingOS 2.0 Upgrade
+# REAL EXECUTION LAYER — SwarmOps Upgrade
 # Publishes content directly to WordPress.
 # Falls back to text-only mode if WordPress is not configured.
 # ==============================================================

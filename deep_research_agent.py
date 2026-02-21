@@ -67,13 +67,13 @@ best organic dog food brands comparison
 organic dog food vs conventional nutrition study"""
 
         response = await call_model(
-            messages=[{"role": "user", "content": prompt}],
+            prompt=prompt,
             tier=1,  # Fast model for query generation
-            model_name="groq/llama-3.3-70b"
         )
 
         # Parse queries from response
-        queries = [q.strip() for q in response.strip().split('\n') if q.strip()]
+        content = response.get("content", "") if isinstance(response, dict) else str(response)
+        queries = [q.strip() for q in content.strip().split('\n') if q.strip()]
         return queries[:3]  # Ensure exactly 3 queries
 
     async def search_brave(self, query: str) -> List[Dict[str, Any]]:
@@ -211,12 +211,12 @@ Provide a detailed analysis in this EXACT format:
 [Rate your confidence 0.0-1.0 and explain reasoning gaps if any]"""
 
         response = await call_model(
-            messages=[{"role": "user", "content": prompt}],
+            prompt=prompt,
             tier=4,  # Tier 4 = reasoning models (Kimi K2.5, DeepSeek R1)
-            model_name="kimi/k2.5"  # Explicitly request Kimi K2.5
         )
 
-        return response
+        content = response.get("content", "") if isinstance(response, dict) else str(response)
+        return content
 
     def parse_analysis(self, analysis: str, queries: List[str], results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """

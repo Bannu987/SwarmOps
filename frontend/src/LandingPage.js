@@ -1,557 +1,359 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './LandingPage.css';
 
-const BACKEND_URL = 'https://marketingos20-production.up.railway.app';
+const BACKEND_URL = process.env.REACT_APP_API_URL || 'https://marketingos20-production.up.railway.app';
 
-const AGENTS = [
-  { id: 'content',    name: 'Content Writer',    specialty: 'Blog posts, copy, long-form articles',    emoji: '✍️',  color: '#3B82F6' },
-  { id: 'ads',        name: 'Ad Strategist',      specialty: 'PPC, paid media, ROI optimization',       emoji: '📊',  color: '#8B5CF6' },
-  { id: 'social',     name: 'Social Media',       specialty: 'Posts, trends, community growth',         emoji: '📱',  color: '#EC4899' },
-  { id: 'email',      name: 'Email Marketer',     specialty: 'Campaigns, sequences, drip flows',        emoji: '📧',  color: '#F59E0B' },
-  { id: 'analytics',  name: 'Data Analyst',       specialty: 'KPI insights, dashboards, reporting',     emoji: '📈',  color: '#10B981' },
-  { id: 'seo',        name: 'SEO Specialist',     specialty: 'Keywords, rankings, technical SEO',       emoji: '🔍',  color: '#06B6D4' },
-  { id: 'brand',      name: 'Brand Strategist',   specialty: 'Identity, voice, market positioning',     emoji: '🎨',  color: '#F97316' },
-  { id: 'competitor', name: 'Competitor Intel',   specialty: 'Market gaps, SWOT, competitive analysis', emoji: '🕵️', color: '#EF4444' },
-  { id: 'abtesting',  name: 'A/B Testing',        specialty: 'Experiments, CRO, variant analysis',      emoji: '🧪',  color: '#84CC16' },
-  { id: 'research',   name: 'Deep Research',      specialty: 'In-depth reports, citations, analysis',   emoji: '🔬',  color: '#A78BFA' },
-  { id: 'nexus',      name: 'Nexus Router',       specialty: 'Smart multi-agent auto-routing',          emoji: '⚡',  color: '#FCD34D' },
-];
-
-const DEMO_PROMPTS = [
-  { label: 'Write a viral LinkedIn post about AI in marketing', icon: '✍️' },
-  { label: "Analyze top SaaS competitors' positioning strategies", icon: '🕵️' },
-  { label: 'Create a 5-email B2B onboarding sequence', icon: '📧' },
-];
-
-const FEATURES = [
-  { icon: '⚡', title: 'Smart Auto-Routing',      desc: 'Nexus analyzes intent and routes to the best agent + AI model automatically. Zero configuration.' },
-  { icon: '🧠', title: 'Persistent Memory',       desc: 'Agents remember your brand voice, past campaigns, and preferences across every session.' },
-  { icon: '🔀', title: 'Multi-Agent Pipelines',   desc: 'Chain agents together — research → write → optimize — for complex multi-step workflows.' },
-  { icon: '📊', title: 'Real-time Analytics',     desc: 'Track costs, latency, confidence scores, and model usage across all agents live.' },
-  { icon: '🌐', title: 'Live Web Research',        desc: 'Agents search the web, pull live data, and cite sources directly in their output.' },
-  { icon: '🔒', title: 'Provider Failover',        desc: 'Auto-fallback across Claude, GPT-4o, and Gemini if any provider hits rate limits.' },
-];
-
-// ── Intersection Observer fade-in hook ─────────────────────────────────────
-function useFadeIn(delay = 0) {
+/* ── Fade-in hook ─────────────────────────────────────────── */
+function useFadeIn() {
   const ref = useRef(null);
-  const [visible, setVisible] = useState(false);
-
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } },
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { el.classList.add('lp-fade--in'); obs.unobserve(el); } },
       { threshold: 0.08 }
     );
-    observer.observe(el);
-    return () => observer.disconnect();
+    obs.observe(el);
+    return () => obs.disconnect();
   }, []);
-
-  return {
-    ref,
-    style: { transitionDelay: `${delay}ms` },
-    animClass: `lp-fade${visible ? ' lp-fade--in' : ''}`,
-  };
+  return ref;
 }
 
-// ── Main Landing Page ───────────────────────────────────────────────────────
-export default function LandingPage({ onEnter }) {
-  const [demoInput, setDemoInput]     = useState('');
-  const [demoResult, setDemoResult]   = useState(null);
-  const [demoLoading, setDemoLoading] = useState(false);
-  const [demoMeta, setDemoMeta]       = useState(null);
-  const [menuOpen, setMenuOpen]       = useState(false);
-  const [navScrolled, setNavScrolled] = useState(false);
+/* ── Demo card (isolated so hooks don't violate rules) ──── */
+function DemoCard({ label, prompt, agent }) {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState(null);
+  const [meta, setMeta] = useState(null);
+  const [expanded, setExpanded] = useState(false);
+  const TRUNCATE = 500;
 
-  useEffect(() => {
-    const onScroll = () => setNavScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const runDemo = async (prompt) => {
-    const query = (prompt || demoInput).trim();
-    if (!query) return;
-    setDemoInput(query);
-    setDemoLoading(true);
-    setDemoResult(null);
-    setDemoMeta(null);
+  const run = async () => {
+    setRunning(true);
+    setResult(null);
+    setMeta(null);
     try {
       const res = await fetch(`${BACKEND_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: query, agent: 'content', use_smart_routing: true }),
-        signal: AbortSignal.timeout(25000),
+        body: JSON.stringify({ message: prompt, agent, use_smart_routing: agent === 'nexus' }),
+        signal: AbortSignal.timeout(30000),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setDemoResult(data.response || data.message || 'Task completed successfully.');
-      setDemoMeta({ agent: data.agent || 'nexus', model: data.model, latency: data.latency_ms });
-    } catch {
-      setDemoResult('Deploy the backend to see live AI responses from all 11 agents in real time.');
-      setDemoMeta({ agent: 'nexus', model: 'claude-3-5-sonnet' });
+      // Guard against HTML response
+      if (typeof data === 'string' && data.trimStart().startsWith('<!')) {
+        throw new Error('Backend returned HTML — check Railway deployment.');
+      }
+      const text = typeof data.result === 'string'
+        ? data.result
+        : typeof data.result === 'object'
+          ? JSON.stringify(data.result, null, 2)
+          : data.response || data.message || 'Done.';
+      setResult(text);
+      setMeta({
+        model: data.model,
+        provider: data.provider,
+        latency: data.latency_ms,
+        confidence: data.quality?.confidence,
+      });
+    } catch (err) {
+      setResult(`Error: ${err.message}`);
+    } finally {
+      setRunning(false);
     }
-    setDemoLoading(false);
   };
 
-  // Hero fade animations
-  const heroA = useFadeIn(0);
-  const heroB = useFadeIn(180);
+  const display = result && !expanded && result.length > TRUNCATE
+    ? result.slice(0, TRUNCATE) + '…'
+    : result;
+
+  const providerClass = meta?.provider
+    ? meta.provider.toLowerCase().includes('groq') ? 'groq'
+      : meta.provider.toLowerCase().includes('google') ? 'google'
+      : meta.provider.toLowerCase().includes('nvidia') ? 'nvidia'
+      : ''
+    : '';
+
+  const confClass = meta?.confidence != null
+    ? meta.confidence >= 0.7 ? 'confidence-high'
+      : meta.confidence >= 0.5 ? 'confidence-medium' : ''
+    : '';
+
+  return (
+    <div className="lp-demo-card">
+      <span className="lp-demo-label">{label}</span>
+      <p className="lp-demo-prompt">"{prompt}"</p>
+      <button
+        className={`lp-demo-run-btn${running ? ' running' : ''}`}
+        onClick={run}
+        disabled={running}
+      >
+        {running ? (
+          <><div className="lp-demo-spinner" /><span>Running…</span></>
+        ) : (
+          <span>Run →</span>
+        )}
+      </button>
+      {result && (
+        <div className="lp-demo-result">
+          <pre className="lp-demo-result-text">{display}</pre>
+          {result.length > TRUNCATE && (
+            <button className="lp-demo-show-more" onClick={() => setExpanded(!expanded)}>
+              {expanded ? 'Show less ▴' : 'Show more ▾'}
+            </button>
+          )}
+          {meta && (
+            <div className="lp-demo-meta">
+              {meta.model && <span className="lp-meta-pill">{meta.model}</span>}
+              {meta.provider && <span className={`lp-meta-pill ${providerClass}`}>{meta.provider}</span>}
+              {meta.latency && <span className="lp-meta-pill">{(meta.latency / 1000).toFixed(1)}s</span>}
+              {meta.confidence != null && (
+                <span className={`lp-meta-pill ${confClass}`}>{(meta.confidence * 100).toFixed(0)}% conf</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Main LandingPage ─────────────────────────────────────── */
+export default function LandingPage({ onEnter }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const refHowitworks = useFadeIn();
+  const refAgents     = useFadeIn();
+  const refDemo       = useFadeIn();
+  const refFeatures   = useFadeIn();
+  const refStack      = useFadeIn();
+
+  const scrollTo = (id) => {
+    setMenuOpen(false);
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const AGENTS = [
+    { emoji: '🔍', name: 'SEO Agent',       model: 'Gemini 1.5 Pro' },
+    { emoji: '✍️', name: 'Content Agent',   model: 'Groq · Llama 3.3' },
+    { emoji: '📢', name: 'PPC Agent',        model: 'Gemini 1.5 Flash' },
+    { emoji: '📊', name: 'Analytics Agent',  model: 'Gemini 1.5 Pro' },
+    { emoji: '🤝', name: 'CRM Agent',        model: 'Groq · Llama 3.3' },
+    { emoji: '📱', name: 'SMM Agent',        model: 'Groq · Llama 3.3' },
+    { emoji: '🎨', name: 'Brand Agent',      model: 'Groq · Qwen 3' },
+    { emoji: '🖥️', name: 'Web/UX Agent',    model: 'OpenRouter' },
+    { emoji: '🧪', name: 'CRO Agent',        model: 'Groq · Qwen 3' },
+    { emoji: '🔬', name: 'Research Agent',   model: 'Brave + Groq' },
+    { emoji: '🧠', name: 'Deep Research',    model: 'NVIDIA Kimi K2.5' },
+  ];
+
+  const FEATURES = [
+    { emoji: '🧠', title: 'Smart Routing',        desc: 'Nexus auto-picks the optimal agent and model for every task. Zero config required.' },
+    { emoji: '🔄', title: '5 AI Providers',        desc: 'Groq → OpenRouter → Gemini → NVIDIA with automatic failover when rate limits hit.' },
+    { emoji: '🛡️', title: 'The Skeptic',          desc: 'QA agent scores every output for accuracy, relevance, depth, and actionability before delivery.' },
+    { emoji: '💾', title: 'Agent Memory',          desc: 'Persistent SQLite. Agents learn your brand voice and campaigns across every session.' },
+    { emoji: '⚡', title: 'Parallel Pipelines',    desc: 'Up to 5 agents execute in parallel. Full marketing campaigns in under 10 seconds.' },
+    { emoji: '🔬', title: 'Deep Research',         desc: 'Brave web search + NVIDIA Kimi K2.5 multi-step reasoning for comprehensive analysis.' },
+  ];
 
   return (
     <div className="lp">
+      {/* ── Nav ─────────────────────────────────────────── */}
+      <nav className="lp-nav">
+        <span className="lp-nav-logo">SwarmOps</span>
+        <div className="lp-nav-links">
+          <button className="lp-nav-link" onClick={() => scrollTo('how')}>How It Works</button>
+          <button className="lp-nav-link" onClick={() => scrollTo('agents')}>Agents</button>
+          <button className="lp-nav-link" onClick={() => scrollTo('demo')}>Demo</button>
+          <button className="lp-nav-link" onClick={() => scrollTo('stack')}>Stack</button>
+        </div>
+        <button className="lp-nav-cta" onClick={onEnter}>Launch App →</button>
+        <button className="lp-hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
+          {menuOpen ? '✕' : '☰'}
+        </button>
+      </nav>
 
-      {/* ══════════════════════════ NAV ════════════════════════════ */}
-      <nav className={`lp-nav${navScrolled ? ' lp-nav--scrolled' : ''}`}>
-        <div className="lp-nav-inner">
-          <div className="lp-logo">
-            <div className="lp-logo-mark">⚡</div>
-            <span className="lp-logo-name">SwarmOps</span>
-            <span className="lp-logo-beta">BETA</span>
+      {/* Mobile menu */}
+      <div className={`lp-mobile-menu${menuOpen ? ' open' : ''}`}>
+        <button className="lp-mobile-link" onClick={() => scrollTo('how')}>How It Works</button>
+        <button className="lp-mobile-link" onClick={() => scrollTo('agents')}>Agents</button>
+        <button className="lp-mobile-link" onClick={() => scrollTo('demo')}>Demo</button>
+        <button className="lp-mobile-link" onClick={() => scrollTo('stack')}>Stack</button>
+        <button className="lp-mobile-cta" onClick={onEnter}>Launch App →</button>
+      </div>
+
+      {/* ── Hero ────────────────────────────────────────── */}
+      <section className="lp-hero">
+        <div className="lp-hero-inner">
+          <div className="lp-hero-badge">
+            <span className="lp-hero-badge-dot" />
+            ✨ Open Source · 11 Agents · $0/month
           </div>
-
-          <div className={`lp-nav-links${menuOpen ? ' open' : ''}`}>
-            <a href="#agents"   onClick={() => setMenuOpen(false)}>Agents</a>
-            <a href="#features" onClick={() => setMenuOpen(false)}>Features</a>
-            <a href="#demo"     onClick={() => setMenuOpen(false)}>Demo</a>
-            <a href="#tech"     onClick={() => setMenuOpen(false)}>Stack</a>
-          </div>
-
-          <div className="lp-nav-right">
+          <h1 className="lp-hero-title">SwarmOps</h1>
+          <p className="lp-hero-subtitle">Multi-Agent AI Marketing Intelligence</p>
+          <p className="lp-hero-body">
+            One command. 11 specialized agents collaborate to research, create, and execute
+            complete marketing campaigns in seconds.
+          </p>
+          <div className="lp-hero-btns">
+            <button className="lp-btn-primary" onClick={onEnter}>Launch Dashboard →</button>
             <a
+              className="lp-btn-secondary"
               href="https://github.com/Bannu987/MarketingOS2.0"
               target="_blank"
               rel="noopener noreferrer"
-              className="lp-nav-ghost"
-            >GitHub</a>
-            <button className="lp-nav-cta" onClick={onEnter}>Launch App →</button>
-            <button
-              className={`lp-hamburger${menuOpen ? ' open' : ''}`}
-              onClick={() => setMenuOpen(!menuOpen)}
-              aria-label="Toggle menu"
             >
-              <span /><span /><span />
-            </button>
+              GitHub ↗
+            </a>
+          </div>
+          <div className="lp-hero-stats">
+            <div className="lp-stat"><span className="lp-stat-num">11</span><span className="lp-stat-label">Agents</span></div>
+            <div className="lp-stat"><span className="lp-stat-num">6</span><span className="lp-stat-label">APIs</span></div>
+            <div className="lp-stat"><span className="lp-stat-num">5</span><span className="lp-stat-label">Models</span></div>
+            <div className="lp-stat"><span className="lp-stat-num">$0</span><span className="lp-stat-label">Monthly</span></div>
           </div>
         </div>
-      </nav>
+      </section>
 
-      {/* ══════════════════════════ HERO ═══════════════════════════ */}
-      <section className="lp-hero">
-        <div className="lp-hero-bg" aria-hidden="true">
-          <div className="lp-orb lp-orb-1" />
-          <div className="lp-orb lp-orb-2" />
-          <div className="lp-orb lp-orb-3" />
-          <div className="lp-grid-overlay" />
+      {/* ── How It Works ────────────────────────────────── */}
+      <section id="how" className="lp-section">
+        <div ref={refHowitworks} className="lp-fade">
+          <h2 className="lp-section-title">How It Works</h2>
+          <p className="lp-section-sub">Three steps from instruction to executed campaign.</p>
+          <div className="lp-steps">
+            <div className="lp-step-card">
+              <span className="lp-step-num">01</span>
+              <h3 className="lp-step-title">You Speak</h3>
+              <p className="lp-step-desc">Give any marketing instruction in natural language. No templates, no config, no dropdowns.</p>
+            </div>
+            <div className="lp-step-card">
+              <span className="lp-step-num">02</span>
+              <h3 className="lp-step-title">Nexus Routes</h3>
+              <p className="lp-step-desc">AI orchestrator analyzes intent and builds an execution plan across agents in milliseconds.</p>
+            </div>
+            <div className="lp-step-card">
+              <span className="lp-step-num">03</span>
+              <h3 className="lp-step-title">Swarm Executes</h3>
+              <p className="lp-step-desc">Agents work in parallel. The Skeptic QA agent scores every output before delivery.</p>
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div className="lp-hero-inner">
-          {/* Copy */}
-          <div ref={heroA.ref} className={`lp-hero-copy ${heroA.animClass}`} style={heroA.style}>
-            <div className="lp-hero-badge">
-              <span className="lp-badge-pulse" />
-              11 AI Agents · Live Now
-            </div>
-
-            <h1 className="lp-hero-h1">
-              The AI Agent Platform<br />
-              <span className="lp-gradient-text">Built for Growth Teams</span>
-            </h1>
-
-            <p className="lp-hero-sub">
-              Orchestrate 11 specialized AI agents — content, ads, SEO, email, research, and more.
-              One command. Expert results. At scale.
-            </p>
-
-            <div className="lp-hero-btns">
-              <button className="lp-btn-primary" onClick={onEnter}>
-                Start for Free
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </button>
-              <a href="#demo" className="lp-btn-ghost">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="10 8 16 12 10 16 10 8" />
-                </svg>
-                Watch Demo
-              </a>
-            </div>
-
-            <div className="lp-hero-stats">
-              {[
-                { num: '11',    label: 'AI Agents'    },
-                { num: '3',     label: 'AI Providers' },
-                { num: '< 3s',  label: 'Avg Response' },
-                { num: '∞',     label: 'Scale'        },
-              ].map((s, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <div className="lp-stat-sep" />}
-                  <div className="lp-hero-stat">
-                    <span className="lp-hero-stat-num">{s.num}</span>
-                    <span className="lp-hero-stat-label">{s.label}</span>
+      {/* ── Agents ──────────────────────────────────────── */}
+      <section id="agents" className="lp-section">
+        <div ref={refAgents} className="lp-fade">
+          <h2 className="lp-section-title">11 Specialized Agents</h2>
+          <p className="lp-section-sub">Each agent is tuned for its domain, with the right model, prompt, and integrations.</p>
+          <div className="lp-agents-grid-wrap">
+            <div className="lp-agents-grid">
+              {AGENTS.map((a, i) => (
+                <div key={i} className="lp-agent-cell">
+                  <span className="lp-agent-emoji">{a.emoji}</span>
+                  <div className="lp-agent-info">
+                    <span className="lp-agent-name">{a.name}</span>
+                    <span className="lp-agent-model">{a.model}</span>
                   </div>
-                </React.Fragment>
+                </div>
               ))}
             </div>
           </div>
+        </div>
+      </section>
 
-          {/* Terminal visual */}
-          <div ref={heroB.ref} className={`lp-hero-visual ${heroB.animClass}`} style={heroB.style}>
-            <div className="lp-terminal">
-              <div className="lp-terminal-bar">
-                <span className="lp-tl lp-tl--red" />
-                <span className="lp-tl lp-tl--yellow" />
-                <span className="lp-tl lp-tl--green" />
-                <span className="lp-terminal-title">SwarmOps Terminal</span>
+      {/* ── Live Demo ───────────────────────────────────── */}
+      <section id="demo" className="lp-section">
+        <div ref={refDemo} className="lp-fade">
+          <div className="lp-demo-header">
+            <h2 className="lp-section-title">Try It Live</h2>
+            <div className="lp-live-badge">
+              <span className="lp-live-dot" />
+              LIVE
+            </div>
+          </div>
+          <p className="lp-demo-note">Real API calls to production agents. Not mocked.</p>
+          <div className="lp-demo-cards">
+            <DemoCard
+              label="SEO"
+              prompt="Find keywords for organic dog food"
+              agent="seo"
+            />
+            <DemoCard
+              label="Content"
+              prompt="Write a tagline for an AI marketing tool"
+              agent="content"
+            />
+            <DemoCard
+              label="Pipeline"
+              prompt="Create a complete marketing campaign for a new coffee shop"
+              agent="nexus"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Features ────────────────────────────────────── */}
+      <section className="lp-section">
+        <div ref={refFeatures} className="lp-fade">
+          <h2 className="lp-section-title">Built Different</h2>
+          <p className="lp-section-sub">Not another chatbot wrapper. A real multi-agent system with integrations.</p>
+          <div className="lp-features-grid">
+            {FEATURES.map((f, i) => (
+              <div key={i} className="lp-feature-card">
+                <span className="lp-feature-emoji">{f.emoji}</span>
+                <h3 className="lp-feature-title">{f.title}</h3>
+                <p className="lp-feature-desc">{f.desc}</p>
               </div>
-              <div className="lp-terminal-body">
-                <p className="lp-tline">
-                  <span className="lp-prompt">$</span>
-                  <span className="lp-tcmd"> nexus "Write viral post on AI marketing"</span>
-                </p>
-                <p className="lp-tline lp-tdim">✓ Routing → Content Writer</p>
-                <p className="lp-tline lp-tdim">✓ Model: claude-3-5-sonnet · Confidence: 97%</p>
-                <p className="lp-tline lp-tdim">✓ Latency: 1.8s · Tokens: 412</p>
-                <div className="lp-toutput">
-                  🚀 <strong>"AI isn't coming for your marketing budget —</strong><br />
-                  it already took it. Here's how top CMOs are<br />
-                  turning that into their biggest competitive advantage..."
-                </div>
-                <span className="lp-tcursor">▋</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Tech Stack ──────────────────────────────────── */}
+      <section id="stack" className="lp-section">
+        <div ref={refStack} className="lp-fade">
+          <h2 className="lp-section-title">Tech Stack</h2>
+          <div className="lp-stack-rows">
+            <div className="lp-stack-row">
+              <span className="lp-stack-cat">Core</span>
+              <div className="lp-stack-pills">
+                {['Python', 'FastAPI', 'React', 'SQLite', 'Zustand'].map(t => (
+                  <span key={t} className="lp-stack-pill">{t}</span>
+                ))}
+              </div>
+            </div>
+            <div className="lp-stack-row">
+              <span className="lp-stack-cat">AI</span>
+              <div className="lp-stack-pills">
+                {['Groq', 'Gemini', 'OpenRouter', 'NVIDIA NIMs', 'Brave Search', 'Serper'].map(t => (
+                  <span key={t} className="lp-stack-pill">{t}</span>
+                ))}
+              </div>
+            </div>
+            <div className="lp-stack-row">
+              <span className="lp-stack-cat">Integrations</span>
+              <div className="lp-stack-pills">
+                {['HubSpot', 'WordPress', 'Google Analytics', 'Google Ads', 'DataForSEO'].map(t => (
+                  <span key={t} className="lp-stack-pill">{t}</span>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════ HOW IT WORKS ═══════════════════════ */}
-      <section className="lp-section lp-how" id="how">
-        <div className="lp-container">
-          <SectionHeader
-            label="HOW IT WORKS"
-            title="Three steps to AI-powered growth"
-            sub="No configuration. No training data. Just describe what you need."
-          />
-          <StepsList />
-        </div>
-      </section>
-
-      {/* ══════════════════════ AGENTS GRID ════════════════════════ */}
-      <section className="lp-section lp-agents" id="agents">
-        <div className="lp-container">
-          <SectionHeader
-            label="THE SWARM"
-            title="11 Specialized AI Agents"
-            sub="Each agent is purpose-built and uses the best AI model for its marketing domain."
-          />
-          <AgentsGrid onEnter={onEnter} />
-        </div>
-      </section>
-
-      {/* ════════════════════════ LIVE DEMO ════════════════════════ */}
-      <section className="lp-section lp-demo" id="demo">
-        <div className="lp-container">
-          <SectionHeader
-            label="LIVE DEMO"
-            title="Try the agents right now"
-            sub="Real agents. Real AI. No account required."
-          />
-          <DemoBox
-            demoInput={demoInput}
-            setDemoInput={setDemoInput}
-            demoLoading={demoLoading}
-            demoResult={demoResult}
-            demoMeta={demoMeta}
-            runDemo={runDemo}
-            onEnter={onEnter}
-          />
-        </div>
-      </section>
-
-      {/* ════════════════════════ FEATURES ═════════════════════════ */}
-      <section className="lp-section lp-features" id="features">
-        <div className="lp-container">
-          <SectionHeader
-            label="FEATURES"
-            title="Everything you need to scale"
-            sub="Built for growth teams that move fast and need reliable AI output."
-          />
-          <FeaturesGrid />
-        </div>
-      </section>
-
-      {/* ══════════════════════ TECH STACK ═════════════════════════ */}
-      <section className="lp-section lp-tech" id="tech">
-        <div className="lp-container">
-          <SectionHeader
-            label="TECH STACK"
-            title="Best-in-class infrastructure"
-            sub="Modern, battle-tested tools from frontend to AI runtime."
-          />
-          <TechGrid />
-        </div>
-      </section>
-
-      {/* ═══════════════════════════ CTA ═══════════════════════════ */}
-      <section className="lp-section lp-cta-wrap">
-        <div className="lp-container">
-          <CtaBox onEnter={onEnter} />
-        </div>
-      </section>
-
-      {/* ════════════════════════ FOOTER ═══════════════════════════ */}
+      {/* ── Footer ──────────────────────────────────────── */}
       <footer className="lp-footer">
-        <div className="lp-container">
-          <div className="lp-footer-top">
-            <div className="lp-footer-brand">
-              <div className="lp-logo">
-                <div className="lp-logo-mark">⚡</div>
-                <span className="lp-logo-name">SwarmOps</span>
-              </div>
-              <p className="lp-footer-tagline">The AI agent platform for modern growth teams.</p>
-            </div>
-            <div className="lp-footer-cols">
-              <div className="lp-footer-col">
-                <span className="lp-footer-col-title">Product</span>
-                <button onClick={onEnter}>Launch App</button>
-                <a href="#agents">Agents</a>
-                <a href="#features">Features</a>
-                <a href="#demo">Live Demo</a>
-              </div>
-              <div className="lp-footer-col">
-                <span className="lp-footer-col-title">Developers</span>
-                <a href="https://github.com/Bannu987/MarketingOS2.0" target="_blank" rel="noopener noreferrer">GitHub</a>
-                <a href="#tech">Tech Stack</a>
-              </div>
-            </div>
-          </div>
-          <div className="lp-footer-bottom">
-            <span>© 2025 SwarmOps. Built with AI, for AI.</span>
-            <span className="lp-footer-powered">Powered by Claude · GPT-4o · Gemini</span>
-          </div>
-        </div>
+        <span className="lp-footer-logo">SwarmOps</span>
+        <p className="lp-footer-by">
+          Built by{' '}
+          <a href="https://github.com/Bannu987/MarketingOS2.0" target="_blank" rel="noopener noreferrer">
+            Shravan Payyavula
+          </a>
+        </p>
+        <p className="lp-footer-powered">Powered by Groq · Gemini · OpenRouter · NVIDIA NIMs</p>
+        <p className="lp-footer-copy">© 2026 SwarmOps. Open source.</p>
       </footer>
-    </div>
-  );
-}
-
-// ── Reusable section header ─────────────────────────────────────────────────
-function SectionHeader({ label, title, sub }) {
-  const f = useFadeIn();
-  return (
-    <div ref={f.ref} className={`lp-section-hd ${f.animClass}`} style={f.style}>
-      <span className="lp-section-label">{label}</span>
-      <h2 className="lp-section-title">{title}</h2>
-      {sub && <p className="lp-section-sub">{sub}</p>}
-    </div>
-  );
-}
-
-// ── Steps list ──────────────────────────────────────────────────────────────
-function StepItem({ step, delay }) {
-  const f = useFadeIn(delay);
-  return (
-    <div ref={f.ref} className={`lp-step ${f.animClass}`} style={f.style}>
-      <div className="lp-step-num">{step.num}</div>
-      <div className="lp-step-line" />
-      <h3 className="lp-step-title">{step.title}</h3>
-      <p className="lp-step-desc">{step.desc}</p>
-    </div>
-  );
-}
-
-function StepsList() {
-  const steps = [
-    { num: '01', title: 'Describe your task',          desc: 'Type in plain English. Nexus automatically picks the best agent and AI model for the job.' },
-    { num: '02', title: 'Agent executes in seconds',   desc: 'Each agent uses the optimal model — Claude, GPT-4o, or Gemini — tuned for its domain.' },
-    { num: '03', title: 'Get expert results instantly', desc: 'Professional-quality output in seconds. Refine, export, or chain to the next agent.' },
-  ];
-  return (
-    <div className="lp-steps">
-      {steps.map((s, i) => <StepItem key={i} step={s} delay={i * 120} />)}
-    </div>
-  );
-}
-
-// ── Agent card ──────────────────────────────────────────────────────────────
-function AgentCard({ agent, delay, onEnter }) {
-  const f = useFadeIn(delay);
-  return (
-    <button
-      ref={f.ref}
-      className={`lp-agent-card ${f.animClass}`}
-      style={f.style}
-      onClick={onEnter}
-    >
-      <div
-        className="lp-agent-avatar"
-        style={{ background: `${agent.color}18`, border: `1px solid ${agent.color}30` }}
-      >
-        {agent.emoji}
-      </div>
-      <div className="lp-agent-body">
-        <span className="lp-agent-name">{agent.name}</span>
-        <span className="lp-agent-spec">{agent.specialty}</span>
-      </div>
-      <span className="lp-agent-tag" style={{ color: agent.color, background: `${agent.color}12` }}>
-        Active
-      </span>
-    </button>
-  );
-}
-
-function AgentsGrid({ onEnter }) {
-  return (
-    <div className="lp-agents-grid">
-      {AGENTS.map((agent, i) => (
-        <AgentCard key={agent.id} agent={agent} delay={i * 40} onEnter={onEnter} />
-      ))}
-    </div>
-  );
-}
-
-// ── Demo box ────────────────────────────────────────────────────────────────
-function DemoBox({ demoInput, setDemoInput, demoLoading, demoResult, demoMeta, runDemo, onEnter }) {
-  const f = useFadeIn(100);
-  return (
-    <div ref={f.ref} className={`lp-demo-box ${f.animClass}`} style={f.style}>
-      {/* Bar */}
-      <div className="lp-demo-bar">
-        <div className="lp-tl-group">
-          <span className="lp-tl lp-tl--red" />
-          <span className="lp-tl lp-tl--yellow" />
-          <span className="lp-tl lp-tl--green" />
-        </div>
-        <span className="lp-demo-bar-title">SwarmOps · Live</span>
-        <span className="lp-demo-live-ind">
-          <span className="lp-live-dot" />LIVE
-        </span>
-      </div>
-
-      {/* Prompt chips */}
-      <div className="lp-demo-chips">
-        {DEMO_PROMPTS.map((p, i) => (
-          <button key={i} className="lp-demo-chip" onClick={() => runDemo(p.label)}>
-            <span>{p.icon}</span>{p.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Input */}
-      <div className="lp-demo-input-row">
-        <input
-          className="lp-demo-input"
-          value={demoInput}
-          onChange={(e) => setDemoInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && runDemo()}
-          placeholder="Ask anything — ads, SEO, content, email, research..."
-        />
-        <button
-          className="lp-demo-send"
-          onClick={() => runDemo()}
-          disabled={demoLoading || !demoInput.trim()}
-          aria-label="Send"
-        >
-          {demoLoading
-            ? <span className="lp-spin" />
-            : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" />
-              </svg>
-            )}
-        </button>
-      </div>
-
-      {/* Thinking */}
-      {demoLoading && (
-        <div className="lp-demo-thinking">
-          <span className="lp-thinking-dots"><span /><span /><span /></span>
-          Nexus is routing your task to the best agent…
-        </div>
-      )}
-
-      {/* Result */}
-      {demoResult && !demoLoading && (
-        <div className="lp-demo-result">
-          <div className="lp-demo-result-meta">
-            <span className="lp-demo-agent-pill">⚡ {demoMeta?.agent || 'SwarmOps'}</span>
-            {demoMeta?.model && <span className="lp-demo-model-pill">{demoMeta.model}</span>}
-            {demoMeta?.latency && <span className="lp-demo-latency">{(demoMeta.latency / 1000).toFixed(1)}s</span>}
-          </div>
-          <div className="lp-demo-result-text">{demoResult}</div>
-          <button className="lp-demo-upgrade" onClick={onEnter}>
-            Use the full app for richer results →
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Feature card ────────────────────────────────────────────────────────────
-function FeatureCard({ feature, delay }) {
-  const f = useFadeIn(delay);
-  return (
-    <div ref={f.ref} className={`lp-feature-card ${f.animClass}`} style={f.style}>
-      <div className="lp-feature-icon">{feature.icon}</div>
-      <h3 className="lp-feature-title">{feature.title}</h3>
-      <p className="lp-feature-desc">{feature.desc}</p>
-    </div>
-  );
-}
-
-function FeaturesGrid() {
-  return (
-    <div className="lp-features-grid">
-      {FEATURES.map((f, i) => <FeatureCard key={i} feature={f} delay={i * 70} />)}
-    </div>
-  );
-}
-
-// ── Tech item ───────────────────────────────────────────────────────────────
-function TechItem({ item, delay }) {
-  const f = useFadeIn(delay);
-  return (
-    <div ref={f.ref} className={`lp-tech-item ${f.animClass}`} style={f.style}>
-      <span className="lp-tech-name">{item.name}</span>
-      <span className="lp-tech-cat">{item.cat}</span>
-    </div>
-  );
-}
-
-function TechGrid() {
-  const items = [
-    { name: 'React 18',    cat: 'Frontend UI'    },
-    { name: 'FastAPI',     cat: 'Backend API'    },
-    { name: 'Claude 3.5',  cat: 'Anthropic AI'   },
-    { name: 'GPT-4o',      cat: 'OpenAI'         },
-    { name: 'Gemini Pro',  cat: 'Google AI'      },
-    { name: 'Python 3.11', cat: 'Agent Runtime'  },
-    { name: 'Railway',     cat: 'Backend Infra'  },
-    { name: 'Vercel',      cat: 'Frontend CDN'   },
-  ];
-  return (
-    <div className="lp-tech-grid">
-      {items.map((t, i) => <TechItem key={i} item={t} delay={i * 50} />)}
-    </div>
-  );
-}
-
-// ── CTA box ─────────────────────────────────────────────────────────────────
-function CtaBox({ onEnter }) {
-  const f = useFadeIn();
-  return (
-    <div ref={f.ref} className={`lp-cta-box ${f.animClass}`} style={f.style}>
-      <div className="lp-cta-glow" aria-hidden="true" />
-      <span className="lp-section-label">GET STARTED</span>
-      <h2 className="lp-cta-title">Ready to 10× your marketing output?</h2>
-      <p className="lp-cta-sub">
-        Join growth teams using SwarmOps to automate their entire marketing stack with AI.
-      </p>
-      <button className="lp-btn-primary lp-btn-lg" onClick={onEnter}>
-        Launch SwarmOps Free →
-      </button>
     </div>
   );
 }

@@ -851,283 +851,159 @@ function App() {
   }
 
   return (
-    <div className={`maestro-app ${darkMode ? 'dark' : 'light'}`}>
-      {/* Ambient Background */}
-      <div className="ambient-background">
-        <div className="gradient-orb orb-1"></div>
-        <div className="gradient-orb orb-2"></div>
-        <div className="gradient-orb orb-3"></div>
-        <div className="noise-overlay"></div>
-      </div>
-
-      {/* App Shell: Sidebar + Main */}
-      <div className="app-shell">
-        <AppSidebar
-          collapsed={sidebarCollapsed}
-          setCollapsed={setSidebarCollapsed}
-          agents={AGENTS}
-          selectedAgentId={selectedAgentId}
-          setSelectedAgent={(id) => { setSelectedAgent(id); if (!multiAgentMode) setSelectedAgents([id]); }}
-          messages={messages}
-          clearMessages={clearMessages}
-          setSettingsOpen={setSettingsOpen}
-        />
-
-        <div className="app-main">
-      {/* Header */}
-      <Header
-        selectedAgent={selectedAgent}
-        agentDropdownOpen={agentDropdownOpen}
-        setAgentDropdownOpen={setAgentDropdownOpen}
+    <div className="app">
+      <AppSidebar
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
         agents={AGENTS}
-        setSelectedAgent={(id) => {
-          setSelectedAgent(id);
-          if (!multiAgentMode) {
-            setSelectedAgents([id]);
-          }
-        }}
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-        notificationsOpen={notificationsOpen}
-        setNotificationsOpen={setNotificationsOpen}
-        notifications={notifications}
-        setNotifications={setNotifications}
-        userMenuOpen={userMenuOpen}
-        setUserMenuOpen={setUserMenuOpen}
+        selectedAgentId={selectedAgentId}
+        setSelectedAgent={(id) => { setSelectedAgent(id); if (!multiAgentMode) setSelectedAgents([id]); }}
+        messages={messages}
+        clearMessages={clearMessages}
         setSettingsOpen={setSettingsOpen}
-        setCommandPaletteOpen={setCommandPaletteOpen}
-        multiAgentMode={multiAgentMode}
-        setMultiAgentMode={(mode) => {
-          setMultiAgentMode(mode);
-          if (!mode) {
-            setSelectedAgents([selectedAgentId]);
-          }
-        }}
-        isFullscreen={isFullscreen}
-        setIsFullscreen={setIsFullscreen}
-        smartRoutingMode={smartRoutingMode}
-        setSmartRoutingMode={setSmartRoutingMode}
-        feedbackLoopRunning={feedbackLoopRunning}
-        triggerFeedbackLoop={triggerFeedbackLoop}
-        rateLimits={rateLimits}
       />
 
-      {/* Main Layout Container */}
-      <div className="main-layout">
-        {/* Left: Messages Area */}
-        <div className="chat-area">
-          {/* Messages */}
-          <div className="messages-container">
-            {messages.length === 0 ? (
-              <EmptyState 
-                suggestedPrompts={suggestedPrompts}
-                setInput={setInput}
-                setSelectedAgent={(id) => {
-                  setSelectedAgent(id);
-                  setSelectedAgents([id]);
-                }}
-                agents={AGENTS}
-              />
-            ) : (
-              <div className="messages-list">
-                {messages.map((message, index) => (
-                  <MessageBubble 
-                    key={message.id || index} 
-                    message={message}
-                    isLatest={index === messages.length - 1}
-                  />
-                ))}
-                {loading && <LoadingMessage agent={selectedAgent} />}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
+      <div className="app-main">
+        <Header
+          selectedAgent={selectedAgent}
+          agents={AGENTS}
+          setSelectedAgent={(id) => { setSelectedAgent(id); if (!multiAgentMode) setSelectedAgents([id]); }}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+          setSettingsOpen={setSettingsOpen}
+          setCommandPaletteOpen={setCommandPaletteOpen}
+          multiAgentMode={multiAgentMode}
+          setMultiAgentMode={(mode) => { setMultiAgentMode(mode); if (!mode) setSelectedAgents([selectedAgentId]); }}
+          smartRoutingMode={smartRoutingMode}
+          setSmartRoutingMode={setSmartRoutingMode}
+          feedbackLoopRunning={feedbackLoopRunning}
+          triggerFeedbackLoop={triggerFeedbackLoop}
+          rightPanelOpen={rightPanelOpen}
+          toggleRightPanel={toggleRightPanel}
+          setRightPanelTab={setRightPanelTab}
+          rateLimits={rateLimits}
+        />
+
+          <div className="chat-area">
+            <div className="messages-wrap">
+              {messages.length === 0 ? (
+                <EmptyState
+                  suggestedPrompts={suggestedPrompts}
+                  setInput={setInput}
+                  setSelectedAgent={(id) => { setSelectedAgent(id); setSelectedAgents([id]); }}
+                  agents={AGENTS}
+                />
+              ) : (
+                <div className="messages-list">
+                  {messages.map((message, index) => (
+                    <MessageBubble
+                      key={message.id || index}
+                      message={message}
+                      isLatest={index === messages.length - 1}
+                    />
+                  ))}
+                  {loading && <LoadingMessage agent={selectedAgent} />}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Input Area */}
           <div className="input-area">
-            <div className="input-context">
-              <div className="active-agents">
-                <span className="context-label">Talking to:</span>
-                {selectedAgents.map(agentId => {
-                  const agent = AGENTS.find(a => a.id === agentId);
-                  if (!agent) return null;
-                  const AgentIcon = agent.icon;
-                  return (
-                    <div
-                      key={agentId}
-                      className="agent-chip"
-                      style={{ 
-                        '--chip-color': agent.color,
-                        '--chip-bg': agent.bgColor
-                      }}
-                    >
-                      <AgentIcon size={14} />
-                      <span>{agent.shortName}</span>
-                      {selectedAgents.length > 1 && (
-                        <button 
-                          className="chip-remove"
-                          onClick={() => removeAgentFromSelection(agentId)}
+            <div className="input-area-inner">
+              {agentDropdownOpen && (
+                <>
+                  <div className="dropdown-backdrop" onClick={() => setAgentDropdownOpen(false)} />
+                  <div className="agent-dropdown">
+                    <div className="agent-dropdown-header">AI Agents</div>
+                    <div className="agent-dropdown-list">
+                      {AGENTS.map(agent => (
+                        <button
+                          key={agent.id}
+                          className={`agent-dropdown-item ${selectedAgent.id === agent.id ? 'selected' : ''}`}
+                          onClick={() => { setSelectedAgent(agent.id); setSelectedAgents([agent.id]); setAgentDropdownOpen(false); }}
                         >
-                          <X size={12} />
+                          <span className="agent-dropdown-emoji">{agent.iconEmoji}</span>
+                          <div className="agent-dropdown-info">
+                            <span className="agent-dropdown-name">{agent.name}</span>
+                            <span className="agent-dropdown-model">{agent.model}</span>
+                          </div>
+                          {selectedAgent.id === agent.id && <Check size={14} className="dropdown-check" />}
                         </button>
-                      )}
+                      ))}
                     </div>
-                  );
-                })}
-                <button 
-                  className="add-agent-chip"
-                  onClick={() => setSelectAgentsModal(true)}
-                >
-                  <Plus size={14} />
-                  <span>Add</span>
-                </button>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmit} className="input-form">
-              <div className={`input-container ${loading ? 'disabled' : ''}`}>
-                <div className="input-actions-left">
-                  <button type="button" className="input-action-btn" title="Attach file">
-                    <Paperclip size={18} />
+                  </div>
+                </>
+              )}
+              <form onSubmit={handleSubmit}>
+                <div className="input-box">
+                  <button
+                    type="button"
+                    className="agent-pill"
+                    onClick={() => setAgentDropdownOpen(!agentDropdownOpen)}
+                  >
+                    <span>{selectedAgent.iconEmoji}</span>
+                    <span>{smartRoutingMode ? 'Auto' : selectedAgent.shortName}</span>
+                    <ChevronDown size={12} />
                   </button>
-                  <button type="button" className="input-action-btn" title="Mention agent">
-                    <AtSign size={18} />
-                  </button>
-                  <button type="button" className="input-action-btn" title="Add emoji">
-                    <Smile size={18} />
-                  </button>
-                </div>
-                
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={`Ask ${selectedAgent.name} anything...`}
-                  rows={1}
-                  disabled={loading}
-                />
-                
-                <div className="input-actions-right">
-                  <button type="button" className="input-action-btn" title="Voice input">
-                    <Mic size={18} />
-                  </button>
-                  <button 
-                    type="submit" 
-                    className={`send-btn ${input.trim() ? 'active' : ''}`}
+                  <textarea
+                    ref={textareaRef}
+                    className="input-textarea"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={smartRoutingMode ? 'Ask anything — Nexus routes to the best agent...' : `Ask ${selectedAgent.name} anything...`}
+                    rows={1}
+                    disabled={loading}
+                  />
+                  <button
+                    type="submit"
+                    className={`send-btn ${input.trim() ? 'active' : 'inactive'}`}
                     disabled={!input.trim() || loading}
                   >
-                    {loading ? (
-                      <Loader2 size={18} className="spinner" />
-                    ) : (
-                      <Send size={18} />
-                    )}
+                    {loading ? <Loader2 size={15} className="spinner" /> : <Send size={15} />}
                   </button>
                 </div>
-              </div>
-            </form>
-
-            <div className="input-hints">
-              <span><kbd>Enter</kbd> to send</span>
-              <span><kbd>Shift + Enter</kbd> new line</span>
-              <span><kbd>⌘K</kbd> commands</span>
+              </form>
+              <p className="input-disclaimer">Enter to send · Shift+Enter new line · ⌘K commands</p>
             </div>
           </div>
         </div>
 
-        {/* Right Panel */}
         {rightPanelOpen && (
-          <div className="right-panel">
-            <div className="panel-header">
-              <div className="panel-tabs">
-                <button
-                  className={`panel-tab ${rightPanelTab === 'analytics' ? 'active' : ''}`}
-                  onClick={() => setRightPanelTab('analytics')}
-                >
-                  <BarChart3 size={16} />
-                  <span>Analytics</span>
-                </button>
-                <button
-                  className={`panel-tab ${rightPanelTab === 'stats' ? 'active' : ''}`}
-                  onClick={() => setRightPanelTab('stats')}
-                >
-                  <Activity size={16} />
-                  <span>Stats</span>
-                </button>
-                <button
-                  className={`panel-tab ${rightPanelTab === 'memory' ? 'active' : ''}`}
-                  onClick={() => setRightPanelTab('memory')}
-                >
-                  <HardDrive size={16} />
-                  <span>Memory</span>
-                </button>
-                <button
-                  className={`panel-tab ${rightPanelTab === 'history' ? 'active' : ''}`}
-                  onClick={() => setRightPanelTab('history')}
-                >
-                  <Clock size={16} />
-                  <span>History</span>
-                </button>
-                <button
-                  className={`panel-tab ${rightPanelTab === 'insights' ? 'active' : ''}`}
-                  onClick={() => setRightPanelTab('insights')}
-                >
-                  <Lightbulb size={16} />
-                  <span>Insights</span>
-                </button>
+          <>
+            <div className="right-panel-backdrop" onClick={() => setRightPanelOpen(false)} />
+            <div className="right-panel-overlay">
+              <div className="panel-header">
+                <div className="panel-tabs">
+                  <button className={`panel-tab ${rightPanelTab === 'analytics' ? 'active' : ''}`} onClick={() => setRightPanelTab('analytics')}><BarChart3 size={14} /><span>Analytics</span></button>
+                  <button className={`panel-tab ${rightPanelTab === 'stats' ? 'active' : ''}`} onClick={() => setRightPanelTab('stats')}><Activity size={14} /><span>Stats</span></button>
+                  <button className={`panel-tab ${rightPanelTab === 'memory' ? 'active' : ''}`} onClick={() => setRightPanelTab('memory')}><HardDrive size={14} /><span>Memory</span></button>
+                  <button className={`panel-tab ${rightPanelTab === 'history' ? 'active' : ''}`} onClick={() => setRightPanelTab('history')}><Clock size={14} /><span>History</span></button>
+                  <button className={`panel-tab ${rightPanelTab === 'insights' ? 'active' : ''}`} onClick={() => setRightPanelTab('insights')}><Lightbulb size={14} /><span>Insights</span></button>
+                </div>
+                <button className="panel-close-btn" onClick={() => setRightPanelOpen(false)}><X size={16} /></button>
               </div>
-              <button className="panel-close-btn" onClick={() => setRightPanelOpen(false)}>
-                <X size={18} />
-              </button>
+              <div className="panel-content">
+                {rightPanelTab === 'analytics' && <AnalyticsPanel trafficData={trafficData} conversionData={conversionData} realTimeData={realTimeAnalytics} />}
+                {rightPanelTab === 'stats' && <StatsPanel stats={stats} />}
+                {rightPanelTab === 'memory' && (
+                  <MemoryPanel
+                    memories={memories}
+                    department={memoryDepartment}
+                    setDepartment={setMemoryDepartment}
+                    agents={AGENTS}
+                    onClearMemory={async () => {
+                      try { await axios.delete(`${API_BASE}/api/memory`); setMemories([]); } catch (err) { console.error('Failed to clear memory'); }
+                    }}
+                  />
+                )}
+                {rightPanelTab === 'history' && <HistoryPanel history={taskHistory} days={historyDays} setDays={setHistoryDays} agents={AGENTS} />}
+                {rightPanelTab === 'insights' && <InsightsPanel agents={AGENTS} />}
+              </div>
             </div>
-
-            <div className="panel-content">
-              {rightPanelTab === 'analytics' && (
-                <AnalyticsPanel trafficData={trafficData} conversionData={conversionData} realTimeData={realTimeAnalytics} />
-              )}
-              {rightPanelTab === 'stats' && (
-                <StatsPanel stats={stats} />
-              )}
-              {rightPanelTab === 'memory' && (
-                <MemoryPanel
-                  memories={memories}
-                  department={memoryDepartment}
-                  setDepartment={setMemoryDepartment}
-                  agents={AGENTS}
-                  onClearMemory={async () => {
-                    try {
-                      await axios.delete(`${API_BASE}/api/memory`);
-                      setMemories([]);
-                    } catch (err) {
-                      console.error('Failed to clear memory');
-                    }
-                  }}
-                />
-              )}
-              {rightPanelTab === 'history' && (
-                <HistoryPanel
-                  history={taskHistory}
-                  days={historyDays}
-                  setDays={setHistoryDays}
-                  agents={AGENTS}
-                />
-              )}
-              {rightPanelTab === 'insights' && <InsightsPanel agents={AGENTS} />}
-            </div>
-          </div>
+          </>
         )}
-      </div>
-
-      {/* Footer */}
-      <Footer
-        activeAgents={activeAgents}
-        totalTasks={totalTasks}
-        toggleRightPanel={toggleRightPanel}
-        rightPanelOpen={rightPanelOpen}
-        setSettingsOpen={setSettingsOpen}
-        setRightPanelTab={setRightPanelTab}
-        integrationStatus={integrationStatus}
-      />
 
       {/* Modals */}
       {selectAgentsModal && (
@@ -1164,277 +1040,82 @@ function App() {
           clearMessages={clearMessages}
         />
       )}
-        </div>{/* closes app-main */}
-      </div>{/* closes app-shell */}
     </div>
   );
 }
 
 // Header Component
 function Header({
-  selectedAgent, agentDropdownOpen, setAgentDropdownOpen, agents, setSelectedAgent,
-  darkMode, setDarkMode, notificationsOpen, setNotificationsOpen, notifications,
-  setNotifications, userMenuOpen, setUserMenuOpen, setSettingsOpen,
-  setCommandPaletteOpen, multiAgentMode, setMultiAgentMode,
-  isFullscreen, setIsFullscreen, smartRoutingMode, setSmartRoutingMode,
-  feedbackLoopRunning, triggerFeedbackLoop, rateLimits
+  selectedAgent, agents, setSelectedAgent,
+  darkMode, setDarkMode, setSettingsOpen, setCommandPaletteOpen,
+  multiAgentMode, setMultiAgentMode, smartRoutingMode, setSmartRoutingMode,
+  feedbackLoopRunning, triggerFeedbackLoop, rightPanelOpen, toggleRightPanel,
+  setRightPanelTab, rateLimits
 }) {
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const markAllRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
-  };
-
   return (
     <header className="header">
       <div className="header-left">
-        <div className="logo">
-          <div className="logo-icon">
-            <Sparkles size={20} />
-          </div>
-          <div className="logo-text">
-            <span className="logo-name">SwarmOps</span>
-            <span className="logo-badge">PRO</span>
-          </div>
-        </div>
-
-        <div className="header-divider" />
-
-        {/* Agent Selector */}
-        <div className="agent-dropdown-wrapper">
-          <button 
-            className="agent-selector-btn"
-            onClick={() => setAgentDropdownOpen(!agentDropdownOpen)}
-          >
-            <div 
-              className="agent-icon-btn" 
-              style={{ background: `linear-gradient(135deg, ${selectedAgent.gradientFrom}, ${selectedAgent.gradientTo})` }}
-            >
-              <selectedAgent.icon size={16} />
-            </div>
-            <div className="agent-selector-info">
-              <span className="agent-selector-name">{selectedAgent.name}</span>
-              <span className="agent-selector-model">{selectedAgent.model}</span>
-            </div>
-            <ChevronDown size={16} className={`chevron ${agentDropdownOpen ? 'open' : ''}`} />
-          </button>
-
-          {agentDropdownOpen && (
-            <>
-              <div className="dropdown-backdrop" onClick={() => setAgentDropdownOpen(false)} />
-              <div className="agent-dropdown-menu">
-                <div className="dropdown-header">
-                  <span className="dropdown-title">AI Agents</span>
-                  <span className="agents-online">{agents.filter(a => a.status === 'online').length} online</span>
-                </div>
-                <div className="agents-list-dropdown">
-                  {agents.map(agent => {
-                    const AgentIcon = agent.icon;
-                    return (
-                      <button
-                        key={agent.id}
-                        className={`agent-dropdown-item ${selectedAgent.id === agent.id ? 'active' : ''}`}
-                        onClick={() => {
-                          setSelectedAgent(agent.id);
-                          setAgentDropdownOpen(false);
-                        }}
-                      >
-                        <div 
-                          className="agent-icon-dropdown" 
-                          style={{ background: `linear-gradient(135deg, ${agent.gradientFrom}, ${agent.gradientTo})` }}
-                        >
-                          <AgentIcon size={18} />
-                        </div>
-                        <div className="agent-dropdown-info">
-                          <span className="agent-dropdown-name">{agent.name}</span>
-                          <span className="agent-dropdown-model">{agent.model}</span>
-                        </div>
-                        {selectedAgent.id === agent.id && <Check size={16} className="check-icon" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Multi-agent toggle */}
+        <button className="header-logo" onClick={() => setCommandPaletteOpen(true)}>SwarmOps</button>
         <button
-          className={`multi-agent-toggle ${multiAgentMode ? 'active' : ''}`}
-          onClick={() => setMultiAgentMode(!multiAgentMode)}
-          title="Multi-Agent Mode"
-        >
-          <Layers size={16} />
-          <span>Multi</span>
-        </button>
-
-        {/* Smart Routing toggle */}
-        <button
-          className={`smart-routing-toggle ${smartRoutingMode ? 'active' : ''}`}
+          className={`header-toggle ${smartRoutingMode ? 'active' : ''}`}
           onClick={() => setSmartRoutingMode(!smartRoutingMode)}
-          title="Smart Routing - Let Nexus choose the best agent"
+          title="Smart Routing — Nexus auto-picks the best agent"
         >
-          <Cpu size={16} />
-          <span>Smart</span>
+          <Cpu size={13} />
+          <span>{smartRoutingMode ? 'Auto' : 'Manual'}</span>
         </button>
-
-        {/* Feedback Loop trigger */}
-        <button
-          className={`feedback-loop-btn ${feedbackLoopRunning ? 'running' : ''}`}
-          onClick={triggerFeedbackLoop}
-          disabled={feedbackLoopRunning}
-          title="Run Feedback Loop - Analyze and optimize"
-        >
-          {feedbackLoopRunning ? <Loader2 size={16} className="spinner" /> : <RefreshCw size={16} />}
-          <span>Loop</span>
-        </button>
-      </div>
-
-      <div className="header-center">
-        <button className="search-bar" onClick={() => setCommandPaletteOpen(true)}>
-          <Search size={16} />
-          <span>Search or run command...</span>
-          <div className="search-shortcut">
-            <kbd>⌘</kbd>
-            <kbd>K</kbd>
-          </div>
-        </button>
+        {rateLimits && <RateLimitMonitor rateLimits={rateLimits} />}
       </div>
 
       <div className="header-right">
-        {/* Rate Limit Monitor */}
-        {rateLimits && <RateLimitMonitor rateLimits={rateLimits} />}
-
+        <button
+          className={`header-icon-btn ${feedbackLoopRunning ? 'active' : ''}`}
+          onClick={triggerFeedbackLoop}
+          disabled={feedbackLoopRunning}
+          title="Run Feedback Loop"
+        >
+          {feedbackLoopRunning ? <Loader2 size={15} className="spinner" /> : <RefreshCw size={15} />}
+        </button>
+        <button
+          className={`header-icon-btn ${rightPanelOpen ? 'active' : ''}`}
+          onClick={() => { setRightPanelTab('analytics'); toggleRightPanel(); }}
+          title="Analytics Panel (⌘B)"
+        >
+          <BarChart3 size={15} />
+        </button>
         <button className="header-icon-btn" onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Light Mode' : 'Dark Mode'}>
-          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          {darkMode ? <Sun size={15} /> : <Moon size={15} />}
         </button>
-        
-        <button className="header-icon-btn" onClick={() => setIsFullscreen(!isFullscreen)} title="Fullscreen">
-          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+        <button className="header-icon-btn" onClick={() => setSettingsOpen(true)} title="Settings">
+          <Settings size={15} />
         </button>
-
-        {/* Notifications */}
-        <div className="notifications-wrapper">
-          <button 
-            className={`header-icon-btn ${unreadCount > 0 ? 'has-badge' : ''}`}
-            onClick={() => setNotificationsOpen(!notificationsOpen)}
-          >
-            <Bell size={18} />
-            {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
-          </button>
-
-          {notificationsOpen && (
-            <>
-              <div className="dropdown-backdrop" onClick={() => setNotificationsOpen(false)} />
-              <div className="notifications-dropdown">
-                <div className="notifications-header">
-                  <span>Notifications</span>
-                  {unreadCount > 0 && (
-                    <button className="mark-read-btn" onClick={markAllRead}>Mark all read</button>
-                  )}
-                </div>
-                <div className="notifications-list">
-                  {notifications.map(n => (
-                    <div key={n.id} className={`notification-item ${n.read ? '' : 'unread'} ${n.type}`}>
-                      <div className="notification-icon">
-                        {n.type === 'success' ? <CheckCircle2 size={18} /> : <Info size={18} />}
-                      </div>
-                      <div className="notification-content">
-                        <span className="notification-title">{n.title}</span>
-                        <span className="notification-message">{n.message}</span>
-                        <span className="notification-time">{n.time}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* User Menu */}
-        <div className="user-menu-wrapper">
-          <button className="user-btn" onClick={() => setUserMenuOpen(!userMenuOpen)}>
-            <div className="user-avatar">M</div>
-            <ChevronDown size={14} className={`chevron ${userMenuOpen ? 'open' : ''}`} />
-          </button>
-
-          {userMenuOpen && (
-            <>
-              <div className="dropdown-backdrop" onClick={() => setUserMenuOpen(false)} />
-              <div className="user-dropdown">
-                <div className="user-dropdown-header">
-                  <div className="user-dropdown-avatar">S</div>
-                  <div className="user-dropdown-info">
-                    <span className="user-dropdown-name">SwarmOps User</span>
-                    <span className="user-dropdown-email">pro@swarmops.ai</span>
-                  </div>
-                </div>
-                <div className="dropdown-divider" />
-                <button className="dropdown-menu-item"><User size={16} /><span>Profile</span></button>
-                <button className="dropdown-menu-item"><BarChart3 size={16} /><span>Billing</span></button>
-                <button className="dropdown-menu-item"><Users size={16} /><span>Team</span></button>
-                <button className="dropdown-menu-item" onClick={() => { setUserMenuOpen(false); setSettingsOpen(true); }}>
-                  <Settings size={16} /><span>Settings</span>
-                </button>
-                <div className="dropdown-divider" />
-                <button className="dropdown-menu-item danger"><ExternalLink size={16} /><span>Sign out</span></button>
-              </div>
-            </>
-          )}
-        </div>
       </div>
     </header>
   );
 }
 
 // Empty State
-function EmptyState({ suggestedPrompts, setInput, setSelectedAgent, agents }) {
+function EmptyState({ suggestedPrompts, setInput, setSelectedAgent }) {
   return (
     <div className="empty-state">
-      <div className="empty-state-content">
-        <div className="empty-icon-wrapper">
-          <div className="empty-icon-glow"></div>
-          <div className="empty-icon">
-            <Sparkles size={40} />
-          </div>
-        </div>
-        
-        <h1 className="empty-title">How can I help you today?</h1>
-        <p className="empty-description">
-          Your AI-powered marketing command center. Choose an agent or describe what you need.
-        </p>
-
-        <div className="suggested-prompts">
-          {suggestedPrompts.map((prompt, i) => {
-            const Icon = prompt.icon;
-            const agent = agents.find(a => a.id === prompt.agent);
-            return (
-              <button
-                key={i}
-                className="suggested-prompt"
-                onClick={() => {
-                  setSelectedAgent(prompt.agent);
-                  setInput(prompt.text);
-                }}
-                style={{ '--accent-color': agent?.color }}
-              >
-                <div className="prompt-icon" style={{ background: agent?.bgColor, color: agent?.color }}>
-                  <Icon size={18} />
-                </div>
-                <span className="prompt-text">{prompt.text}</span>
-                <ArrowRight size={16} className="prompt-arrow" />
-              </button>
-            );
-          })}
-        </div>
+      <h1 className="empty-title">SwarmOps</h1>
+      <p className="empty-subtitle">How can I help you today?</p>
+      <div className="suggestion-grid">
+        {suggestedPrompts.map((prompt, i) => (
+          <button
+            key={i}
+            className="suggestion-chip"
+            onClick={() => { setSelectedAgent(prompt.agent); setInput(prompt.text); }}
+          >
+            {prompt.text}
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
-// Message Bubble (Enhanced with metadata and pipeline support)
+// Message Bubble
 function MessageBubble({ message, isLatest }) {
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState(null);
@@ -1453,15 +1134,9 @@ function MessageBubble({ message, isLatest }) {
   if (message.role === 'user') {
     return (
       <div className="message user-message">
-        <div className="message-wrapper">
-          <div className="user-message-bubble">
-            <div className="user-message-text">{message.content}</div>
-          </div>
-          <div className="message-meta">
-            <span className="message-time">
-              {new Date(message.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </div>
+        <div className="user-message-inner">
+          <p className="user-message-label">You</p>
+          <div className="user-message-bubble">{message.content}</div>
         </div>
       </div>
     );
@@ -1470,8 +1145,8 @@ function MessageBubble({ message, isLatest }) {
   if (message.role === 'system') {
     return (
       <div className="message system-message">
-        <div className="system-message-content">
-          <AlertCircle size={18} />
+        <div className="system-message-inner">
+          <AlertCircle size={15} />
           <span>{message.content}</span>
         </div>
       </div>
@@ -1482,21 +1157,17 @@ function MessageBubble({ message, isLatest }) {
   const isPipeline = message.pipeline || (message.result && typeof message.result === 'object' && message.result.pipeline);
   const pipelineData = isPipeline ? (message.result || message) : null;
 
+  const providerKey = message.provider?.toLowerCase().split(' ')[0] || '';
+
   return (
-    <div className={`message agent-message ${isLatest ? 'latest' : ''} ${isPipeline ? 'pipeline-message' : ''}`}>
-      <div
-        className="agent-avatar"
-        style={{ background: `linear-gradient(135deg, ${message.agentGradientFrom}, ${message.agentGradientTo})` }}
-      >
-        <span>{message.agentIcon}</span>
-      </div>
-      <div className="message-wrapper">
-        <div className="message-header">
-          <span className="agent-name">{message.agentName}</span>
-          <span className="agent-model-tag">{message.model}</span>
+    <div className={`message agent-message ${isPipeline ? 'pipeline-message' : ''}`}>
+      <div className="agent-emoji-icon">{message.agentIcon}</div>
+      <div className="agent-message-body">
+        <div className="agent-message-label">
+          <span className="agent-label-name">{message.agentName}</span>
+          {message.model && <span className="agent-label-model">{message.model}</span>}
         </div>
 
-        {/* Pipeline Visualization */}
         {isPipeline && pipelineData.steps && (
           <PipelineVisualization
             steps={pipelineData.steps}
@@ -1506,71 +1177,44 @@ function MessageBubble({ message, isLatest }) {
           />
         )}
 
-        {/* Regular message content */}
         {!isPipeline && (
-          <>
-            <div className="agent-message-bubble">
-              <div className="agent-message-text">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-              </div>
-            </div>
+          <div className="agent-message-content">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+          </div>
+        )}
 
-            {/* Enhanced Metadata Bar */}
-            {(message.provider || message.latency_ms || message.quality) && (
-              <div className="message-metadata-bar">
-                {/* Model & Provider */}
-                {message.provider && message.model && (
-                  <div className="metadata-item">
-                    <Cpu size={12} />
-                    <span className="metadata-model">{message.model}</span>
-                    <span className="metadata-provider">via {message.provider}</span>
-                  </div>
-                )}
-
-                {/* Latency */}
-                {message.latency_ms && (
-                  <div className="metadata-item">
-                    <Clock size={12} />
-                    <span>{(message.latency_ms / 1000).toFixed(1)}s</span>
-                  </div>
-                )}
-
-                {/* Quality Badge */}
-                {message.quality && (
-                  <div className="metadata-item">
-                    <div className={`quality-badge confidence-${getConfidenceLevel(message.quality.confidence)}`}>
-                      <div className="quality-dot" />
-                      <span>{(message.quality.confidence * 100).toFixed(0)}%</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Revised Badge */}
-                {message.quality && message.quality.revised && (
-                  <div className="metadata-item">
-                    <span className="revised-badge">✨ Revised</span>
-                  </div>
-                )}
-              </div>
+        {(message.provider || message.latency_ms || message.quality) && !isPipeline && (
+          <div className="message-meta-bar">
+            {message.model && message.provider && (
+              <span className={`meta-badge provider-${providerKey}`}>{message.model}</span>
             )}
-          </>
+            {message.provider && (
+              <span className={`meta-badge provider-${providerKey}`}>{message.provider}</span>
+            )}
+            {message.latency_ms && (
+              <span className="meta-badge">{(message.latency_ms / 1000).toFixed(1)}s</span>
+            )}
+            {message.quality?.confidence != null && (
+              <span className={`meta-badge confidence-${getConfidenceLevel(message.quality.confidence)}`}>
+                {(message.quality.confidence * 100).toFixed(0)}%
+              </span>
+            )}
+            {message.quality?.revised && <span className="meta-badge revised">✨ Revised</span>}
+          </div>
         )}
 
         <div className="message-actions">
-          <button className={`action-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-            <span>{copied ? 'Copied!' : 'Copy'}</span>
+          <button className={`msg-action-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+            <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
-          <button className="action-btn"><Share2 size={14} /><span>Share</span></button>
-          <button className="action-btn"><Bookmark size={14} /><span>Save</span></button>
-          <div className="action-divider" />
-          <button className={`action-btn icon-only ${liked === true ? 'liked' : ''}`} onClick={() => setLiked(liked === true ? null : true)}>
-            <ThumbsUp size={14} />
+          <button className="msg-action-btn"><Bookmark size={12} /><span>Save</span></button>
+          <button className={`msg-action-btn ${liked === true ? 'liked' : ''}`} onClick={() => setLiked(liked === true ? null : true)}>
+            <ThumbsUp size={12} />
           </button>
-          <button className={`action-btn icon-only ${liked === false ? 'disliked' : ''}`} onClick={() => setLiked(liked === false ? null : false)}>
-            <ThumbsDown size={14} />
+          <button className={`msg-action-btn ${liked === false ? 'disliked' : ''}`} onClick={() => setLiked(liked === false ? null : false)}>
+            <ThumbsDown size={12} />
           </button>
-          <button className="action-btn icon-only"><RotateCcw size={14} /></button>
         </div>
       </div>
     </div>
@@ -1687,21 +1331,14 @@ function PipelineStep({ step, isParallel }) {
 // Loading Message
 function LoadingMessage({ agent }) {
   return (
-    <div className="message agent-message loading">
-      <div className="agent-avatar" style={{ background: `linear-gradient(135deg, ${agent.gradientFrom}, ${agent.gradientTo})` }}>
-        <span>{agent.iconEmoji}</span>
-      </div>
-      <div className="message-wrapper">
-        <div className="message-header">
-          <span className="agent-name">{agent.name}</span>
-        </div>
-        <div className="agent-message-bubble loading-bubble">
-          <div className="typing-indicator">
-            <div className="typing-dot"></div>
-            <div className="typing-dot"></div>
-            <div className="typing-dot"></div>
-          </div>
-          <span className="typing-text">Thinking...</span>
+    <div className="message loading-message">
+      <div className="agent-emoji-icon">{agent.iconEmoji}</div>
+      <div className="agent-message-body">
+        <p className="thinking-label">{agent.name} is thinking...</p>
+        <div className="thinking-dots">
+          <div className="thinking-dot" />
+          <div className="thinking-dot" />
+          <div className="thinking-dot" />
         </div>
       </div>
     </div>
@@ -2429,7 +2066,7 @@ function AppSidebar({ collapsed, setCollapsed, agents, selectedAgentId, setSelec
     : [];
 
   return (
-    <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <div className={`sidebar ${!collapsed ? 'expanded' : ''}`}>
       {/* Logo + collapse button */}
       <div className="sidebar-header">
         <div className="sidebar-logo">

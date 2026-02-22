@@ -7,11 +7,11 @@ import {
   Bell, User, Search, ChevronDown, X, Settings, BarChart3,
   Lightbulb, Cpu, HardDrive, Activity, AlertCircle, Users,
   TrendingUp, TrendingDown, Eye, MousePointer, Target, Zap,
-  PenTool, DollarSign, Palette, Globe, Layout as LayoutIcon,
-  ArrowRight, Check, Clock, Filter,
+  PenTool, DollarSign, Palette, Globe,
+  ArrowRight, Check, Clock,
   Maximize2, Minimize2, RefreshCw, ExternalLink,
   AtSign, Smile, CheckCircle2, Info,
-  Layers, Bookmark, Volume2
+  Layers, Bookmark, Volume2, ChevronLeft, MessageSquare
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -324,6 +324,7 @@ function App() {
   const [memories, setMemories] = useState([]);
   const [taskHistory, setTaskHistory] = useState([]);
   const [historyDays, setHistoryDays] = useState(7);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -334,7 +335,7 @@ function App() {
 
   // Persist dark mode
   useEffect(() => {
-    localStorage.setItem('marketingos-darkmode', JSON.stringify(darkMode));
+    localStorage.setItem('swarmops-darkmode', JSON.stringify(darkMode));
   }, [darkMode]);
 
   // Scroll to bottom on new messages
@@ -812,7 +813,7 @@ function App() {
   ];
 
   if (showLanding) {
-    return <LandingPage onLaunch={() => { localStorage.setItem('swarmops-launched', '1'); setShowLanding(false); }} />;
+    return <LandingPage onEnter={() => { localStorage.setItem('swarmops-launched', '1'); setShowLanding(false); }} />;
   }
 
   return (
@@ -825,6 +826,20 @@ function App() {
         <div className="noise-overlay"></div>
       </div>
 
+      {/* App Shell: Sidebar + Main */}
+      <div className="app-shell">
+        <AppSidebar
+          collapsed={sidebarCollapsed}
+          setCollapsed={setSidebarCollapsed}
+          agents={AGENTS}
+          selectedAgentId={selectedAgentId}
+          setSelectedAgent={(id) => { setSelectedAgent(id); if (!multiAgentMode) setSelectedAgents([id]); }}
+          messages={messages}
+          clearMessages={clearMessages}
+          setSettingsOpen={setSettingsOpen}
+        />
+
+        <div className="app-main">
       {/* Header */}
       <Header
         selectedAgent={selectedAgent}
@@ -1115,6 +1130,8 @@ function App() {
           clearMessages={clearMessages}
         />
       )}
+        </div>{/* closes app-main */}
+      </div>{/* closes app-shell */}
     </div>
   );
 }
@@ -1314,10 +1331,10 @@ function Header({
               <div className="dropdown-backdrop" onClick={() => setUserMenuOpen(false)} />
               <div className="user-dropdown">
                 <div className="user-dropdown-header">
-                  <div className="user-dropdown-avatar">M</div>
+                  <div className="user-dropdown-avatar">S</div>
                   <div className="user-dropdown-info">
-                    <span className="user-dropdown-name">Marketing Pro</span>
-                    <span className="user-dropdown-email">pro@marketingos.ai</span>
+                    <span className="user-dropdown-name">SwarmOps User</span>
+                    <span className="user-dropdown-email">pro@swarmops.ai</span>
                   </div>
                 </div>
                 <div className="dropdown-divider" />
@@ -2366,6 +2383,86 @@ function HistoryPanel({ history, days, setDays, agents }) {
             </tbody>
           </table>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── AppSidebar Component ──────────────────────────────────────────────────
+function AppSidebar({ collapsed, setCollapsed, agents, selectedAgentId, setSelectedAgent, messages, clearMessages, setSettingsOpen }) {
+  const recentConvs = messages.length > 0
+    ? [{ id: 'current', label: messages[0]?.content?.slice(0, 36) || 'Current conversation' }]
+    : [];
+
+  return (
+    <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      {/* Logo + collapse button */}
+      <div className="sidebar-header">
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-mark">⚡</div>
+          <span className="sidebar-logo-name">SwarmOps</span>
+        </div>
+        <button
+          className="sidebar-collapse-btn"
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <ChevronLeft size={16} />
+        </button>
+      </div>
+
+      {/* New Chat */}
+      <button className="sidebar-new-chat" onClick={clearMessages}>
+        <Plus size={16} className="sidebar-new-chat-icon" />
+        <span className="sidebar-new-chat-label">New Chat</span>
+      </button>
+
+      {/* Agent navigation */}
+      <div className="sidebar-nav">
+        <span className="sidebar-section-title">Agents</span>
+        {agents.slice(0, 8).map((agent) => {
+          const AgentIcon = agent.icon;
+          return (
+            <button
+              key={agent.id}
+              className={`sidebar-nav-item ${selectedAgentId === agent.id ? 'active' : ''}`}
+              onClick={() => setSelectedAgent(agent.id)}
+              title={agent.name}
+            >
+              <div className="sidebar-nav-icon">
+                <AgentIcon size={16} />
+              </div>
+              <span className="sidebar-nav-label">{agent.shortName || agent.name}</span>
+            </button>
+          );
+        })}
+
+        {/* Recent conversations */}
+        {recentConvs.length > 0 && (
+          <>
+            <span className="sidebar-section-title" style={{ marginTop: '12px' }}>Recent</span>
+            <div className="sidebar-conv-list">
+              {recentConvs.map((conv) => (
+                <button key={conv.id} className="sidebar-conv-item" title={conv.label}>
+                  <MessageSquare size={13} className="sidebar-conv-icon" />
+                  <span className="sidebar-conv-label">{conv.label}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="sidebar-footer">
+        <button
+          className="sidebar-nav-item"
+          onClick={() => setSettingsOpen(true)}
+          title="Settings"
+        >
+          <div className="sidebar-nav-icon"><Settings size={16} /></div>
+          <span className="sidebar-nav-label">Settings</span>
+        </button>
       </div>
     </div>
   );

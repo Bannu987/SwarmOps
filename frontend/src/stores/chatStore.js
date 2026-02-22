@@ -137,7 +137,7 @@ export const useChatStore = create(
       })
     }),
     {
-      name: 'marketingos-storage',
+      name: 'swarmops-storage',
       version: 1,
       partialize: (state) => ({
         messages: state.messages.slice(-100),

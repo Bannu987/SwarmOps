@@ -26,6 +26,29 @@ import './LandingPage.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://marketingos20-production.up.railway.app';
 
+const safeApiCall = async (method, url, data = null, timeout = 30000) => {
+  try {
+    const config = {
+      timeout,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    const response = method === 'get'
+      ? await axios.get(url, config)
+      : await axios.post(url, data, config);
+
+    // Detect HTML response (wrong URL / Vercel SPA fallback)
+    if (typeof response.data === 'string' && response.data.trimStart().startsWith('<!')) {
+      throw new Error('Backend connection error — received HTML instead of JSON. Check that REACT_APP_API_URL points to the Railway backend.');
+    }
+    return response;
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Request timed out. The backend may be warming up — please try again in 30 seconds.');
+    }
+    throw error;
+  }
+};
+
 // Agent configurations - 10 agents with real integration endpoints
 const AGENTS = [
   {
@@ -601,7 +624,7 @@ function App() {
       // Smart Routing Mode - Let Nexus decide which agent to use
       if (smartRoutingMode) {
         try {
-          const response = await axios.post(`${API_BASE}/api/chat`, {
+          const response = await safeApiCall('post', `${API_BASE}/api/chat`, {
             message: currentInput,
             agent: 'nexus'
           });
@@ -737,10 +760,15 @@ function App() {
             addMessage(agentMessage);
           } catch (agentErr) {
             console.error(`Error with agent ${agent.name}:`, agentErr);
+            const agentRawDetail = agentErr.response?.data?.detail;
+            const agentIsHtml = typeof agentErr.response?.data === 'string' && agentErr.response.data.trimStart().startsWith('<!');
+            const agentErrText = agentIsHtml
+              ? 'Backend connection error — received HTML instead of JSON. The backend may be unreachable.'
+              : (typeof agentRawDetail === 'string' ? agentRawDetail : agentErr.message || 'Service temporarily unavailable. Please try again.');
             const errorMsg = {
               id: Date.now() + Math.random(),
               role: 'agent',
-              content: `⚠️ ${agent.name} encountered an issue: ${typeof agentErr.response?.data?.detail === 'string' ? agentErr.response.data.detail : agentErr.message || 'Service temporarily unavailable. Please try again.'}`,
+              content: `⚠️ ${agent.name} encountered an issue: ${agentErrText}`,
               agentId: agent.id,
               agentName: agent.name,
               agentIcon: agent.iconEmoji,
@@ -755,10 +783,16 @@ function App() {
         }
       }
     } catch (err) {
+      const rawDetail = err.response?.data?.detail;
+      const detail = typeof rawDetail === 'string' ? rawDetail : null;
+      const isHtmlResponse = typeof err.response?.data === 'string' && err.response.data.trimStart().startsWith('<!');
+      const errorContent = isHtmlResponse
+        ? '⚠️ Backend connection error — the app received HTML instead of JSON. The backend may be down or the API URL is misconfigured. Please refresh.'
+        : `⚠️ ${detail || err.message || 'Failed to connect to the backend. Please try again in a moment.'}`;
       const errorMessage = {
         id: Date.now(),
         role: 'system',
-        content: `Error: ${typeof err.response?.data?.detail === 'string' ? err.response.data.detail : err.message || 'Failed to connect to API. Make sure backend is running.'}`,
+        content: errorContent,
         timestamp: new Date().toISOString()
       };
       addMessage(errorMessage);

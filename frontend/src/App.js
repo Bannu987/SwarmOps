@@ -24,7 +24,7 @@ import './App.css';
 import LandingPage from './LandingPage';
 import './LandingPage.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://marketingos20-production.up.railway.app';
 
 // Agent configurations - 10 agents with real integration endpoints
 const AGENTS = [

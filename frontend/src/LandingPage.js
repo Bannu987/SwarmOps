@@ -81,12 +81,12 @@ export default function LandingPage({ onEnter }) {
       const res = await fetch(`${BACKEND_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: query, department: 'content', use_smart_routing: true }),
+        body: JSON.stringify({ message: query, agent: 'content', use_smart_routing: true }),
         signal: AbortSignal.timeout(25000),
       });
       const data = await res.json();
       setDemoResult(data.response || data.message || 'Task completed successfully.');
-      setDemoMeta({ agent: data.department || 'nexus', model: data.model, latency: data.latency_ms });
+      setDemoMeta({ agent: data.agent || 'nexus', model: data.model, latency: data.latency_ms });
     } catch {
       setDemoResult('Deploy the backend to see live AI responses from all 11 agents in real time.');
       setDemoMeta({ agent: 'nexus', model: 'claude-3-5-sonnet' });

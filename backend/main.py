@@ -717,6 +717,16 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         except Exception:
             memory = None
 
+        # --- inject data intelligence context (live business data + benchmarks) ---
+        try:
+            from data_intelligence import get_data_intelligence
+            di = get_data_intelligence()
+            data_context = di.build_agent_context(agent, request.message)
+            if data_context:
+                msg = data_context + "\n\nUSER REQUEST:\n" + msg
+        except Exception:
+            pass  # never block on context injection
+
         # --- dispatch to the correct agent and capture a revision callable ---
         result = None
         agent_fn = None  # callable(prompt) -> str for revisions
@@ -979,6 +989,70 @@ def import_memory(request: MemoryImportRequest):
         from memory_store import get_memory_store
         result = get_memory_store().import_all({"agent_memory": request.agent_memory, "task_log": request.task_log})
         return {"success": True, **result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# BUSINESS PROFILE ENDPOINTS
+# ============================================================================
+
+class ProfileKeyRequest(BaseModel):
+    key: str
+    value: str
+
+@app.get("/api/business-profile")
+def get_business_profile():
+    """Get all stored business profile keys (industry, website, goals, etc.)"""
+    try:
+        from memory_store import get_memory_store
+        profile = get_memory_store().get_all_profile_keys()
+        return {"success": True, "profile": profile, "count": len(profile)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/business-profile")
+def set_business_profile(request: ProfileKeyRequest):
+    """Set a business profile key (persists across sessions, never auto-cleared)"""
+    try:
+        from memory_store import get_memory_store
+        get_memory_store().set_profile_key(request.key, request.value)
+        return {"success": True, "key": request.key, "value": request.value}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/business-profile")
+def clear_business_profile():
+    """Clear ALL business profile data (destructive — requires explicit user action)"""
+    try:
+        from memory_store import get_memory_store
+        get_memory_store().clear_profile()
+        return {"success": True, "message": "Business profile cleared."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/insights/{department}")
+def get_agent_insights(department: str, limit: int = 10):
+    """Get saved insights for a specific agent department"""
+    try:
+        from memory_store import get_memory_store
+        insights = get_memory_store().get_insights(department=department, limit=limit)
+        return {"department": department, "insights": insights, "count": len(insights)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/integrations/status")
+def get_integration_status():
+    """Check which data integrations are connected (GA4, HubSpot, Google Ads, etc.)"""
+    try:
+        from data_intelligence import get_data_intelligence
+        di = get_data_intelligence()
+        connected = di.detect_connected_integrations()
+        return {
+            "success": True,
+            "integrations": connected,
+            "connected_count": sum(1 for v in connected.values() if v),
+            "total": len(connected)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

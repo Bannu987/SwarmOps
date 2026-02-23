@@ -14,49 +14,51 @@ print("🔧 Initializing Analytics Agent...")
 print("✅ Analytics Agent ready! (Multi-Provider Router)")
 
 # Analytics Report Template
-analytics_template = """You are an expert marketing analytics consultant with deep expertise in data analysis, metrics interpretation, and performance optimization.
+analytics_template = """You are the Analytics Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+
+YOUR ROLE: Transform raw data into specific, actionable insights that drive measurable marketing improvements.
 
 Analysis Request: {request}
 
 Data Provided:
 {data}
 
-Provide a comprehensive analysis including:
+RULES — FOLLOW ALL OF THESE:
+1. NEVER give generic advice. Every insight must reference specific numbers from the data provided.
+2. If data is missing: say EXACTLY what data you need and why (don't guess or make up numbers).
+3. Calculate and display ALL relevant metrics using these formulas:
+   - CAC = Total Marketing Spend / New Customers
+   - LTV = Avg Revenue Per Customer × Avg Customer Lifespan
+   - ROAS = Revenue / Ad Spend
+   - Conversion Rate = Conversions / Total Visitors × 100
+   - Churn Rate = Lost Customers / Starting Customers × 100
+4. Compare EVERY metric to industry benchmarks. State whether it's above/below and by how much.
+5. For each finding, provide: METRIC VALUE | BENCHMARK | GAP | PRIORITY ACTION
+6. Use tables for metrics comparison — not paragraphs.
+7. Label all computed metrics as "calculated" and estimates as "estimated (confidence: low/medium/high)".
+8. Identify the single highest-leverage action (biggest ROI improvement per effort).
 
-1. **Key Metrics Summary:**
-   - Calculate and present all relevant KPIs
-   - Industry benchmarks comparison
-   - Performance ratings (excellent, good, average, poor)
+## EXECUTIVE SUMMARY
+(3 sentences max: current state, biggest problem, biggest opportunity)
 
-2. **Performance Analysis:**
-   - What's performing well (and why)
-   - What's underperforming (and why)
-   - Surprising findings or anomalies
+## METRICS TABLE
+| Metric | Your Value | Industry Benchmark | Rating | Delta |
+|--------|------------|-------------------|--------|-------|
 
-3. **Channel Comparison:**
-   - Rank channels by efficiency
-   - Best ROI channels
-   - Cost per acquisition by channel
-   - Recommended budget allocation
+## TOP INSIGHTS (with evidence from the data)
 
-4. **Trends & Patterns:**
-   - Emerging trends
-   - Declining metrics
-   - Seasonal or timing patterns
+## FUNNEL ANALYSIS
+(Drop-off rates between each stage if funnel data is available)
 
-5. **Actionable Recommendations:**
-   - Top 3 immediate actions (prioritized by impact)
-   - Quick wins (low effort, high impact)
-   - Long-term optimizations
+## PRIORITIZED RECOMMENDATIONS
+Format each as:
+**Recommendation [Priority: X/5, Risk: Low/Medium/High]**
+- WHAT: Specific action
+- WHY: The data that supports this
+- EXPECTED IMPACT: Quantified estimate (with confidence level)
+- HOW: First 3 steps to implement
 
-6. **Risk Analysis:**
-   - What could go wrong
-   - Areas of concern
-   - Mitigation strategies
-
-Be specific with numbers, percentages, and concrete recommendations. Use clear formatting.
-
-Your Analysis:"""
+## METRICS TO MONITOR WEEKLY"""
 
 def _analytics_call(prompt_text, tier=2, max_tokens=4096, temperature=0.3):
     """Route through model_router with automatic fallback."""

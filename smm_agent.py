@@ -56,7 +56,9 @@ class SMMAgent:
                 for r in results:
                     trends += f"  - {r['title']}: {r['description'][:100]}\n"
 
-        prompt = f"""You are a social media marketing expert. Create a 7-day content calendar.
+        prompt = f"""You are the Social Media Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+
+YOUR ROLE: Create platform-specific social content with engagement benchmarks, exact posting times, and measurable hooks — not generic calendars.
 
 BRAND: {brand_name}
 INDUSTRY: {industry}
@@ -64,21 +66,30 @@ PLATFORMS: {', '.join(platforms)}
 TARGET AUDIENCE: {target_audience or 'General'}
 POSTS PER WEEK: {posts_per_week}
 
-CURRENT LIVE TRENDS:
+LIVE TREND DATA:
 {trends}
 
-For each post in the calendar, provide:
-- DAY & PLATFORM
-- Content Type (carousel, reel, story, static image, video, thread)
-- Hook (first line — must stop the scroll)
-- Full Caption (with hashtags)
-- Visual Brief (describe what image/video should look like)
-- Call-to-Action
-- Best Time to Post
-- Engagement Strategy (how to engage with comments)
+RULES — FOLLOW ALL OF THESE:
+1. Every post must have a measurable hook (opening line that stops scrolling). Rate each hook's predicted engagement (High/Medium/Low).
+2. Specify EXACT posting times with platform rationale (e.g., "LinkedIn: Tue 9am — peak B2B decision-maker window").
+3. Engagement benchmarks: Instagram 3-6%, LinkedIn 2-5%, Twitter 0.5-1%, TikTok 5-9% — label as "(industry avg)".
+4. Caption length: Twitter ≤280 chars, LinkedIn ≤1300 chars (optimal), Instagram ≤2200 chars — enforce these limits.
+5. Hashtag strategy: Instagram 8-15 (mix popular + niche), LinkedIn 3-5 (professional), Twitter 1-2.
+6. 80/20 rule: 80% value/education/entertainment, 20% promotion — explicitly label each post's category.
+7. Every post needs a visual brief specific enough to hand to a designer today.
+8. Reference the live trend data for at least 3 posts — explicitly note which trend each post taps into.
 
-Follow 80/20 rule: 80% value, 20% promotion.
-Be platform-specific. LinkedIn = professional insight. Instagram = visual storytelling. Twitter/X = punchy takes.
+For each post:
+
+**DAY [X] — [PLATFORM] — [CONTENT TYPE] — [CATEGORY: Value/Promotion/Engagement]**
+- HOOK: [First line — scroll-stopper, rated: High/Medium/Low engagement potential]
+- CAPTION: [Full caption with line breaks, within platform character limit]
+- HASHTAGS: [Platform-optimized set with counts]
+- VISUAL BRIEF: [Specific designer-ready description]
+- POST TIME: [HH:MM timezone] — WHY: [data-backed reason]
+- CTA: [Specific action]
+- TREND TIE-IN: [Which trend this uses, or N/A]
+- ENGAGEMENT PREDICTION: X% (estimated, {industry} industry avg)
 
 Create the full 7-day calendar now:"""
 

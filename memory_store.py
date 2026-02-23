@@ -49,10 +49,41 @@ class MemoryStore:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            -- Business Profile: persistent key/value store for user's business data
+            CREATE TABLE IF NOT EXISTS business_profile (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Agent Insights: meaningful insights saved per department
+            CREATE TABLE IF NOT EXISTS agent_insights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                department TEXT NOT NULL,
+                insight_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                confidence REAL DEFAULT 0.8,
+                source TEXT DEFAULT 'agent',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP
+            );
+
+            -- Recommendation Tracking: track what was recommended and outcome
+            CREATE TABLE IF NOT EXISTS recommendation_tracking (
+                id TEXT PRIMARY KEY,
+                department TEXT NOT NULL,
+                recommendation TEXT NOT NULL,
+                predicted_impact TEXT,
+                status TEXT DEFAULT 'pending',
+                actual_impact TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE INDEX IF NOT EXISTS idx_memory_dept ON agent_memory(department);
             CREATE INDEX IF NOT EXISTS idx_memory_type ON agent_memory(memory_type);
             CREATE INDEX IF NOT EXISTS idx_tasklog_dept ON task_log(department);
             CREATE INDEX IF NOT EXISTS idx_tasklog_date ON task_log(created_at);
+            CREATE INDEX IF NOT EXISTS idx_insights_dept ON agent_insights(department);
         """)
         conn.commit()
 
@@ -207,7 +238,124 @@ class MemoryStore:
         conn = self._get_conn()
         conn.execute("DELETE FROM agent_memory")
         conn.execute("DELETE FROM task_log")
+        conn.execute("DELETE FROM agent_insights")
+        # Don't clear business_profile — user had to type that data
         conn.commit()
+
+    # ------------------------------------------------------------------
+    # Business Profile (persistent key/value for user's business data)
+    # ------------------------------------------------------------------
+
+    def set_profile_key(self, key: str, value: str):
+        """Upsert a business profile key."""
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT INTO business_profile (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP",
+            (key.lower().strip(), str(value)),
+        )
+        conn.commit()
+
+    def get_profile_key(self, key: str) -> str:
+        """Get a single business profile value."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT value FROM business_profile WHERE key = ?",
+            (key.lower().strip(),),
+        ).fetchone()
+        return row["value"] if row else None
+
+    def get_all_profile_keys(self) -> dict:
+        """Get entire business profile as dict."""
+        conn = self._get_conn()
+        rows = conn.execute("SELECT key, value FROM business_profile").fetchall()
+        return {r["key"]: r["value"] for r in rows}
+
+    def clear_profile(self):
+        """Clear the business profile (user reset)."""
+        conn = self._get_conn()
+        conn.execute("DELETE FROM business_profile")
+        conn.commit()
+
+    # ------------------------------------------------------------------
+    # Agent Insights
+    # ------------------------------------------------------------------
+
+    def save_insight(self, department: str, insight_type: str, content: str,
+                     confidence: float = 0.8, source: str = "agent",
+                     expires_days: int = None):
+        """Save a meaningful insight from an agent or the user."""
+        conn = self._get_conn()
+        expires_at = None
+        if expires_days:
+            from datetime import timedelta
+            expires_at = (datetime.now(timezone.utc) + timedelta(days=expires_days)).strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute(
+            "INSERT INTO agent_insights (department, insight_type, content, confidence, source, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (department, insight_type, content, confidence, source, expires_at),
+        )
+        conn.commit()
+
+    def get_insights(self, department: str = None, limit: int = 10) -> list:
+        """Get non-expired insights, optionally filtered by department."""
+        conn = self._get_conn()
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        if department:
+            rows = conn.execute(
+                "SELECT department, insight_type, content, confidence, source, created_at "
+                "FROM agent_insights "
+                "WHERE department = ? AND (expires_at IS NULL OR expires_at > ?) "
+                "ORDER BY created_at DESC LIMIT ?",
+                (department, now, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT department, insight_type, content, confidence, source, created_at "
+                "FROM agent_insights "
+                "WHERE expires_at IS NULL OR expires_at > ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (now, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Recommendation Tracking
+    # ------------------------------------------------------------------
+
+    def track_recommendation(self, rec_id: str, department: str, recommendation: str,
+                              predicted_impact: str = ""):
+        """Record a recommendation for tracking."""
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR IGNORE INTO recommendation_tracking "
+            "(id, department, recommendation, predicted_impact) VALUES (?, ?, ?, ?)",
+            (rec_id, department, recommendation, predicted_impact),
+        )
+        conn.commit()
+
+    def update_recommendation_status(self, rec_id: str, status: str, actual_impact: str = ""):
+        """Update the outcome of a recommendation."""
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE recommendation_tracking SET status=?, actual_impact=? WHERE id=?",
+            (status, actual_impact, rec_id),
+        )
+        conn.commit()
+
+    def get_recommendations(self, department: str = None, status: str = None) -> list:
+        """Get tracked recommendations with optional filters."""
+        conn = self._get_conn()
+        query = "SELECT * FROM recommendation_tracking WHERE 1=1"
+        params = []
+        if department:
+            query += " AND department = ?"
+            params.append(department)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        query += " ORDER BY created_at DESC LIMIT 20"
+        return [dict(r) for r in conn.execute(query, params).fetchall()]
 
 
 # Singleton for easy import

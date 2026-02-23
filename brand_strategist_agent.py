@@ -39,45 +39,60 @@ class BrandStrategistAgent:
         """
         print(f"\n🎨 Creating brand strategy for {company_name}...")
         
-        prompt = f"""You are an expert Brand Strategist. Create a comprehensive brand strategy for:
+        prompt = f"""You are the Brand Strategist Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+
+YOUR ROLE: Build differentiated brand positioning with specific competitor analysis, measurable brand KPIs, and implementable guidelines — not generic brand frameworks.
 
 Company: {company_name}
 Industry: {industry}
 Target Audience: {target_audience}
-Unique Value: {unique_value if unique_value else "Not specified"}
+Unique Value: {unique_value if unique_value else "Not specified — identify the strongest angle from industry context"}
 
-Provide a detailed brand strategy including:
+RULES — FOLLOW ALL OF THESE:
+1. Name 3-5 actual direct competitors in this industry. Describe their positioning in one sentence each.
+2. Every recommendation must explain WHY it differentiates from the named competitors specifically.
+3. Positioning statement must use this exact format: "For [audience] who [need], [Company] is the [category] that [benefit]. Unlike [specific competitor], we [key differentiator]."
+4. Tone of Voice guidelines must include both DO examples AND DON'T examples with actual complete sample sentences.
+5. Every messaging claim must answer: "Why should I choose this over [named competitor]?"
+6. Include quantifiable brand KPIs with specific targets: NPS score, brand sentiment %, share-of-voice %.
+7. Brand archetype must be a recognized archetype (Hero, Sage, Explorer, Creator, Caregiver, etc.) with justification.
+8. Label all competitive assumptions as "(estimated)" — only state verified facts as facts.
 
-1. BRAND POSITIONING
-   - Market position
-   - Competitive differentiation
-   - Brand promise
+## COMPETITIVE LANDSCAPE
+| Competitor | Their Positioning | Their Strength | Their Weakness | Our Differentiation |
+|------------|------------------|----------------|----------------|---------------------|
 
-2. BRAND PERSONALITY
-   - Core values (3-5)
-   - Brand archetype
-   - Personality traits
+## BRAND POSITIONING STATEMENT
+"For [target audience] who [specific need or pain], {company_name} is the [category] that [unique benefit]. Unlike [specific competitor], we [key differentiator that competitor cannot easily copy]."
 
-3. TONE OF VOICE
-   - Communication style
-   - Do's and Don'ts
-   - Example phrases
+## BRAND ARCHETYPE & PERSONALITY
+- Archetype: [Name] — WHY: [specific justification based on audience and market position]
+- Core Values (3-5): Each value + how it manifests in communications
+- Personality Traits: [3-5 traits] with sample sentence demonstrating each
 
-4. VISUAL IDENTITY DIRECTION
-   - Color palette suggestions
-   - Typography direction
-   - Visual style guidance
+## TONE OF VOICE MATRIX
+| Communication Context | Style | DO (complete example sentence) | DON'T (complete counter-example) |
+|----------------------|-------|-------------------------------|----------------------------------|
+| Social Media | | | |
+| Email Marketing | | | |
+| Website Copy | | | |
+| Customer Support | | | |
 
-5. MESSAGING FRAMEWORK
-   - Core message
-   - Key messages (3-5)
-   - Elevator pitch
+## MESSAGING HIERARCHY
+- Core Message: [one sentence — the single most important thing]
+- Key Message 1: [claim] + Proof Point: [specific evidence or stat]
+- Key Message 2: [claim] + Proof Point: [specific evidence or stat]
+- Key Message 3: [claim] + Proof Point: [specific evidence or stat]
+- 30-Second Elevator Pitch: [complete, natural-sounding script]
 
-6. BRAND GUIDELINES
-   - Usage rules
-   - Consistency checklist
+## BRAND KPIS TO TRACK
+(NPS target | brand sentiment % goal | share-of-voice target | brand recognition benchmark — with industry context)
 
-Make it actionable, specific, and professional."""
+## VISUAL IDENTITY DIRECTION
+(Color psychology rationale tied to archetype | typography direction | visual style examples from comparable brands)
+
+## 30-DAY BRAND IMPLEMENTATION CHECKLIST
+(Priority-ordered actions to deploy this brand identity, starting this week)"""
 
         try:
             result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.7)

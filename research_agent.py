@@ -16,21 +16,50 @@ search = WebSearch()
 print("✅ Research Agent ready! (Multi-Provider Router)")
 
 # Create research prompt template
-research_template = """You are a research analyst who synthesizes web search results into clear, actionable insights.
+research_template = """You are the Research Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+
+YOUR ROLE: Synthesize multi-source web research into specific, actionable marketing intelligence — not generic summaries.
 
 Research Topic: {topic}
 
-Web Search Results:
+Web Search Results (multiple sources):
 {search_results}
 
-Please analyze these search results and provide:
-1. A clear summary of the key findings (2-3 paragraphs)
-2. The most important insights (3-5 bullet points)
-3. Any actionable recommendations
+RULES — FOLLOW ALL OF THESE:
+1. Cite specific URLs, company names, and data points from the search results — never make generic claims.
+2. Every statistic must include its source URL or be labeled "(estimated from search context)".
+3. Identify contradictions between sources — where sources disagree, state both views and assess which is more credible.
+4. Separate FACTS (directly from search results) from ANALYSIS (your interpretation).
+5. For marketing research: always include competitive landscape, market opportunity, and 3 specific actionable next steps.
+6. Synthesize ACROSS all sources — do not summarize individual articles one by one.
+7. End with a CONFIDENCE ASSESSMENT: what's well-supported vs. uncertain?
 
-Keep your response concise but comprehensive. Focus on the most relevant and recent information.
+## KEY FINDINGS (with citations)
+1. [Finding] — Source: [URL]
+2. [Finding] — Source: [URL]
+3. [Finding] — Source: [URL]
 
-Your Analysis:"""
+## COMPETITIVE LANDSCAPE
+(Named companies, their approaches, market positions — from search results only)
+
+## DATA & STATISTICS
+| Stat | Value | Source | Confidence |
+|------|-------|--------|------------|
+
+## MARKETING OPPORTUNITIES (3 Specific)
+For each:
+- OPPORTUNITY: [specific gap or trend]
+- EVIDENCE: [cited from search results with URL]
+- RECOMMENDED ACTION: [specific first step, executable this week]
+- EXPECTED IMPACT: [estimated with confidence level]
+
+## SOURCE QUALITY ASSESSMENT
+(Which sources are most authoritative? What gaps remain in the research?)
+
+## CONFIDENCE LEVEL: [High/Medium/Low]
+REASON: [what information is missing or uncertain]
+
+Your research synthesis:"""
 
 prompt = PromptTemplate(
     input_variables=["topic", "search_results"],
@@ -46,37 +75,60 @@ def _groq_analyze(prompt_text):
 
 def research_topic(topic, num_results=5):
     """
-    Research a topic using web search + AI analysis
+    Research a topic using multi-angle web search + AI synthesis.
+    Performs 3 searches from different angles to get comprehensive coverage.
 
     Args:
         topic (str): The topic to research
-        num_results (int): Number of search results to analyze
+        num_results (int): Number of search results per query
 
     Returns:
         dict: Research results with search data and analysis
     """
     print(f"\n🔬 Research Agent researching: '{topic}'")
-    print(f"📡 Step 1: Searching the web...")
+    print(f"📡 Step 1: Multi-angle web search (3 queries)...")
 
-    # Step 1: Search the web
-    search_results = search.search(topic, max_results=num_results)
+    # Multi-angle search: main topic + stats/data + competitive landscape
+    search_queries = [
+        topic,
+        f"{topic} statistics data 2024 2025",
+        f"{topic} best practices examples case study",
+    ]
 
-    if not search_results:
+    all_results = []
+    seen_urls = set()
+    for i, query in enumerate(search_queries, 1):
+        print(f"   Query {i}/3: {query}")
+        results = search.search(query, max_results=max(3, num_results // 2))
+        for r in results:
+            url = r.get('url', '')
+            if url not in seen_urls:
+                seen_urls.add(url)
+                all_results.append(r)
+
+    if not all_results:
         return {
             'topic': topic,
             'search_results': [],
             'analysis': "No search results found. Unable to research this topic."
         }
 
-    # Step 2: Format search results for analysis
-    formatted_results = ""
-    for result in search_results:
-        formatted_results += f"\n{result['rank']}. {result['title']}\n"
+    # Step 2: Format search results for analysis — group by query angle
+    formatted_results = f"=== MAIN TOPIC RESULTS ===\n"
+    for result in all_results[:num_results]:
+        formatted_results += f"\n{result.get('rank', '?')}. {result['title']}\n"
         formatted_results += f"   {result['description']}\n"
         formatted_results += f"   Source: {result['url']}\n"
 
-    print(f"✅ Found {len(search_results)} sources")
-    print(f"🤖 Step 2: Analyzing findings with AI...")
+    if len(all_results) > num_results:
+        formatted_results += f"\n=== ADDITIONAL SOURCES (stats + case studies) ===\n"
+        for result in all_results[num_results:num_results + 6]:
+            formatted_results += f"\n- {result['title']}\n"
+            formatted_results += f"  {result['description']}\n"
+            formatted_results += f"  Source: {result['url']}\n"
+
+    print(f"✅ Found {len(all_results)} unique sources across 3 search angles")
+    print(f"🤖 Step 2: Synthesizing with AI (Tier 4 deep research)...")
 
     # Check memory for past research on this topic
     past_context = ""
@@ -85,7 +137,7 @@ def research_topic(topic, num_results=5):
         past = get_memory_store().search_memories("research", topic, limit=3)
         if past:
             past_lines = "\n".join(f"  - {m['content']}" for m in past)
-            past_context = f"\n\nPREVIOUS RESEARCH ON THIS TOPIC:\n{past_lines}\nBuild on this and find NEW information.\n"
+            past_context = f"\n\nPREVIOUS RESEARCH ON THIS TOPIC:\n{past_lines}\nBuild on this — find NEW angles not covered before.\n"
     except Exception:
         pass
 
@@ -93,13 +145,13 @@ def research_topic(topic, num_results=5):
     filled_prompt = prompt.format(topic=topic, search_results=formatted_results) + past_context
     analysis = _groq_analyze(filled_prompt)
 
-    print(f"✅ Research complete!")
+    print(f"✅ Research complete! ({len(all_results)} sources synthesized)")
 
     return {
         'topic': topic,
-        'search_results': search_results,
+        'search_results': all_results,
         'analysis': analysis,
-        'num_sources': len(search_results)
+        'num_sources': len(all_results)
     }
 
 

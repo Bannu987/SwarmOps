@@ -39,75 +39,61 @@ class CROAgent:
         """
         print(f"\n🔍 Analyzing conversion funnel...")
         
-        prompt = f"""You are a Conversion Rate Optimization Expert. Analyze this conversion funnel:
+        prompt = f"""You are the CRO Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+
+YOUR ROLE: Identify conversion killers with specific drop-off percentages, revenue impact calculations, and prioritized A/B tests — not generic CRO advice.
 
 FUNNEL STEPS:
 {funnel_steps}
 
 CONVERSION DATA:
-{conversion_data if conversion_data else "No data provided - use best practices"}
+{conversion_data if conversion_data else "No data provided — use industry benchmarks and label clearly as '(estimated, industry avg)'"}
 
 GOAL: {goal}
 
-Provide a comprehensive funnel analysis:
+RULES — FOLLOW ALL OF THESE:
+1. Calculate drop-off rate at every step. If no data: use vertical benchmarks (labeled as "estimated, industry avg").
+2. For each drop-off point: quantify revenue impact. Formula: lost monthly revenue = drop-off rate × avg order value × monthly visitors.
+3. Every recommendation must include: estimated CVR lift % + estimated revenue recovery (labeled as estimated).
+4. A/B test hypotheses must follow If-Then-Because format with specific success metrics and sample size calculations.
+5. Classify every friction point: Cognitive | Visual | Technical | Trust | Motivational.
+6. Compare funnel to vertical benchmarks: ecommerce checkout 2.86% end-to-end CVR, SaaS trial 20% signup-to-activation, B2B lead gen 2.35%.
+7. Priority scoring: Impact Score (1-10) × Ease Score (1-10) ÷ 10 = Priority. Show the math for each.
+8. Label all projected improvements as "(estimated, confidence: low/medium/high)" with justification.
 
-## 1. FUNNEL VISUALIZATION
-- Map out each step clearly
-- Identify transition points
-- Highlight drop-off zones (based on data or typical patterns)
-- Calculate estimated conversion rate at each step
+## FUNNEL MAP WITH DROP-OFF ANALYSIS
+| Stage | Visitors | CVR | Drop-off % | Industry Benchmark | Gap | Revenue Lost/Mo |
+|-------|----------|-----|------------|-------------------|-----|-----------------|
 
-## 2. DROP-OFF ANALYSIS
-For each major drop-off point:
-- What's happening at this step
-- Why users are leaving (likely reasons)
-- Severity (Critical/High/Medium/Low)
-- Impact on overall conversions (% impact)
+## REVENUE IMPACT SUMMARY
+- Current end-to-end CVR: X% | Benchmark CVR: X% | Gap: X percentage points
+- Estimated monthly revenue lost to conversion gap: $X (estimated — needs actual traffic + AOV data)
 
-## 3. FRICTION POINTS
-Identify specific friction in:
-- Form fields (too many? confusing?)
-- Page load times
-- Unclear value proposition
-- Trust/security concerns
-- Decision fatigue
-- Technical issues
-- Mobile experience
+## TOP FRICTION POINTS (Ranked by Revenue Impact)
+For each:
+**[Friction Type — Cognitive/Visual/Technical/Trust/Motivational]: [Specific description]**
+- REVENUE IMPACT: $X/month (estimated, confidence: low/medium/high)
+- EVIDENCE: [behavioral signal or data point]
+- FIX: [specific, implementable solution]
+- ESTIMATED LIFT: X% CVR improvement (estimated)
+- PRIORITY SCORE: [Impact X] × [Ease X] ÷ 10 = [Score]
 
-## 4. PSYCHOLOGICAL BARRIERS
-- Commitment anxiety
-- Analysis paralysis
-- Price shock
-- Feature overload
-- Trust deficit
-- Unclear next steps
+## A/B TEST ROADMAP (Priority Order)
+For each test:
+**Test [N]: [Descriptive Name]**
+- Hypothesis: If [specific change], then [metric] will improve by [X%], because [psychological/UX reason]
+- Control: [current state description]
+- Variant: [specific proposed change]
+- Primary Metric: [KPI]
+- Sample Size Needed: [calculated minimum for 95% confidence]
+- Duration: [days based on typical traffic]
 
-## 5. OPTIMIZATION OPPORTUNITIES (Prioritized)
-For each opportunity:
-- What to change
-- Expected impact (High/Medium/Low)
-- Implementation difficulty (Easy/Medium/Hard)
-- Priority score (1-10)
-- Estimated conversion lift %
+## QUICK WINS (This Week — ≤2 days implementation, >10% estimated lift)
 
-## 6. QUICK WINS
-- Changes that can be implemented immediately
-- High impact, low effort
-- Specific action items (numbered)
-
-## 7. A/B TEST ROADMAP
-Prioritize top 5-7 tests:
-- Test 1: [Hypothesis, what to test, expected outcome]
-- Test 2: [Hypothesis, what to test, expected outcome]
-- etc.
-
-## 8. REVENUE IMPACT PROJECTION
-- Current conversion rate (estimate if not provided)
-- Optimized conversion rate projection
-- Revenue impact calculation
-- ROI on optimization efforts
-
-Be specific, data-driven, and actionable."""
+## 90-DAY CRO ROADMAP
+- Week 1-2: [Quick wins — list specific items]
+- Week 3-6: [Major A/B tests — list specific items]
+- Month 2-3: [Structural changes — list specific items]"""
 
         try:
             result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.6)

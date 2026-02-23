@@ -617,21 +617,133 @@ class Nexus:
         print(f"✅ Default decision: Research Agent (will gather information)")
         return "research"
     
+    def check_onboarding_needed(self) -> Optional[str]:
+        """
+        Check if the user is new (no business profile stored yet).
+        Returns an onboarding prompt if first-time user, else None.
+        """
+        try:
+            from memory_store import get_memory_store
+            profile = get_memory_store().get_all_profile_keys()
+            if not profile:
+                return (
+                    "Welcome to SwarmOps! To give you data-driven, personalized marketing intelligence "
+                    "(not generic advice), I need to understand your business first.\n\n"
+                    "Please answer these 4 quick questions:\n\n"
+                    "1. **Website URL** — What's your website? (e.g., https://yoursite.com)\n"
+                    "2. **Industry** — What industry/niche? "
+                    "(e.g., SaaS, ecommerce, local business, B2B services, healthcare)\n"
+                    "3. **Primary Marketing Goal** — What's your #1 goal right now? "
+                    "(e.g., 'grow organic traffic', 'reduce customer acquisition cost', "
+                    "'scale Google Ads', 'improve email open rates')\n"
+                    "4. **Monthly Marketing Budget** — How much do you spend on marketing per month? "
+                    "(e.g., $1,000 / $10,000 / $100,000)\n\n"
+                    "Once I have this, I'll benchmark you against your industry, pull your live data "
+                    "(if you've connected GA4, HubSpot, or Google Ads), and give you specific, "
+                    "numbered recommendations — not generic platitudes."
+                )
+        except Exception:
+            pass
+        return None
+
+    def _try_parse_profile_data(self, message: str):
+        """
+        Parse and store business profile data from a user message.
+        Called on every message to progressively build the profile.
+        """
+        import re
+        msg_lower = message.lower()
+        profile_updates = {}
+
+        # URL detection
+        urls = re.findall(r'https?://[^\s,]+', message)
+        if urls:
+            profile_updates['website_url'] = urls[0].rstrip('.,)')
+
+        # Industry detection
+        industry_map = {
+            'saas': 'saas', 'software': 'saas', 'app': 'saas',
+            'ecommerce': 'ecommerce', 'e-commerce': 'ecommerce', 'shopify': 'ecommerce', 'store': 'ecommerce',
+            'b2b': 'b2b', 'agency': 'b2b', 'consulting': 'b2b', 'services': 'b2b',
+            'healthcare': 'healthcare', 'medical': 'healthcare', 'clinic': 'healthcare',
+            'fintech': 'fintech', 'finance': 'fintech', 'banking': 'fintech',
+            'real estate': 'real_estate', 'realtor': 'real_estate', 'property': 'real_estate',
+            'education': 'education', 'course': 'education', 'school': 'education',
+            'local': 'local_business', 'restaurant': 'local_business', 'salon': 'local_business',
+        }
+        for keyword, industry in industry_map.items():
+            if keyword in msg_lower:
+                profile_updates['industry'] = industry
+                break
+
+        # Budget detection — "$X", "$Xk", "$X,000"
+        budget_match = re.search(r'\$([\d,]+(?:\.\d+)?)\s*(?:k|K)?(?:\s*/\s*month)?', message)
+        if budget_match:
+            profile_updates['monthly_budget'] = budget_match.group(0)
+
+        # Goal detection
+        goal_keywords = {
+            'organic traffic': 'grow_organic_traffic',
+            'seo': 'grow_organic_traffic',
+            'google ads': 'scale_paid_ads',
+            'paid ads': 'scale_paid_ads',
+            'email': 'improve_email_marketing',
+            'conversion': 'improve_conversion_rate',
+            'reduce cac': 'reduce_acquisition_cost',
+            'cac': 'reduce_acquisition_cost',
+            'brand': 'build_brand_awareness',
+            'leads': 'generate_leads',
+        }
+        for keyword, goal in goal_keywords.items():
+            if keyword in msg_lower and 'primary_goal' not in profile_updates:
+                profile_updates['primary_goal'] = goal
+                break
+
+        # Save updates to profile store
+        if profile_updates:
+            try:
+                from memory_store import get_memory_store
+                mem = get_memory_store()
+                for key, value in profile_updates.items():
+                    existing = mem.get_profile_key(key)
+                    if not existing:  # Only set if not already stored
+                        mem.set_profile_key(key, value)
+                        print(f"  Profile updated: {key} = {value}")
+            except Exception:
+                pass
+
     def execute_task(self, user_goal):
         """
         Execute the user's goal by routing to the right agent(s)
         Now supports complex multi-agent collaboration!
-        
+
         Args:
             user_goal (str): The user's high-level goal
-            
+
         Returns:
             str: The result from the agent(s)
         """
         print("\n" + "="*60)
         print("🚀 THE NEXUS - TASK EXECUTION (v2.0 - 10 Agents)")
         print("="*60)
-        
+
+        # --- Onboarding check (first-time users only) ---
+        onboarding_msg = self.check_onboarding_needed()
+        if onboarding_msg:
+            # Try to parse profile data from the message itself
+            self._try_parse_profile_data(user_goal)
+            # If still no profile after parsing, return onboarding prompt
+            try:
+                from memory_store import get_memory_store
+                profile = get_memory_store().get_all_profile_keys()
+                if not profile:
+                    return onboarding_msg
+            except Exception:
+                pass
+        else:
+            # Always try to extract profile data from any message
+            self._try_parse_profile_data(user_goal)
+
         # Detect if this is a multi-agent task
         goal_lower = user_goal.lower()
         

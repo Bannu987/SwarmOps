@@ -51,90 +51,68 @@ class WebUXAgent:
         
         style_guide = style_examples.get(style.lower(), style_examples["modern"])
         
-        prompt = f"""You are an expert Landing Page Designer specializing in {style} aesthetics like Linear.app and Emergent.
+        prompt = f"""You are the Web/UX Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
 
-Design a high-converting landing page for:
+YOUR ROLE: Design high-converting digital experiences with specific conversion rate targets, A/B test variants, and production-ready specifications — not generic UX advice.
 
 Product/Service: {product}
 Target Audience: {target_audience}
 Primary Goal: {goal}
 Key Benefits: {key_benefits if key_benefits else "Not specified"}
-Design Style: {style} - {style_guide}
+Design Style: {style} — {style_guide}
 
-Create a DETAILED landing page specification including:
+RULES — FOLLOW ALL OF THESE:
+1. Every section must have a conversion optimization rationale — WHY this element placement increases conversions (cite a UX principle or benchmark).
+2. Provide conversion rate benchmarks: landing page avg 2.35% | top 25%: 5.31% | top 10%: 11.45% — state which tier this design targets.
+3. Hero headline must include 3 A/B test variants. State which psychological trigger each uses (curiosity, social proof, urgency, etc.).
+4. CTA button must include: exact copy, hex color, px size, hover behavior, and predicted CTR (estimated).
+5. Social proof must use specific number formats ("10,000+ teams" not "many teams") — explain why specificity increases trust.
+6. Every color must have a hex code. Every spacing value must be in px or rem. Every font must have px size and weight.
+7. Label all predicted conversion lift estimates as "(estimated, based on [principle/benchmark])".
+8. Include a friction audit: top 3 trust-killers for this specific page type and how to address each.
 
-## 1. HERO SECTION (Above the Fold)
-- Background (color/gradient with exact hex codes)
-- Headline (text + font size in px + weight)
-- Subheadline (text + styling)
-- Primary CTA button (text, color, size, hover effect)
-- Secondary CTA (if needed)
-- Hero visual/image (description, placement, size)
-- Trust indicator (social proof number/badge)
+## CONVERSION TARGET
+- Landing page avg: 2.35% | Top quartile: 5.31% | This design targets: X% — REASON: [specific design choices]
 
-## 2. PROBLEM/BENEFIT SECTION
-- Section title
-- 3-4 key benefits
-- Each benefit: Icon suggestion + headline + 2-sentence description
-- Layout (grid/cards/list)
-- Visual treatment
+## HERO SECTION (Above the Fold)
+- Background: [hex/gradient with exact values]
+- Headline A (test): "[text]" — Trigger: [psychological principle]
+- Headline B (test): "[text]" — Trigger: [different principle]
+- Headline C (test): "[text]" — Trigger: [different principle]
+- Subheadline: "[text]"
+- Primary CTA: "[text]" | Color: [hex] | Size: [px] | Hover: [effect] | Predicted CTR: X% (estimated)
+- Secondary CTA: "[text]" (optional)
+- Trust Indicator: "[specific social proof format with number]"
+- Hero Visual: [specific description at exact dimensions]
 
-## 3. FEATURES SHOWCASE
-- Section layout (2-column, 3-column, etc.)
-- 3-6 key features
-- Each feature: Visual + title + description
-- Interactive elements
+## BENEFITS SECTION
+(3-4 benefits, each with: icon description + headline ≤6 words + 2-sentence description + evidence statement)
 
-## 4. SOCIAL PROOF
-- Testimonial structure (3 examples)
-- Company logos (which companies to showcase)
-- Stats to highlight (users, growth, satisfaction)
-- Trust badges
+## SOCIAL PROOF SECTION
+(3 testimonials, each with: specific outcome metric | name/title/company | 2-3 sentences)
+(Key stats with specific numbers | logos | trust badges)
 
-## 5. PRICING/CTA SECTION
-- Pricing presentation (if applicable)
-- Value proposition
-- Final CTA
-- Risk reversal (guarantee)
+## DESIGN SYSTEM
+**Colors:** Primary [hex + usage] | Secondary [hex + usage] | Accent [hex + usage] | Background [hex] | Text [hex]
+**Typography:** [Font family] | H1: [px/weight] | H2: [px/weight] | Body: [px/weight] | Button: [px/weight]
+**Spacing:** Section padding: [px] | Container max-width: [px] | Grid gap: [px] | Border radius: [px]
+**Effects:** Shadows [CSS value] | Hover transitions [duration + easing] | Scroll animations [describe]
 
-## 6. DESIGN SYSTEM
-**Colors:**
-- Primary: (hex code + usage)
-- Secondary: (hex code + usage)
-- Accent: (hex code + usage)
-- Background: (hex code)
-- Text: (hex code for headings + body)
+## FRICTION AUDIT
+| Trust-Killer | Severity | Solution | Estimated CVR Lift |
+|-------------|----------|----------|-------------------|
 
-**Typography:**
-- Font family (suggest modern font)
-- H1: size, weight, line-height
-- H2: size, weight, line-height
-- Body: size, weight, line-height
-- Button text: size, weight
+## A/B TEST PRIORITY QUEUE
+1. [Element] — Hypothesis: If [change] then [metric] improves by X% because [reason] — Success metric: [KPI]
+2. [Element] — same format
+3. [Element] — same format
 
-**Spacing:**
-- Section padding: (vertical in px)
-- Container max-width: (in px)
-- Element gaps: (in px)
+## RESPONSIVE SPECIFICATIONS
+- Desktop (1200px+): [specific layout]
+- Tablet (768-1199px): [specific changes with px breakpoints]
+- Mobile (320-767px): [stacked layout with specific changes]
 
-**Effects:**
-- Shadows (CSS values)
-- Border radius (in px)
-- Hover animations (describe)
-- Transitions (timing)
-
-## 7. RESPONSIVE BEHAVIOR
-- Desktop (1200px+): describe layout
-- Tablet (768-1199px): describe changes
-- Mobile (320-767px): describe mobile-first approach
-
-## 8. MICRO-INTERACTIONS
-- Button hover effects
-- Scroll animations
-- Image lazy loading
-- Smooth transitions
-
-Make it production-ready, specific, and inspired by {style} aesthetics."""
+Make it production-ready, {style}-style, and inspired by Linear.app aesthetics."""
 
         try:
             result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=3000, temperature=0.7)

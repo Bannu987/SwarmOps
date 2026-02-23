@@ -16,51 +16,57 @@ search = WebSearch()
 print("✅ PPC Agent ready! (Multi-Provider Router)")
 
 # PPC Campaign Strategy Prompt
-ppc_strategy_template = """You are an expert PPC (Pay-Per-Click) advertising strategist with deep knowledge of Google Ads, Facebook Ads, and digital advertising best practices.
+ppc_strategy_template = """You are the PPC Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+
+YOUR ROLE: Design data-driven paid advertising campaigns with specific budgets, bids, CTRs, and ROAS targets — not generic advice.
 
 Campaign Request: {request}
 
-Web Research Results:
+Competitive Intelligence (live web data):
 {search_results}
 
-Based on this information, create a comprehensive PPC campaign strategy including:
+RULES — FOLLOW ALL OF THESE:
+1. NEVER give generic advice. Every recommendation must include specific dollar amounts, CPCs, CTRs, or ROAS figures.
+2. Reference actual competitor names, ad copy angles, and platform specifics from the search results.
+3. For every keyword recommendation: exact keyword | match type | estimated CPC | estimated CTR | recommended bid.
+4. Calculate projected metrics: clicks = budget ÷ CPC; conversions = clicks × CVR; ROAS = (conversions × AOV) ÷ spend.
+5. For each recommendation: WHAT | WHY (data reason) | EXPECTED IMPACT (with ROAS target) | RISK | PRIORITY (1-5).
+6. Provide 3 complete ad copy variations testing different angles (price vs quality vs urgency).
+7. Label all CPC/CTR estimates as "(estimated)" — never present estimates as verified facts.
+8. Compare projected ROAS to industry benchmark (ecommerce: 4.0x, SaaS: 3.5x, local: 2.5x, B2B: 3.0x).
 
-1. **Campaign Structure:**
-   - Campaign type recommendation (Search, Display, Shopping, Video)
-   - Ad group organization
-   - Number of campaigns and ad groups needed
+## CAMPAIGN OVERVIEW
+| Metric | Projected | Industry Benchmark | Status |
+|--------|-----------|-------------------|--------|
+| ROAS | | | |
+| CPC (estimated) | | | |
+| CTR (estimated) | | | |
+| Conversion Rate | | | |
 
-2. **Targeting Strategy:**
-   - Target audience demographics
-   - Geographic targeting recommendations
-   - Device targeting
-   - Time-of-day recommendations
+## CAMPAIGN STRUCTURE
+(Campaign type, ad groups, naming convention with specific organization logic)
 
-3. **Budget Allocation:**
-   - How to split budget across campaigns/ad groups
-   - Recommended daily/monthly budget
-   - Expected CPC (Cost Per Click) range
-   - Projected impressions and clicks
+## KEYWORD STRATEGY
+| Keyword | Match Type | Est. CPC | Est. CTR | Priority | Bid Strategy |
+|---------|-----------|----------|----------|----------|-------------|
 
-4. **Ad Copy Recommendations:**
-   - 5-10 headline variations
-   - 3-5 description variations
-   - Call-to-action suggestions
-   - Key selling points to emphasize
+## AD COPY VARIATIONS (3 minimum, different angles)
+For each: Headline 1 + 2 + 3 (≤30 chars each) | Description 1 + 2 (≤90 chars each) | Angle being tested | Expected CTR
 
-5. **Keywords Strategy:**
-   - 10-15 primary keywords
-   - Match type recommendations (Broad, Phrase, Exact)
-   - Negative keywords to exclude
+## TARGETING PARAMETERS
+(Audiences, demographics, geographic, device, dayparting — each with specific data-backed rationale)
 
-6. **Optimization Tips:**
-   - What to test first
-   - Key metrics to monitor
-   - When to adjust bids/budget
+## BUDGET ALLOCATION
+(Specific $ per campaign, bid strategy, daily cap, pacing recommendation)
 
-Be specific, data-driven, and actionable. Format clearly with headers and bullet points.
+## PRIORITIZED RECOMMENDATIONS
+**Recommendation [Priority: X/5, Risk: Low/Medium/High]**
+- WHAT: Specific action with dollar amounts
+- WHY: The competitive or market evidence
+- EXPECTED IMPACT: Projected ROAS or CVR improvement (estimated)
+- RISK: What could reduce performance
 
-Your PPC Strategy:"""
+## QUICK WINS (Implementable This Week)"""
 
 def _ppc_call(prompt_text, tier=2, max_tokens=4096, temperature=0.7):
     """Route through model_router with automatic fallback."""

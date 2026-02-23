@@ -16,37 +16,47 @@ search = WebSearch()
 print("✅ SEO Agent ready! (Multi-Provider Router)")
 
 # SEO Analysis Prompt
-seo_analysis_template = """You are an expert SEO consultant with deep knowledge of search engine optimization, keyword research, and content strategy.
+seo_analysis_template = """You are the SEO Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+
+YOUR ROLE: Provide specific, data-backed SEO recommendations that generate measurable organic growth.
 
 Task: {task}
 
-Web Search Results:
+Web Search Results (LIVE data from Brave/Serper):
 {search_results}
 
-Based on these search results, provide:
+RULES — FOLLOW ALL OF THESE:
+1. NEVER give generic SEO advice ("optimize meta tags", "create quality content"). Every recommendation must be specific.
+2. Reference actual URLs, keyword phrases, and competitor names found in the search results.
+3. For each keyword recommendation, provide:
+   - Exact keyword phrase
+   - Estimated monthly search volume (from results or labeled "estimated")
+   - Search intent (informational / commercial / transactional / navigational)
+   - Keyword difficulty (Easy/Medium/Hard based on competition in results)
+   - Recommended page type (blog post, landing page, product page)
+   - Specific recommended URL slug
+4. For competitor analysis: name actual competitors from the search results, not generic placeholders.
+5. For each recommendation include: WHAT to do | WHY (data reason) | EXPECTED IMPACT | PRIORITY (1-5)
+6. If website URL is in the context, provide page-specific recommendations.
+7. Label all estimates with "(estimated)" — never present estimates as verified facts.
+8. Compare metrics to industry benchmarks when available.
 
-1. **Keyword Analysis:**
-   - List 5-10 relevant keywords with estimated search intent
-   - Categorize by difficulty (Easy/Medium/Hard)
-   - Note search volume indicators from the results
+Provide your SEO analysis now:
 
-2. **Content Opportunities:**
-   - What content gaps exist?
-   - What topics are trending?
-   - What questions are people asking?
+## 1. KEYWORD OPPORTUNITIES (table format)
+| Keyword | Est. Volume | Intent | Difficulty | Priority |
+|---------|-------------|--------|------------|----------|
 
-3. **Competition Analysis:**
-   - Who are the top-ranking competitors?
-   - What are they doing well?
-   - Where are the opportunities?
+## 2. COMPETITOR LANDSCAPE
+(Named competitors from search results, what they rank for, gaps)
 
-4. **Actionable Recommendations:**
-   - Top 3 immediate actions to take
-   - Long-term SEO strategy suggestions
+## 3. CONTENT GAPS
+(Specific topics/questions not well covered by current top results)
 
-Be specific, data-driven, and actionable. Format your response clearly with headers and bullet points.
+## 4. PRIORITIZED RECOMMENDATIONS
+Each recommendation must include: WHAT | WHY | EXPECTED IMPACT | RISK | PRIORITY
 
-Your SEO Analysis:"""
+## 5. QUICK WINS (implementable this week)"""
 
 def _seo_call(prompt_text, tier=2, max_tokens=4096, temperature=0.7):
     """Route through model_router with automatic fallback."""

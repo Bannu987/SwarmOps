@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './LandingPage.css';
-
-const BACKEND_URL = 'https://marketingos20-production.up.railway.app';
+import api from './api';
 
 /* ── Fade-in hook ─────────────────────────────────────────── */
 function useFadeIn() {
@@ -32,18 +31,7 @@ function DemoCard({ label, prompt, agent }) {
     setResult(null);
     setMeta(null);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt, agent, use_smart_routing: agent === 'nexus' }),
-        signal: AbortSignal.timeout(30000),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      // Guard against HTML response
-      if (typeof data === 'string' && data.trimStart().startsWith('<!')) {
-        throw new Error('Backend returned HTML — check Railway deployment.');
-      }
+      const data = await api.chat(prompt, agent);
       const text = typeof data.result === 'string'
         ? data.result
         : typeof data.result === 'object'

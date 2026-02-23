@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
+import api from './api';
 import { useChatStore } from './stores/chatStore';
 import { 
   Send, Paperclip, Mic, Plus, Sparkles, Copy, Share2,
@@ -24,30 +24,6 @@ import './App.css';
 import LandingPage from './LandingPage';
 import './LandingPage.css';
 
-const API_BASE = 'https://marketingos20-production.up.railway.app';
-
-const safeApiCall = async (method, url, data = null, timeout = 30000) => {
-  try {
-    const config = {
-      timeout,
-      headers: { 'Content-Type': 'application/json' }
-    };
-    const response = method === 'get'
-      ? await axios.get(url, config)
-      : await axios.post(url, data, config);
-
-    // Detect HTML response (wrong URL / Vercel SPA fallback)
-    if (typeof response.data === 'string' && response.data.trimStart().startsWith('<!')) {
-      throw new Error('Backend connection error — received HTML instead of JSON. Check that REACT_APP_API_URL points to the Railway backend.');
-    }
-    return response;
-  } catch (error) {
-    if (error.code === 'ECONNABORTED') {
-      throw new Error('Request timed out. The backend may be warming up — please try again in 30 seconds.');
-    }
-    throw error;
-  }
-};
 
 // Agent configurations - 10 agents with real integration endpoints
 const AGENTS = [
@@ -398,8 +374,8 @@ function App() {
   useEffect(() => {
     const fetchIntegrationStatus = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/integrations/status`);
-        setIntegrationStatus(response.data);
+        const data = await api.integrations();
+        setIntegrationStatus(data);
       } catch (err) {
         console.log('Integration status unavailable');
       }
@@ -413,9 +389,9 @@ function App() {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/stats`);
-        if (response.data) {
-          setRealTimeAnalytics(response.data);
+        const data = await api.stats();
+        if (data) {
+          setRealTimeAnalytics(data);
         }
       } catch (err) {
         console.log('Analytics unavailable');
@@ -430,8 +406,8 @@ function App() {
   useEffect(() => {
     const fetchRateLimits = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/rate-limits`);
-        setRateLimits(response.data);
+        const data = await api.rateLimits();
+        setRateLimits(data);
       } catch (err) {
         console.log('Rate limits unavailable');
       }
@@ -445,8 +421,8 @@ function App() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/stats`);
-        setStats(response.data);
+        const data = await api.stats();
+        setStats(data);
       } catch (err) {
         console.log('Stats unavailable');
       }
@@ -458,8 +434,8 @@ function App() {
   useEffect(() => {
     const fetchMemories = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/memory/${memoryDepartment}`);
-        setMemories(response.data.memories || []);
+        const data = await api.getMemory(memoryDepartment);
+        setMemories(data.memories || []);
       } catch (err) {
         console.log('Memories unavailable');
       }
@@ -473,8 +449,8 @@ function App() {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/history?days=${historyDays}`);
-        setTaskHistory(response.data.tasks || []);
+        const data = await api.history({ days: historyDays });
+        setTaskHistory(data.tasks || []);
       } catch (err) {
         console.log('History unavailable');
       }
@@ -489,14 +465,14 @@ function App() {
     if (feedbackLoopRunning) return;
     setFeedbackLoopRunning(true);
     try {
-      const response = await axios.post(`${API_BASE}/api/feedback-loop`, {
+      const feedbackData = await api.feedbackLoop({
         trigger: 'manual',
         metrics: { conversion_rate: 2.5, bounce_rate: 45, avg_session: 120 }
       });
       const feedbackMessage = {
         id: Date.now(),
         role: 'agent',
-        content: response.data?.result || 'Feedback loop completed',
+        content: feedbackData?.result || 'Feedback loop completed',
         agentId: 'nexus',
         agentName: 'Nexus Orchestrator',
         agentIcon: '🧠',
@@ -596,152 +572,80 @@ function App() {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
-    const userMessage = {
-      id: Date.now(),
-      role: 'user',
-      content: input.trim(),
-      timestamp: new Date().toISOString()
-    };
-
-    addMessage(userMessage);
     const currentInput = input.trim();
+    addMessage({ id: Date.now(), role: 'user', content: currentInput, timestamp: new Date().toISOString() });
     setInput('');
     setLoading(true);
     setStreaming(true);
 
-    try {
-      // Smart Routing Mode - Let Nexus decide which agent to use
-      if (smartRoutingMode) {
-        try {
-          const response = await safeApiCall('post', `${API_BASE}/api/chat`, {
-            message: currentInput,
-            agent: 'nexus'
-          });
+    // Determine which agents to query
+    const agentIds = smartRoutingMode
+      ? ['nexus']
+      : (multiAgentMode && selectedAgents.length > 0 ? selectedAgents : [selectedAgentId]);
 
-          // Format content based on agent type
-          let messageContent = response?.data?.result || 'Task completed';
-          if (response?.data?.agent === 'deep_research' && typeof messageContent === 'object') {
-            messageContent = formatDeepResearchResult(messageContent);
-          } else if (typeof messageContent === 'object') {
+    for (const agentId of agentIds) {
+      const agentConfig = AGENTS.find(a => a.id === agentId) || {
+        id: 'nexus', name: 'Nexus Orchestrator', iconEmoji: '🧠',
+        color: '#818CF8', gradientFrom: '#6366F1', gradientTo: '#8B5CF6', model: 'Smart Routing'
+      };
+
+      try {
+        let data;
+        if (agentId === 'deep_research') {
+          data = await api.deepResearch(currentInput);
+        } else {
+          data = await api.chat(currentInput, agentId);
+        }
+
+        // Extract displayable text
+        let messageContent;
+        if (agentId === 'deep_research' && data?.result && typeof data.result === 'object') {
+          messageContent = formatDeepResearchResult(data.result);
+        } else {
+          messageContent = data?.result || data?.response || 'Response received';
+          if (typeof messageContent === 'object') {
             messageContent = JSON.stringify(messageContent, null, 2);
           }
-
-          const agentMessage = {
-            id: Date.now() + Math.random(),
-            role: 'agent',
-            content: messageContent,
-            agentId: response?.data?.agent || 'nexus',
-            agentName: 'Nexus Orchestrator',
-            agentIcon: '🧠',
-            agentColor: '#818CF8',
-            agentGradientFrom: '#6366F1',
-            agentGradientTo: '#8B5CF6',
-            model: response?.data?.model || 'Smart Routing',
-            provider: response?.data?.provider,
-            latency_ms: response?.data?.latency_ms,
-            quality: response?.data?.quality,
-            pipeline: response?.data?.pipeline,
-            result: response?.data?.result,
-            timestamp: new Date().toISOString(),
-            metadata: {
-              selectedAgent: response?.data?.agent,
-              confidence: response?.data?.quality?.confidence
-            }
-          };
-          addMessage(agentMessage);
-        } catch (err) {
-          throw err;
         }
-      } else {
-        // Manual agent selection mode
-        const agentsToQuery = multiAgentMode && selectedAgents.length > 0 ? selectedAgents : [selectedAgentId];
 
-        for (const agentId of agentsToQuery) {
-          const agent = AGENTS.find(a => a.id === agentId);
-          if (!agent) continue;
-
-          let response;
-
-          try {
-            if (agent.id === 'deep_research') {
-              response = await axios.post(`${API_BASE}/api/deep-research`, {
-                topic: currentInput
-              });
-            } else {
-              response = await safeApiCall('post', `${API_BASE}/api/chat`, {
-                message: currentInput,
-                agent: agent.id
-              });
-            }
-
-            // Special formatting for deep research results
-            let messageContent;
-            if (agent.id === 'deep_research' && response?.data?.result && typeof response.data.result === 'object') {
-              messageContent = formatDeepResearchResult(response.data.result);
-            } else {
-              messageContent = response?.data?.result || response?.data?.data?.analysis || response?.data?.post || (typeof response?.data === 'object' ? JSON.stringify(response?.data, null, 2) : String(response?.data)) || 'Response received';
-            }
-
-            const agentMessage = {
-              id: Date.now() + Math.random(),
-              role: 'agent',
-              content: messageContent,
-              agentId: agent.id,
-              agentName: agent.name,
-              agentIcon: agent.iconEmoji,
-              agentColor: agent.color,
-              agentGradientFrom: agent.gradientFrom,
-              agentGradientTo: agent.gradientTo,
-              model: response?.data?.model || agent.model,
-              provider: response?.data?.provider,
-              latency_ms: response?.data?.latency_ms,
-              quality: response?.data?.quality,
-              timestamp: new Date().toISOString()
-            };
-
-            addMessage(agentMessage);
-          } catch (agentErr) {
-            console.error(`Error with agent ${agent.name}:`, agentErr);
-            const agentRawDetail = agentErr.response?.data?.detail;
-            const agentIsHtml = typeof agentErr.response?.data === 'string' && agentErr.response.data.trimStart().startsWith('<!');
-            const agentErrText = agentIsHtml
-              ? 'Backend connection error — received HTML instead of JSON. The backend may be unreachable.'
-              : (typeof agentRawDetail === 'string' ? agentRawDetail : agentErr.message || 'Service temporarily unavailable. Please try again.');
-            const errorMsg = {
-              id: Date.now() + Math.random(),
-              role: 'agent',
-              content: `⚠️ ${agent.name} encountered an issue: ${agentErrText}`,
-              agentId: agent.id,
-              agentName: agent.name,
-              agentIcon: agent.iconEmoji,
-              agentColor: agent.color,
-              agentGradientFrom: agent.gradientFrom,
-              agentGradientTo: agent.gradientTo,
-              model: agent.model,
-              timestamp: new Date().toISOString()
-            };
-            addMessage(errorMsg);
+        addMessage({
+          id: Date.now() + Math.random(),
+          role: 'agent',
+          content: messageContent,
+          agentId: data?.agent || agentId,
+          agentName: smartRoutingMode ? 'Nexus Orchestrator' : agentConfig.name,
+          agentIcon: smartRoutingMode ? '🧠' : agentConfig.iconEmoji,
+          agentColor: agentConfig.color,
+          agentGradientFrom: agentConfig.gradientFrom,
+          agentGradientTo: agentConfig.gradientTo,
+          model: data?.model || agentConfig.model,
+          provider: data?.provider,
+          latency_ms: data?.latency_ms,
+          quality: data?.quality,
+          pipeline: data?.pipeline,
+          result: data?.result,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            selectedAgent: data?.agent,
+            confidence: data?.quality?.confidence
           }
-        }
+        });
+      } catch (err) {
+        const errDetail = err.response?.data?.detail;
+        const errText = typeof errDetail === 'string'
+          ? errDetail
+          : err.message || 'Service temporarily unavailable. Please try again.';
+        addMessage({
+          id: Date.now() + Math.random(),
+          role: 'system',
+          content: `⚠️ ${agentConfig.name} encountered an issue: ${errText}`,
+          timestamp: new Date().toISOString()
+        });
       }
-    } catch (err) {
-      const rawDetail = err.response?.data?.detail;
-      const detail = typeof rawDetail === 'string' ? rawDetail : null;
-      const isHtmlResponse = typeof err.response?.data === 'string' && err.response.data.trimStart().startsWith('<!');
-      const errorContent = isHtmlResponse
-        ? '⚠️ Backend connection error — the app received HTML instead of JSON. The backend may be down or the API URL is misconfigured. Please refresh.'
-        : `⚠️ ${detail || err.message || 'Failed to connect to the backend. Please try again in a moment.'}`;
-      const errorMessage = {
-        id: Date.now(),
-        role: 'system',
-        content: errorContent,
-        timestamp: new Date().toISOString()
-      };
-      addMessage(errorMessage);
-    } finally {
-      setLoading(false);
-      setStreaming(false);
     }
+
+    setLoading(false);
+    setStreaming(false);
   };
 
   const handleKeyDown = (e) => {
@@ -936,7 +840,7 @@ function App() {
                     setDepartment={setMemoryDepartment}
                     agents={AGENTS}
                     onClearMemory={async () => {
-                      try { await axios.delete(`${API_BASE}/api/memory`); setMemories([]); } catch (err) { console.error('Failed to clear memory'); }
+                      try { await api.clearMemory(); setMemories([]); } catch (err) { console.error('Failed to clear memory'); }
                     }}
                   />
                 )}

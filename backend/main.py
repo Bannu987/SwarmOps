@@ -684,6 +684,7 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
     try:
         agent = request.agent.lower().strip()
         msg = request.message
+        user_msg = request.message  # preserve raw user input before any augmentation
 
         # --- Check if this is a nexus request and if it needs a pipeline ---
         if agent == "nexus" or agent == "":
@@ -747,7 +748,8 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             from analytics_agent import get_live_dashboard, analyze_performance
             result = get_live_dashboard(days=30)
             if result is None or (isinstance(result, str) and "❌" in result):
-                result = analyze_performance(msg, "No GA4 data available. Analyze based on the request using industry benchmarks.")
+                # user_msg is the description; msg (augmented) may contain inline numbers from data_context
+                result = analyze_performance(user_msg, msg)
             agent_fn = lambda p: analyze_performance(p, "Revision requested by quality control.")
 
         elif agent == "ppc":
@@ -758,19 +760,29 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             agent_fn = create_campaign_strategy
 
         elif agent == "crm":
+            import re as _re
             from crm_agent import create_email_sequence
-            result = create_email_sequence(msg, num_emails=3)
-            agent_fn = lambda p: create_email_sequence(p, num_emails=3)
+            _email_match = _re.search(r'(\d+)[- ]?email', user_msg, _re.IGNORECASE)
+            _num_emails = int(_email_match.group(1)) if _email_match and 1 <= int(_email_match.group(1)) <= 10 else 3
+            result = create_email_sequence(msg, num_emails=_num_emails)
+            agent_fn = lambda p: create_email_sequence(p, num_emails=_num_emails)
 
         elif agent == "smm":
             from smm_agent import write_platform_post
+            # detect platform from user request (not the augmented msg)
+            _smm_lower = user_msg.lower()
+            _platform = "linkedin"
+            for _p in ("instagram", "tiktok", "twitter", "facebook", "youtube", "pinterest"):
+                if _p in _smm_lower:
+                    _platform = _p
+                    break
             result = write_platform_post(
-                platform="linkedin", topic=msg,
+                platform=_platform, topic=user_msg,
                 brand_voice="Professional and engaging",
                 goal="engagement", brand_name="Brand"
             )
             agent_fn = lambda p: write_platform_post(
-                platform="linkedin", topic=p,
+                platform=_platform, topic=p,
                 brand_voice="Professional and engaging",
                 goal="engagement", brand_name="Brand"
             )
@@ -779,7 +791,7 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             from brand_strategist_agent import create_brand_strategy
             result = create_brand_strategy(
                 company_name="Company", industry="General",
-                target_audience="General audience", unique_value=msg
+                target_audience="General audience", unique_value=user_msg
             )
             agent_fn = lambda p: create_brand_strategy(
                 company_name="Company", industry="General",
@@ -789,7 +801,7 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         elif agent in ("web_ux", "webux"):
             from web_ux_agent import design_landing_page
             result = design_landing_page(
-                product=msg, target_audience="General audience",
+                product=user_msg, target_audience="General audience",
                 goal="conversions"
             )
             agent = "web_ux"
@@ -801,7 +813,7 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         elif agent == "cro":
             from cro_agent import analyze_funnel
             result = analyze_funnel(
-                funnel_steps=msg, conversion_data="",
+                funnel_steps=user_msg, conversion_data="",
                 goal="increase conversions"
             )
             agent_fn = lambda p: analyze_funnel(

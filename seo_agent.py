@@ -138,13 +138,14 @@ def find_keywords(topic, num_keywords=10):
     results = search.search(query, max_results=5)
     
     if not results:
-        return "No keyword data found."
-    
-    # Format for Gemini
-    formatted_results = "\n".join([
-        f"- {r['title']}: {r['description']}" 
-        for r in results
-    ])
+        print("⚠️  Search unavailable — using AI knowledge base for keyword research")
+        formatted_results = "(No live search data available — generate keywords from your training knowledge and industry expertise)"
+    else:
+        # Format for LLM
+        formatted_results = "\n".join([
+            f"- {r['title']}: {r['description']}"
+            for r in results
+        ])
     
     # Check memory for past keyword research on this topic
     past_context = ""

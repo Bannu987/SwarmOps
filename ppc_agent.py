@@ -98,13 +98,14 @@ def create_campaign_strategy(campaign_request, budget=None):
     results = search.search(search_query, max_results=5)
     
     if not results:
-        return "Unable to research competitive landscape. Please try a different query."
-    
-    # Format search results
-    formatted_results = "\n".join([
-        f"{r['rank']}. {r['title']}\n   {r['description']}\n   {r['url']}"
-        for r in results
-    ])
+        print("⚠️  Search unavailable — using AI knowledge base for PPC strategy")
+        formatted_results = "(No live search data available — generate strategy from your training knowledge and industry benchmarks)"
+    else:
+        # Format search results
+        formatted_results = "\n".join([
+            f"{r['rank']}. {r['title']}\n   {r['description']}\n   {r['url']}"
+            for r in results
+        ])
     
     print(f"✅ Research complete")
     print(f"🤖 Generating campaign strategy with Gemini...")

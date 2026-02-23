@@ -34,6 +34,30 @@ load_dotenv()
 
 _last_call_info = threading.local()
 
+# ---------------------------------------------------------------------------
+# Provider failure cache — skip dead/rate-limited providers for 5 minutes
+# ---------------------------------------------------------------------------
+
+_failed_providers: dict = {}  # {provider_name: fail_timestamp}
+_FAILURE_TTL = 300  # 5 minutes
+
+
+def _is_provider_failed(provider: str) -> bool:
+    """Return True if this provider failed within the last 5 minutes."""
+    ts = _failed_providers.get(provider)
+    if ts is None:
+        return False
+    if time.time() - ts > _FAILURE_TTL:
+        _failed_providers.pop(provider, None)
+        return False
+    return True
+
+
+def _mark_provider_failed(provider: str, reason: str = ""):
+    """Cache a provider failure for 5 minutes."""
+    _failed_providers[provider] = time.time()
+    print(f"[model_router] ⛔ {provider} marked as failed for 5 min: {reason[:80]}")
+
 
 def get_last_call_info() -> dict:
     """Get metadata from the most recent call_model_sync call in this thread."""
@@ -338,11 +362,15 @@ def web_search_multi(query: str, max_results: int = 5) -> list[dict]:
 # The first one that succeeds wins.
 
 def _build_tier_chain(tier: int):
-    """Return a list of (callable, display_model, display_provider) tuples."""
+    """Return a list of (callable, display_model, display_provider) tuples.
+    Priority order: Groq (fastest) → Gemini (reliable) → OpenRouter → NVIDIA → DeepSeek
+    """
     if tier == 1:  # Fast classification
         return [
             (lambda p, s, mt, t: _call_groq(p, s, "llama-3.3-70b-versatile", mt, t),
              "llama-3.3-70b-versatile", "groq"),
+            (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
+             "gemini-2.0-flash", "gemini"),
             (lambda p, s, mt, t: _call_openrouter(p, s, "llama-3.3-70b", mt, t),
              "llama-3.3-70b-instruct:free", "openrouter"),
             (lambda p, s, mt, t: _call_openrouter(p, s, "mistral-small", mt, t),
@@ -352,17 +380,19 @@ def _build_tier_chain(tier: int):
         return [
             (lambda p, s, mt, t: _call_groq(p, s, "llama-3.3-70b-versatile", mt, t),
              "llama-3.3-70b-versatile", "groq"),
+            (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
+             "gemini-2.0-flash", "gemini"),
             (lambda p, s, mt, t: _call_openrouter(p, s, "llama-3.3-70b", mt, t),
              "llama-3.3-70b-instruct:free", "openrouter"),
             (lambda p, s, mt, t: _call_openrouter(p, s, "mistral-small", mt, t),
              "mistral-small-3.1-24b:free", "openrouter"),
-            (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
-             "gemini-2.0-flash", "gemini"),
         ]
-    elif tier == 3:  # Strategic reasoning (fast — no reasoning models)
+    elif tier == 3:  # Strategic reasoning
         return [
             (lambda p, s, mt, t: _call_groq(p, s, "llama-3.3-70b-versatile", mt, t),
              "llama-3.3-70b-versatile", "groq"),
+            (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
+             "gemini-2.0-flash", "gemini"),
             (lambda p, s, mt, t: _call_openrouter(p, s, "llama-3.3-70b", mt, t),
              "llama-3.3-70b-instruct:free", "openrouter"),
             (lambda p, s, mt, t: _call_openrouter(p, s, "mistral-small", mt, t),
@@ -372,14 +402,14 @@ def _build_tier_chain(tier: int):
         ]
     elif tier == 4:  # Deep research (search + model)
         return [
-            (lambda p, s, mt, t: _call_nvidia(p, s, "kimi-k2.5", mt, t),
-             "kimi-k2.5", "nvidia"),
-            (lambda p, s, mt, t: _call_openrouter(p, s, "deepseek-r1", mt, t),
-             "deepseek-r1-0528:free", "openrouter"),
             (lambda p, s, mt, t: _call_gemini(p, s, mt, t),
              "gemini-2.0-flash", "gemini"),
             (lambda p, s, mt, t: _call_groq(p, s, "llama-3.3-70b-versatile", mt, t),
              "llama-3.3-70b-versatile", "groq"),
+            (lambda p, s, mt, t: _call_nvidia(p, s, "kimi-k2.5", mt, t),
+             "kimi-k2.5", "nvidia"),
+            (lambda p, s, mt, t: _call_openrouter(p, s, "deepseek-r1", mt, t),
+             "deepseek-r1-0528:free", "openrouter"),
         ]
     else:
         # Default to tier 2
@@ -438,6 +468,11 @@ async def call_model(
     rate_limited_providers = []
 
     for call_fn, model_name, provider_name in chain:
+        # Skip providers cached as failed (rate-limited / 402 / no response)
+        if _is_provider_failed(provider_name):
+            print(f"[model_router] ⏭️  {provider_name} in failure cache, skipping")
+            continue
+
         # Check rate limit before attempting call
         if not rate_limiter.can_call(provider_name):
             wait = rate_limiter.wait_time(provider_name)
@@ -455,15 +490,21 @@ async def call_model(
                 latency = int((time.time() - t0) * 1000)
                 # Record successful call
                 rate_limiter.record_call(provider_name)
+                print(f"[model_router] ✅ Used {provider_name}/{model_name} ({latency}ms)")
                 return {
                     "content": content,
                     "model": model_name,
                     "provider": provider_name,
                     "latency_ms": latency,
                 }
+            else:
+                _mark_provider_failed(provider_name, "empty response")
         except Exception as e:
             last_error = e
-            print(f"[model_router] {provider_name}/{model_name} failed: {e}")
+            err_str = str(e)
+            print(f"[model_router] {provider_name}/{model_name} failed: {err_str[:120]}")
+            if "429" in err_str or "rate" in err_str.lower() or "402" in err_str or "balance" in err_str.lower():
+                _mark_provider_failed(provider_name, err_str)
             continue
 
     # If ALL providers were rate-limited, wait for shortest time and retry once
@@ -535,6 +576,11 @@ def call_model_sync(
     rate_limited_providers = []
 
     for call_fn, model_name, provider_name in chain:
+        # Skip providers cached as failed (rate-limited / 402 / no response)
+        if _is_provider_failed(provider_name):
+            print(f"[model_router] ⏭️  {provider_name} in failure cache, skipping")
+            continue
+
         # Check rate limit before attempting call
         if not rate_limiter.can_call(provider_name):
             wait = rate_limiter.wait_time(provider_name)
@@ -556,10 +602,17 @@ def call_model_sync(
                     "latency_ms": latency,
                 }
                 _last_call_info.info = info
+                print(f"[model_router] ✅ Used {provider_name}/{model_name} ({latency}ms)")
                 return info
+            else:
+                _mark_provider_failed(provider_name, "empty response")
         except Exception as e:
             last_error = e
-            print(f"[model_router] {provider_name}/{model_name} failed: {e}")
+            err_str = str(e)
+            print(f"[model_router] {provider_name}/{model_name} failed: {err_str[:120]}")
+            # Cache providers that are rate-limited (429) or have insufficient balance (402)
+            if "429" in err_str or "rate" in err_str.lower() or "402" in err_str or "balance" in err_str.lower():
+                _mark_provider_failed(provider_name, err_str)
             continue
 
     # If ALL providers were rate-limited, wait for shortest time and retry once

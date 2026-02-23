@@ -745,11 +745,20 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             agent_fn = find_keywords
 
         elif agent == "analytics":
+            import re as _re_anal
             from analytics_agent import get_live_dashboard, analyze_performance
-            result = get_live_dashboard(days=30)
-            if result is None or (isinstance(result, str) and "❌" in result):
-                # user_msg is the description; msg (augmented) may contain inline numbers from data_context
-                result = analyze_performance(user_msg, msg)
+            # If user provides inline numbers, analyze their data directly (skip generic dashboard)
+            _has_inline_data = bool(_re_anal.search(
+                r'\d[\d,]*\s*(visitor|sale|order|spend|revenue|conversion|click|impression|roas|cac|ctr|cvr|ltv)',
+                user_msg, _re_anal.IGNORECASE
+            ))
+            if _has_inline_data:
+                # Pass user_msg as both description and data so the LLM can see the numbers
+                result = analyze_performance(user_msg, f"User-provided metrics:\n{user_msg}")
+            else:
+                result = get_live_dashboard(days=30)
+                if result is None or (isinstance(result, str) and "❌" in result):
+                    result = analyze_performance(user_msg, msg)
             agent_fn = lambda p: analyze_performance(p, "Revision requested by quality control.")
 
         elif agent == "ppc":

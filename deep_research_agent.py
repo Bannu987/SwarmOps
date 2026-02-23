@@ -165,6 +165,11 @@ organic dog food vs conventional nutrition study"""
         for i, q in enumerate(queries, 1):
             context += f"{i}. {q}\n"
 
+        if not results:
+            context += "\n\nSEARCH RESULTS: No live search data available.\n"
+            context += "Use your training knowledge and industry expertise to provide comprehensive research.\n"
+            return context
+
         context += f"\n\nSEARCH RESULTS ({len(results)} sources found):\n\n"
 
         for i, result in enumerate(results, 1):
@@ -353,18 +358,9 @@ Provide a detailed analysis in this EXACT format:
         print(f"✅ Found {len(results)} unique sources")
 
         if not results:
-            return {
-                "success": False,
-                "error": "No search results found. Check API keys and search availability.",
-                "summary": "Research failed due to unavailable search results.",
-                "key_findings": [],
-                "sources": [],
-                "recommendations": ["Verify Brave and Serper API keys are configured"],
-                "confidence": 0.0,
-                "search_queries_used": queries,
-                "models_used": [],
-                "total_latency_ms": int((time.time() - start_time) * 1000)
-            }
+            # Fall back to LLM-only research — don't fail the request
+            print("⚠️  No search results — falling back to LLM knowledge base research")
+            results = []
 
         # Step 3: Compile context
         print("📊 Step 3/5: Compiling search context...")
@@ -381,6 +377,13 @@ Provide a detailed analysis in this EXACT format:
         # Add metadata
         from model_router import get_last_call_info
         model_info = get_last_call_info()
+
+        # Ensure required keys are always present
+        structured_data.setdefault('summary', analysis[:500] if analysis else "Research complete.")
+        structured_data.setdefault('key_findings', [])
+        structured_data.setdefault('sources', [])
+        structured_data.setdefault('recommendations', [])
+        structured_data.setdefault('confidence', 0.7)
 
         structured_data['success'] = True
         structured_data['models_used'] = {

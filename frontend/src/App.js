@@ -65,7 +65,6 @@ const AGENTS = [
     gradientFrom: '#6366F1',
     gradientTo: '#8B5CF6',
     bgColor: 'rgba(99, 102, 241, 0.15)',
-    endpoint: '/api/content/generate',
     integration: 'wordpress',
     tasks: 47,
     successRate: 98.5,
@@ -86,7 +85,6 @@ const AGENTS = [
     gradientFrom: '#F59E0B',
     gradientTo: '#FBBF24',
     bgColor: 'rgba(251, 191, 36, 0.15)',
-    endpoint: '/api/ppc/campaigns',
     integration: 'google_ads',
     tasks: 23,
     successRate: 96.2,
@@ -107,7 +105,6 @@ const AGENTS = [
     gradientFrom: '#A855F7',
     gradientTo: '#C084FC',
     bgColor: 'rgba(168, 85, 247, 0.15)',
-    endpoint: '/api/brand/strategy',
     tasks: 8,
     successRate: 99.1,
     avgResponseTime: '1.5s',
@@ -127,7 +124,6 @@ const AGENTS = [
     gradientFrom: '#06B6D4',
     gradientTo: '#22D3EE',
     bgColor: 'rgba(6, 182, 212, 0.15)',
-    endpoint: '/api/research/topic',
     tasks: 156,
     successRate: 97.8,
     avgResponseTime: '2.1s',
@@ -147,7 +143,6 @@ const AGENTS = [
     gradientFrom: '#8B5CF6',
     gradientTo: '#A78BFA',
     bgColor: 'rgba(139, 92, 246, 0.15)',
-    endpoint: '/api/deep-research',
     tasks: 0,
     successRate: 99.0,
     avgResponseTime: '5.2s',
@@ -167,7 +162,6 @@ const AGENTS = [
     gradientFrom: '#10B981',
     gradientTo: '#34D399',
     bgColor: 'rgba(16, 185, 129, 0.15)',
-    endpoint: '/api/crm/email-sequence',
     integration: 'hubspot',
     tasks: 89,
     successRate: 98.9,
@@ -188,7 +182,6 @@ const AGENTS = [
     gradientFrom: '#EC4899',
     gradientTo: '#F472B6',
     bgColor: 'rgba(236, 72, 153, 0.15)',
-    endpoint: '/api/webux/landing-page',
     tasks: 15,
     successRate: 97.5,
     avgResponseTime: '1.8s',
@@ -208,7 +201,6 @@ const AGENTS = [
     gradientFrom: '#14B8A6',
     gradientTo: '#2DD4BF',
     bgColor: 'rgba(20, 184, 166, 0.15)',
-    endpoint: '/api/seo/rankings',
     integration: 'search_console',
     tasks: 234,
     successRate: 96.8,
@@ -229,7 +221,6 @@ const AGENTS = [
     gradientFrom: '#F97316',
     gradientTo: '#FB923C',
     bgColor: 'rgba(249, 115, 22, 0.15)',
-    endpoint: '/api/analytics/dashboard',
     integration: 'ga4',
     tasks: 500,
     successRate: 99.2,
@@ -250,7 +241,6 @@ const AGENTS = [
     gradientFrom: '#8B5CF6',
     gradientTo: '#A78BFA',
     bgColor: 'rgba(139, 92, 246, 0.15)',
-    endpoint: '/api/cro/analyze-funnel',
     tasks: 67,
     successRate: 97.3,
     avgResponseTime: '1.6s',
@@ -270,7 +260,6 @@ const AGENTS = [
     gradientFrom: '#D946EF',
     gradientTo: '#E879F9',
     bgColor: 'rgba(217, 70, 239, 0.15)',
-    endpoint: '/api/smm/post',
     tasks: 34,
     successRate: 97.8,
     avgResponseTime: '1.3s',
@@ -424,7 +413,7 @@ function App() {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/analytics/dashboard`);
+        const response = await axios.get(`${API_BASE}/api/stats`);
         if (response.data) {
           setRealTimeAnalytics(response.data);
         }
@@ -674,61 +663,14 @@ function App() {
           let response;
 
           try {
-            if (agent.id === 'content') {
-              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
-                prompt: currentInput,
-                max_length: 2000
-              });
-            } else if (agent.id === 'crm') {
-              response = await axios.post(`${API_BASE}/api/crm/email-sequence`, {
-                topic: currentInput,
-                num_emails: 3
-              });
-            } else if (agent.id === 'brand') {
-              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
-                company_name: "Your Company",
-                industry: "Technology",
-                target_audience: "Target audience",
-                unique_value: currentInput
-              });
-            } else if (agent.id === 'webux') {
-              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
-                product: "Your Product",
-                target_audience: "Target users",
-                goal: "Conversions",
-                style: "modern",
-                key_benefits: currentInput
-              });
-            } else if (agent.id === 'cro') {
-              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
-                funnel_steps: currentInput,
-                conversion_data: "",
-                goal: "Increase conversions"
-              });
-            } else if (agent.id === 'ppc') {
-              response = await axios.post(`${API_BASE}/api/task`, {
-                goal: "PPC campaign help: " + currentInput
-              });
-            } else if (agent.id === 'research') {
-              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
-                topic: currentInput,
-                depth: "comprehensive"
-              });
-            } else if (agent.id === 'deep_research') {
-              response = await axios.post(`${API_BASE}${agent.endpoint}`, {
+            if (agent.id === 'deep_research') {
+              response = await axios.post(`${API_BASE}/api/deep-research`, {
                 topic: currentInput
               });
-            } else if (agent.id === 'seo') {
-              response = await axios.get(`${API_BASE}/api/seo/opportunities?topic=${encodeURIComponent(currentInput)}`);
-            } else if (agent.id === 'analytics') {
-              response = await axios.get(`${API_BASE}/api/analytics/dashboard`);
-            } else if (agent.id === 'smm') {
-              response = await axios.post(`${API_BASE}/api/smm/post`, {
-                platform: "linkedin",
-                topic: currentInput,
-                brand_voice: "Professional and engaging",
-                goal: "Increase engagement",
-                brand_name: "Brand"
+            } else {
+              response = await safeApiCall('post', `${API_BASE}/api/chat`, {
+                message: currentInput,
+                agent: agent.id
               });
             }
 

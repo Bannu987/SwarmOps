@@ -24,7 +24,7 @@ import './App.css';
 import LandingPage from './LandingPage';
 import './LandingPage.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://marketingos20-production.up.railway.app';
+const API_BASE = 'https://marketingos20-production.up.railway.app';
 
 const safeApiCall = async (method, url, data = null, timeout = 30000) => {
   try {

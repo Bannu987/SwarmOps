@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './LandingPage.css';
 
-const BACKEND_URL = process.env.REACT_APP_API_URL || 'https://marketingos20-production.up.railway.app';
+const BACKEND_URL = 'https://marketingos20-production.up.railway.app';
 
 /* ── Fade-in hook ─────────────────────────────────────────── */
 function useFadeIn() {

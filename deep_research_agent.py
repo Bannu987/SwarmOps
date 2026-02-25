@@ -51,20 +51,18 @@ class DeepResearchAgent:
         """
         Step 1: Generate 3 smart, diverse search queries using Tier 1 model
         """
-        prompt = f"""You are a research query generator. Generate 3 diverse, high-quality search queries to comprehensively research this topic:
+        prompt = f"""You are a research query generator. Generate 2 diverse, high-quality search queries to comprehensively research this topic:
 
 TOPIC: {topic}
 
 Requirements:
 - Query 1: Broad overview query
 - Query 2: Deep dive into specific aspect
-- Query 3: Alternative angle or recent developments
 
-Return ONLY the 3 queries, one per line, no numbering or explanation.
+Return ONLY the 2 queries, one per line, no numbering or explanation.
 Example format:
 organic dog food benefits 2026
-best organic dog food brands comparison
-organic dog food vs conventional nutrition study"""
+best organic dog food brands comparison"""
 
         response = await call_model(
             prompt=prompt,
@@ -74,7 +72,7 @@ organic dog food vs conventional nutrition study"""
         # Parse queries from response
         content = response.get("content", "") if isinstance(response, dict) else str(response)
         queries = [q.strip() for q in content.strip().split('\n') if q.strip()]
-        return queries[:3]  # Ensure exactly 3 queries
+        return queries[:2]  # Ensure exactly 2 queries
 
     async def search_brave(self, query: str) -> List[Dict[str, Any]]:
         """Execute Brave search and return results"""
@@ -95,7 +93,7 @@ organic dog food vs conventional nutrition study"""
                             'snippet': parts[2].strip() if len(parts) > 2 else '',
                             'source': 'brave'
                         })
-            return parsed[:5]  # Top 5 results
+            return parsed[:3]  # Top 3 results
         except Exception as e:
             print(f"⚠️  Brave search failed: {e}")
             return []
@@ -111,13 +109,13 @@ organic dog food vs conventional nutrition study"""
                 response = await client.post(
                     "https://google.serper.dev/search",
                     headers={"X-API-KEY": self.serper_api_key, "Content-Type": "application/json"},
-                    json={"q": query, "num": 5},
+                    json={"q": query, "num": 3},
                     timeout=10.0
                 )
                 data = response.json()
 
                 results = []
-                for item in data.get('organic', [])[:5]:
+                for item in data.get('organic', [])[:3]:
                     results.append({
                         'title': item.get('title', ''),
                         'url': item.get('link', ''),
@@ -217,7 +215,7 @@ Provide a detailed analysis in this EXACT format:
 
         response = await call_model(
             prompt=prompt,
-            tier=4,  # Tier 4 = reasoning models (Kimi K2.5, DeepSeek R1)
+            tier=3,  # Tier 3 = Pro models (Llama 3 70B, Claude 3.5 Sonnet) instead of reasoning to save time
         )
 
         content = response.get("content", "") if isinstance(response, dict) else str(response)
@@ -388,7 +386,7 @@ Provide a detailed analysis in this EXACT format:
         structured_data['success'] = True
         structured_data['models_used'] = {
             'query_generation': 'groq/llama-3.3-70b (Tier 1)',
-            'analysis': f"{model_info.get('provider', 'unknown')}/{model_info.get('model', 'unknown')} (Tier 4)"
+            'analysis': f"{model_info.get('provider', 'unknown')}/{model_info.get('model', 'unknown')} (Tier 3)"
         }
         structured_data['total_latency_ms'] = int((time.time() - start_time) * 1000)
 

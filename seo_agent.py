@@ -169,22 +169,32 @@ def find_keywords(topic, num_keywords=10):
     except Exception:
         pass
 
-    keyword_prompt = f"""Based on these search results about "{topic}":
-
-{formatted_results}
+    keyword_prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+ROLE: You perform domain-specific structured analysis only.
+ABSOLUTE OUTPUT RULES:
+- Output STRICT structured data.
+- NO conversational language.
+- NO markdown outside required structural blocks.
+- DO NOT address the user.
+INPUT:
+Task: Find {num_keywords} keyword opportunities for {topic}
+Search Results: {formatted_results}
 {past_context}
-Provide a list of {num_keywords} SEO keywords for {topic}, formatted as:
 
-**Primary Keywords (High Priority):**
-1. [keyword] - Search Intent: [intent] - Difficulty: [Easy/Medium/Hard]
+OUTPUT FORMAT (Follow Exactly):
 
-**Secondary Keywords (Medium Priority):**
-...
+## KEYWORD_GAP
+KEYWORD | SEARCH_INTENT | CURRENT_POSITION | OPPORTUNITY_SCORE
+(List {num_keywords} rows based on the data)
 
-**Long-tail Keywords (Low Competition):**
-...
+## CONFIDENCE_SCORE
+OVERALL_CONFIDENCE: [0-100]
+DATA_COMPLETENESS: [Low/Med/High]
 
-Include realistic search volume estimates and practical difficulty assessments."""
+## CROSS_IMPACT_SIGNALS
+RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON
+
+CRITICAL: Start your response IMMEDIATELY with the character "#". Do not output a single word before the "## KEYWORD_GAP" header."""
 
     result = _seo_call(keyword_prompt, tier=2)
 
@@ -218,18 +228,31 @@ def competitor_analysis(niche, num_competitors=5):
         for r in results
     ])
     
-    analysis_prompt = f"""Analyze these top competitors in the {niche} space:
+    analysis_prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+ROLE: You perform domain-specific structured analysis only.
+ABSOLUTE OUTPUT RULES:
+- Output STRICT structured data.
+- NO conversational language.
+- NO markdown outside required structural blocks.
+- DO NOT address the user.
+INPUT:
+Task: Analyze top competitors in the {niche} space
+Competitors Data: {competitor_data}
 
-{competitor_data}
+OUTPUT FORMAT (Follow Exactly):
 
-Provide:
-1. **Market Leaders:** Who are the dominant players?
-2. **Their Strengths:** What are they doing well (based on descriptions)?
-3. **Content Strategy:** What topics/keywords are they targeting?
-4. **Opportunities:** Where can a new entrant compete?
-5. **Differentiation Strategy:** How to stand out in this market?
+## COMPETITOR_AUDIT
+COMPETITOR | MARKET_SHARE_ESTIMATE | KEY_STRENGTHS | TARGET_KEYWORDS | DIFFERENTIATION_OPPORTUNITY
+(List exactly {num_competitors} rows based on the data)
 
-Be specific and actionable."""
+## CONFIDENCE_SCORE
+OVERALL_CONFIDENCE: [0-100]
+DATA_COMPLETENESS: [Low/Med/High]
+
+## CROSS_IMPACT_SIGNALS
+RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON
+
+CRITICAL: Start your response IMMEDIATELY with the character "#". Do not output a single word before the "## COMPETITOR_AUDIT" header."""
 
     result = _seo_call(analysis_prompt, tier=4)
 
@@ -261,18 +284,31 @@ def content_gap_analysis(topic):
         for r in results
     ])
     
-    gap_prompt = f"""Based on existing content about "{topic}":
+    gap_prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+ROLE: You perform domain-specific structured analysis only.
+ABSOLUTE OUTPUT RULES:
+- Output STRICT structured data.
+- NO conversational language.
+- NO markdown outside required structural blocks.
+- DO NOT address the user.
+INPUT:
+Task: Identify content gaps and opportunities for {topic}
+Existing Content: {existing_content}
 
-{existing_content}
+OUTPUT FORMAT (Follow Exactly):
 
-Identify:
-1. **Content Gaps:** What topics are NOT well covered?
-2. **Underserved Questions:** What questions aren't being answered?
-3. **Content Opportunities:** What new angles/approaches could work?
-4. **Content Ideas:** 5 specific blog post titles that fill these gaps
-5. **Format Suggestions:** What content formats would work best (guides, videos, infographics)?
+## CONTENT_DEFICIENCIES
+TOPIC_GAP | UNDERSERVED_QUESTIONS | RECOMMENDED_FORMAT | ESTIMATED_TRAFFIC_POTENTIAL
+(List at least 5 rows based on the data)
 
-Be creative and specific."""
+## CONFIDENCE_SCORE
+OVERALL_CONFIDENCE: [0-100]
+DATA_COMPLETENESS: [Low/Med/High]
+
+## CROSS_IMPACT_SIGNALS
+RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON
+
+CRITICAL: Start your response IMMEDIATELY with the character "#". Do not output a single word before the "## CONTENT_DEFICIENCIES" header."""
 
     result = _seo_call(gap_prompt, tier=2)
 

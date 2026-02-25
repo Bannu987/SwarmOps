@@ -713,8 +713,36 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
     """Unified chat endpoint — routes message to the appropriate agent, with Skeptic QA + memory + pipelines"""
     try:
         agent = request.agent.lower().strip()
-        msg = request.message
-        user_msg = request.message  # preserve raw user input before any augmentation
+        msg = request.message.strip()
+        user_msg = request.message.strip()  # preserve raw user input before any augmentation
+
+        # --- Check for Small-Talk / Greetings (Bypass Headless Nodes) ---
+        import re as _re
+        _msg_lower = user_msg.lower()
+        _greetings = {"hi", "hello", "hey", "how are you", "help", "what can you do", "morning", "good morning", "afternoon", "evening"}
+        _technical_terms = {"seo", "ppc", "roas", "roi", "b2b", "crm", "cac", "cpa", "funnel", "conversion", "ads", "analytics", "data"}
+        
+        # Condition 1: Exact match with a common greeting
+        # Condition 2: Very short (under 4 words) AND lacks marketing terminology
+        _is_greeting = _msg_lower in _greetings or any(greet == _msg_lower for greet in _greetings)
+        _is_short_and_casual = len(user_msg.split()) < 4 and not any(term in _msg_lower for term in _technical_terms)
+
+        if (agent == "nexus" or agent == "") and (_is_greeting or _is_short_and_casual):
+            print(f"\n👋 SMALL TALK INTERCEPTED: Bypassing Headless Nodes for '{user_msg}'")
+            nexus = get_nexus()
+            
+            # Use Nexus master persona to generate a friendly greeting directly
+            _greeting_prompt = "The user just said hello. Introduce yourself as The Nexus, CMO of SwarmOps, and ask them for their business context or what marketing challenge they want to tackle today. Keep it under 50 words, friendly but professional."
+            result = nexus.apply_nexus_persona(user_msg, _greeting_prompt)
+            
+            return {
+                "success": True,
+                "agent": "nexus",
+                "result": result,
+                "model": "nexus_persona",
+                "provider": "direct",
+                "latency_ms": 0,
+            }
 
         # --- Check if this is a nexus request and if it needs a pipeline ---
         if agent == "nexus" or agent == "":

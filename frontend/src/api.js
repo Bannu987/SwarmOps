@@ -20,7 +20,7 @@ export const api = {
       message,
       agent
     }, {
-      timeout: 60000,
+      timeout: 300000,
       headers: { 'Content-Type': 'application/json' }
     });
     return response.data;
@@ -31,7 +31,7 @@ export const api = {
     const response = await axios.post(`${API_BASE}/api/deep-research`, {
       topic
     }, {
-      timeout: 120000,
+      timeout: 300000,
       headers: { 'Content-Type': 'application/json' }
     });
     return response.data;

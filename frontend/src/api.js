@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = 'https://marketingos20-production.up.railway.app';
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 // Intercept HTML responses (Vercel SPA fallback when URL is wrong)
 axios.interceptors.response.use(

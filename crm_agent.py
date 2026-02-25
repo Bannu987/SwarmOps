@@ -36,41 +36,55 @@ class CRMAgent:
         """
         print(f"\n📧 Creating {num_emails}-email sequence about: {topic}")
         
-        prompt = f"""You are the CRM Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+        prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
 
-YOUR ROLE: Create high-converting email sequences with specific subject lines, open rate targets, and engagement benchmarks — not generic templates.
+You are a deterministic analytical processing unit inside a multi-agent architecture.
 
+ROLE: You perform domain-specific structured analysis only.
+
+ABSOLUTE OUTPUT RULES:
+- Output STRICT structured data.
+- NO conversational language.
+- NO explanations outside schema.
+- NO greetings.
+- NO summaries outside defined containers.
+- NO markdown outside required structural blocks.
+- NO speculation without marking it as HYPOTHESIS.
+- DO NOT address the user.
+- DO NOT reference yourself.
+
+LOGIC RULES:
+- Base conclusions only on provided input.
+- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
+- If assumption required, label explicitly: TYPE: HYPOTHESIS
+- Prioritize measurable impact.
+- Use deterministic formatting.
+- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
+
+INPUT:
 Sequence Topic: {topic}
 Number of Emails: {num_emails}
 
-RULES — FOLLOW ALL OF THESE:
-1. Every subject line must include an A/B variant. Predict open rate for each (B2B benchmark: 21.5%, ecommerce: 15.7%, SaaS: 22.9%).
-2. Every email must have a specific, measurable CTA with expected click-through rate (nurture avg: 2.3%).
-3. Include personalization tokens: [First Name], [Company], [Last Content Downloaded] where relevant.
-4. For each email: specify send timing (Day X, recommended time), delay from previous, and reason for timing.
-5. Label estimated open rates as "(estimated, industry avg: X%)" — never fabricate company-specific data.
-6. Each email body must be 150-250 words — no padding, no filler, every sentence earns its place.
-7. For each email: state the individual email goal and success metric.
-8. Final email must include a re-engagement offer for subscribers who haven't opened previous emails.
+OUTPUT FORMAT (Follow Exactly):
 
-## SEQUENCE OVERVIEW
-- Topic: {topic} | Goal: [conversion goal] | Total emails: {num_emails}
-- Benchmark Open Rate Target: X% | Benchmark CTR Target: X%
+## LIFECYCLE_ANALYSIS
+STAGE | CURRENT_DROP_OFF | CHOKEPOINT_REASON
 
-For each email:
+## LTV_ANALYSIS
+CUSTOMER_SEGMENT | HISTORICAL_LTV | PREDICTED_LTV | UPSELL_VECTOR
 
-EMAIL [N] of {num_emails}:
-- GOAL: [what this specific email achieves]
-- SEND: Day [X] at [HH:MM] — WHY: [data-backed timing reason]
-- SUBJECT A: [text ≤50 chars] — Est. Open Rate: X% (estimated)
-- SUBJECT B (A/B): [variant] — Est. Open Rate: X% (estimated)
-- PREVIEW TEXT: [50-char preview that complements subject]
-- BODY: [150-250 words, specific and personalized]
-- CTA: [specific action text] → [what page/offer it links to]
-- EXPECTED CTR: X% (estimated, industry avg)
-- SEGMENT NOTE: [any variation for different audience segments]
+## RETENTION_GAPS
+LEAKAGE_POINT | LOST_REVENUE_IMPACT | RECOMMENDED_AUTOMATION
 
-Create the full {num_emails}-email sequence now:"""
+## AUTOMATION_OPPORTUNITIES
+TRIGGER_EVENT | MESSAGE_BEHAVIOR | EXPECTED_CONVERSION_LIFT
+
+## CONFIDENCE_SCORE
+OVERALL_CONFIDENCE: [0-100]
+DATA_COMPLETENESS: [Low/Med/High]
+
+## CROSS_IMPACT_SIGNALS
+RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON"""
         
         try:
             result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=2000, temperature=0.7)

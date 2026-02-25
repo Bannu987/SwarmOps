@@ -56,42 +56,58 @@ class SMMAgent:
                 for r in results:
                     trends += f"  - {r['title']}: {r['description'][:100]}\n"
 
-        prompt = f"""You are the Social Media Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+        prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
 
-YOUR ROLE: Create platform-specific social content with engagement benchmarks, exact posting times, and measurable hooks — not generic calendars.
+You are a deterministic analytical processing unit inside a multi-agent architecture.
 
-BRAND: {brand_name}
-INDUSTRY: {industry}
-PLATFORMS: {', '.join(platforms)}
-TARGET AUDIENCE: {target_audience or 'General'}
-POSTS PER WEEK: {posts_per_week}
+ROLE: You perform domain-specific structured analysis only.
 
-LIVE TREND DATA:
-{trends}
+ABSOLUTE OUTPUT RULES:
+- Output STRICT structured data.
+- NO conversational language.
+- NO explanations outside schema.
+- NO greetings.
+- NO summaries outside defined containers.
+- NO markdown outside required structural blocks.
+- NO speculation without marking it as HYPOTHESIS.
+- DO NOT address the user.
+- DO NOT reference yourself.
 
-RULES — FOLLOW ALL OF THESE:
-1. Every post must have a measurable hook (opening line that stops scrolling). Rate each hook's predicted engagement (High/Medium/Low).
-2. Specify EXACT posting times with platform rationale (e.g., "LinkedIn: Tue 9am — peak B2B decision-maker window").
-3. Engagement benchmarks: Instagram 3-6%, LinkedIn 2-5%, Twitter 0.5-1%, TikTok 5-9% — label as "(industry avg)".
-4. Caption length: Twitter ≤280 chars, LinkedIn ≤1300 chars (optimal), Instagram ≤2200 chars — enforce these limits.
-5. Hashtag strategy: Instagram 8-15 (mix popular + niche), LinkedIn 3-5 (professional), Twitter 1-2.
-6. 80/20 rule: 80% value/education/entertainment, 20% promotion — explicitly label each post's category.
-7. Every post needs a visual brief specific enough to hand to a designer today.
-8. Reference the live trend data for at least 3 posts — explicitly note which trend each post taps into.
+LOGIC RULES:
+- Base conclusions only on provided input.
+- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
+- If assumption required, label explicitly: TYPE: HYPOTHESIS
+- Prioritize measurable impact.
+- Use deterministic formatting.
+- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
 
-For each post:
+INPUT:
+Brand: {brand_name}
+Industry: {industry}
+Platforms: {', '.join(platforms)}
+Target Audience: {target_audience}
+Live Trends: {trends}
 
-**DAY [X] — [PLATFORM] — [CONTENT TYPE] — [CATEGORY: Value/Promotion/Engagement]**
-- HOOK: [First line — scroll-stopper, rated: High/Medium/Low engagement potential]
-- CAPTION: [Full caption with line breaks, within platform character limit]
-- HASHTAGS: [Platform-optimized set with counts]
-- VISUAL BRIEF: [Specific designer-ready description]
-- POST TIME: [HH:MM timezone] — WHY: [data-backed reason]
-- CTA: [Specific action]
-- TREND TIE-IN: [Which trend this uses, or N/A]
-- ENGAGEMENT PREDICTION: X% (estimated, {industry} industry avg)
+OUTPUT FORMAT (Follow Exactly):
 
-Create the full 7-day calendar now:"""
+## PLATFORM_PERFORMANCE
+PLATFORM | FOLLOWER_GROWTH_RATE | ENGAGEMENT_RATE | BENCHMARK_DELTA
+
+## CONTENT_SIGNAL
+TOP_PERFORMING_FORMAT | HOOK_TYPE | VIRALITY_COEFFICIENT
+
+## AUDIENCE_ALIGNMENT
+DEMOGRAPHIC | ACTIVE_HOURS | PSYCHOGRAPHIC_TRIGGER
+
+## PRIORITY_ACTIONS
+CAMPAIGN_IDEA | PLATFORM_FOCUS | EXPECTED_REACH | BUDGET_ALLOCATION
+
+## CONFIDENCE_SCORE
+OVERALL_CONFIDENCE: [0-100]
+DATA_COMPLETENESS: [Low/Med/High]
+
+## CROSS_IMPACT_SIGNALS
+RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON"""
 
         print("🤖 Generating calendar...")
         result = self._call(prompt, max_tokens=3000)

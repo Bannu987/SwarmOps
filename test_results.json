@@ -1,0 +1,251 @@
+{
+  "pass": 35,
+  "fail": 0,
+  "results": [
+    {
+      "test": "Chat: Content Agent",
+      "status": "PASS",
+      "ms": 14230,
+      "model": "llama-3.3-70b-versatile",
+      "provider": "groq"
+    },
+    {
+      "test": "Chat: SEO Agent",
+      "status": "PASS",
+      "ms": 12465,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Chat: Analytics Agent",
+      "status": "PASS",
+      "ms": 15351,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Chat: PPC Agent",
+      "status": "PASS",
+      "ms": 10353,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Chat: CRM Agent",
+      "status": "PASS",
+      "ms": 20942,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Chat: SMM Agent",
+      "status": "PASS",
+      "ms": 10709,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Chat: Brand Agent",
+      "status": "PASS",
+      "ms": 9558,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Chat: Web/UX Agent",
+      "status": "PASS",
+      "ms": 16257,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Chat: CRO Agent",
+      "status": "PASS",
+      "ms": 9938,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Chat: Research Agent",
+      "status": "PASS",
+      "ms": 15784,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Nexus: Smart Route (should detect SEO)",
+      "status": "PASS",
+      "ms": 22714,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Nexus: Pipeline (multi-agent)",
+      "status": "PASS",
+      "ms": 17072,
+      "model": "gemini-2.0-flash",
+      "provider": "gemini"
+    },
+    {
+      "test": "Agent Debate",
+      "status": "PASS",
+      "ms": 2171,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Content Generate",
+      "status": "PASS",
+      "ms": 4589,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Analytics Dashboard",
+      "status": "PASS",
+      "ms": 7065,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "SEO Rankings",
+      "status": "PASS",
+      "ms": 2115,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "SEO Keywords",
+      "status": "PASS",
+      "ms": 9413,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "PPC Campaigns",
+      "status": "PASS",
+      "ms": 7990,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "SMM Trends",
+      "status": "PASS",
+      "ms": 18684,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "SMM Post",
+      "status": "PASS",
+      "ms": 9617,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Brand Strategy",
+      "status": "PASS",
+      "ms": 6333,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Web/UX Landing Page",
+      "status": "PASS",
+      "ms": 4303,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "CRO Funnel",
+      "status": "PASS",
+      "ms": 5208,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Research Topic",
+      "status": "PASS",
+      "ms": 17287,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Set Profile Key",
+      "status": "PASS",
+      "ms": 2060,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Get Profile",
+      "status": "PASS",
+      "ms": 2060,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Get Stats",
+      "status": "PASS",
+      "ms": 2067,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Get History",
+      "status": "PASS",
+      "ms": 2063,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Get Memory (SEO)",
+      "status": "PASS",
+      "ms": 2080,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Export Memory",
+      "status": "PASS",
+      "ms": 2088,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Get Insights",
+      "status": "PASS",
+      "ms": 2072,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "CRM Contacts (HubSpot)",
+      "status": "PASS",
+      "ms": 4639,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Email Performance",
+      "status": "PASS",
+      "ms": 4795,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "Analytics Anomalies",
+      "status": "PASS",
+      "ms": 7935,
+      "model": "n/a",
+      "provider": "n/a"
+    },
+    {
+      "test": "CRM Email Sequence",
+      "status": "PASS",
+      "ms": 4412,
+      "model": "n/a",
+      "provider": "n/a"
+    }
+  ]
+}

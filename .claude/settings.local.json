@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(vercel --version:*)",
+      "Bash(npm install:*)",
+      "Bash(railway login:*)",
+      "Bash(ping:*)",
+      "Bash(railway whoami:*)",
+      "Bash(vercel:*)",
+      "Bash(npm run build:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd missing langchain-google-genai dependency\n\nFixes SEO and Analytics agents that were failing with:\n''No module named langchain_google_genai''\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix null data: standardize response keys and add AI fallbacks\n\nAll endpoints now return { result: \"...\" } instead of inconsistent keys\n\\(data, campaigns, post, contacts, stats, trends, calendar, anomalies\\).\nAdded _extract_text\\(\\) to normalize dict/list/None responses to strings.\nAdded AI fallback for every integration-dependent agent \\(SEO, Analytics,\nPPC, CRM\\) so they return real AI content when integrations aren''t connected.\nFixed PPC import: create_campaign_strategy instead of create_strategy.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(python -m uvicorn:*)",
+      "Bash(timeout /t 10 /nobreak)",
+      "Bash(python:*)",
+      "Bash(set:*)",
+      "Bash(pip install:*)",
+      "Bash(timeout:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(git commit:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(npx react-scripts build)",
+      "Bash(git rm:*)",
+      "Bash(npx vercel:*)"
+    ]
+  }
+}

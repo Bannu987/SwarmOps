@@ -1,0 +1,240 @@
+# MarketingOS 2.0 (SwarmOps) — Complete Project Summary
+
+## What It Is
+
+**MarketingOS 2.0** (internally called **SwarmOps**) is a **multi-agent AI marketing platform** — a full-stack application where **10+ specialized AI agents** collaborate to handle every aspect of digital marketing: SEO, content creation, PPC advertising, analytics, social media, CRM, conversion optimization, brand strategy, UX design, and deep research.
+
+The system uses a central **orchestrator (The Nexus)** that intelligently routes user requests to the right agent(s), supports multi-agent pipelines, manages budgets, and even facilitates **agent debates** when agents disagree on strategy.
+
+---
+
+## Architecture Overview
+
+```mermaid
+graph TD
+    subgraph Frontend ["Frontend (React 19)"]
+        LP["LandingPage.js"]
+        APP["App.js — Main Dashboard"]
+        API["api.js — Axios client"]
+    end
+
+    subgraph Backend ["Backend (FastAPI)"]
+        MAIN["main.py — REST API"]
+    end
+
+    subgraph Orchestrator ["The Nexus (Orchestrator)"]
+        NX["nexus.py — Smart Router + Pipelines"]
+        DEBATE["Agent Debate System"]
+        BUDGET["Budget Manager"]
+    end
+
+    subgraph Agents ["10+ Specialized Agents"]
+        SEO["SEO Agent"]
+        CONTENT["Content Agent"]
+        PPC["PPC Agent"]
+        ANALYTICS["Analytics Agent"]
+        CRM["CRM Agent"]
+        SMM["SMM Agent"]
+        CRO["CRO Agent"]
+        BRAND["Brand Strategist"]
+        WEBUX["Web/UX Agent"]
+        SKEPTIC["Skeptic Agent (QC)"]
+        RESEARCH["Research Agent"]
+        DEEP["Deep Research Agent"]
+    end
+
+    subgraph AI ["AI Model Router"]
+        MR["model_router.py"]
+        GROQ["Groq (Llama 3.3)"]
+        GEMINI["Google Gemini 2.0"]
+        OR["OpenRouter"]
+        NV["NVIDIA (Kimi K2.5)"]
+        DS["DeepSeek"]
+    end
+
+    subgraph Integrations ["Real Integrations"]
+        GA4["Google Analytics 4"]
+        GSC["Google Search Console"]
+        GADS["Google Ads"]
+        HUB["HubSpot CRM"]
+        WP["WordPress"]
+        DSEO["DataForSEO"]
+    end
+
+    subgraph Infra ["Infrastructure"]
+        MEM["Memory Store (SQLite)"]
+        RL["Rate Limiter"]
+        BM["Benchmarks"]
+        DI["Data Intelligence"]
+        WS["Web Search (Brave + Serper)"]
+        RF["Response Formatter"]
+    end
+
+    LP --> APP
+    APP --> API
+    API --> MAIN
+    MAIN --> NX
+    NX --> SEO & CONTENT & PPC & ANALYTICS & CRM & SMM & CRO & BRAND & WEBUX & RESEARCH & DEEP
+    NX --> SKEPTIC
+    NX --> DEBATE & BUDGET
+    SEO & CONTENT & PPC & ANALYTICS & CRM & SMM & CRO & BRAND & WEBUX & RESEARCH & DEEP --> MR
+    MR --> GROQ & GEMINI & OR & NV & DS
+    SEO --> GSC & DSEO
+    ANALYTICS --> GA4
+    PPC --> GADS
+    CRM --> HUB
+    CONTENT --> WP
+    NX --> MEM & DI
+    MR --> RL & WS
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 19, Recharts (charts), Zustand (state), Lucide icons, react-markdown |
+| **Backend** | FastAPI (Python), Pydantic models, CORS middleware |
+| **AI Providers** | Groq (Llama 3.3 70B), Google Gemini 2.0 Flash, OpenRouter, NVIDIA (Kimi K2.5), DeepSeek |
+| **Database** | SQLite ([marketingos.db](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/marketingos.db)) + JSON files for memory |
+| **Integrations** | Google Analytics 4, Google Search Console, Google Ads, HubSpot, WordPress, DataForSEO |
+| **Search** | Brave Search API, Serper.dev (Google results) |
+| **Deployment** | Docker, Railway (backend), Vercel (frontend) |
+
+---
+
+## Core Components
+
+### 1. The Nexus — Master Orchestrator ([nexus.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/nexus.py))
+- **1,447 lines** — the brain of the entire system
+- **Smart routing**: analyzes the user's query and picks the best agent(s)
+- **Pipeline execution**: chains agents together (e.g., SEO → Content → PPC) in serial or parallel
+- **Agent Debate**: when agents disagree, Nexus facilitates structured debate and picks a winner using real GA4 data
+- **Budget Manager**: tracks spending across campaigns, approves/denies allocation requests
+- **Onboarding**: detects first-time users and collects business profile progressively
+- **Performance tracking**: logs which agents are used, latency, and model info
+
+### 2. Model Router ([model_router.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/model_router.py))
+- **846 lines** — unified multi-provider AI routing
+- **5 providers** with tiered fallback: Groq → Gemini → OpenRouter → NVIDIA → DeepSeek
+- **4 tiers**: Tier 1 (fast/routing), Tier 2 (standard), Tier 3 (advanced + search), Tier 4 (deep reasoning)
+- **Failure cache**: automatically skips dead/rate-limited providers for 5 minutes
+- **Web search integration**: Brave + Serper dual-engine search with deduplication
+
+### 3. FastAPI Backend ([main.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/backend/main.py))
+- **1,101 lines**, 87+ endpoint handlers
+- Full REST API for all agents and integrations
+- Key endpoint categories:
+  - Health/status checks and provider diagnostics
+  - Nexus smart routing (`/api/execute`)
+  - Direct agent endpoints (SEO, Content, PPC, Analytics, etc.)
+  - Real integration endpoints (Google Ads campaigns, GA4 data, WordPress publishing, HubSpot contacts)
+  - Memory/profile management
+  - Agent debate and feedback loops
+
+---
+
+## All 10+ Specialized Agents
+
+| Agent | File | Lines | Purpose |
+|-------|------|-------|---------|
+| **SEO** | [seo_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/seo_agent.py) | 490 | Keyword research, competitor analysis, content gaps, ranking tracking (GSC + DataForSEO) |
+| **Content** | [content_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/content_agent.py) | 223 | Blog posts, articles, with direct WordPress publishing |
+| **PPC** | [ppc_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/ppc_agent.py) | 457 | Campaign strategy, ad copy, targeting, real Google Ads campaign creation |
+| **Analytics** | [analytics_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/analytics_agent.py) | 550 | Performance analysis, ROI, bottlenecks, live GA4 dashboards, anomaly detection |
+| **CRM** | [crm_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/crm_agent.py) | 267 | Email sequences, contact management, real HubSpot integration |
+| **SMM** | [smm_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/smm_agent.py) | 344 | Social calendars, trend analysis, platform-specific posts, viral hooks |
+| **CRO** | [cro_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/cro_agent.py) | 378 | Funnel analysis, A/B test plans, friction point identification |
+| **Brand Strategist** | [brand_strategist_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/brand_strategist_agent.py) | 265 | Brand strategy, tone of voice, consistency audits |
+| **Web/UX** | [web_ux_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/web_ux_agent.py) | 416 | Landing page design (Linear/Emergent style), wireframes, UX audits |
+| **Skeptic (QC)** | [skeptic_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/skeptic_agent.py) | 289 | Quality control — reviews every agent output on 5 dimensions, forces revisions if below threshold |
+| **Research** | [research_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/research_agent.py) | 253 | Multi-angle web research with AI synthesis and confidence assessment |
+| **Deep Research** | [deep_research_agent.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/deep_research_agent.py) | 410 | 5-step intensive research: query generation → dual search → context compilation → Kimi K2.5 reasoning → structured output |
+
+### Skeptic Agent — Quality Control Layer
+Every agent's output passes through the **Skeptic Agent** which scores on 5 dimensions:
+- **Specificity** (25%) — real numbers, names, timelines
+- **Actionability** (25%) — can the user act on this today?
+- **Data-Groundedness** (20%) — backed by evidence
+- **Depth** (15%) — thorough analysis
+- **Honesty** (15%) — clear about what's estimated vs. verified
+
+If confidence < 0.65, it forces a revision with specific feedback.
+
+---
+
+## Infrastructure Layer
+
+| Module | File | Purpose |
+|--------|------|---------|
+| **Data Intelligence** | [data_intelligence.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/data_intelligence.py) | Central brain — detects connected integrations, fetches real business data, computes metrics (CAC, LTV, ROAS, churn), and builds rich context for every agent prompt |
+| **Memory Store** | [memory_store.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/memory_store.py) | Persistent SQLite memory — stores agent memories, task history, business profiles, insights, and recommendation tracking |
+| **Memory System** | [memory_system.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/memory_system.py) | Simple JSON-based memory for brand info, budget, notes, and task logs |
+| **Web Search** | [web_search.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/web_search.py) | Brave Search API wrapper — search, summarize, and news lookup |
+| **Rate Limiter** | [rate_limiter.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/rate_limiter.py) | In-memory thread-safe rate limiter for all providers (Groq 28/min, OpenRouter 18/min, etc.) |
+| **Benchmarks** | [benchmarks.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/benchmarks.py) | Real industry benchmark data (ecommerce, SaaS, B2B, healthcare, real estate) for SEO, social, ads |
+| **Response Formatter** | [response_formatter.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/response_formatter.py) | Structures all agent responses with consistent metadata and generates follow-up suggestions |
+
+---
+
+## Real Integrations (6 platforms)
+
+| Integration | File | Capabilities |
+|-------------|------|-------------|
+| **Google Analytics 4** | [google_analytics.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/integrations/google_analytics.py) | Traffic data, conversion metrics, anomaly detection |
+| **Google Search Console** | [google_search_console.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/integrations/google_search_console.py) | Keyword rankings, click-through data, page performance |
+| **Google Ads** | [google_ads.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/integrations/google_ads.py) | Campaign creation, performance metrics, optimization |
+| **HubSpot** | [hubspot.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/integrations/hubspot.py) | Contact management, email sending, email performance stats |
+| **WordPress** | [wordpress.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/integrations/wordpress.py) | Publish blog posts/pages directly with SEO optimization |
+| **DataForSEO** | [dataforseo.py](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/integrations/dataforseo.py) | Search volume, keyword difficulty, CPC data |
+
+---
+
+## Frontend — React Dashboard
+
+| File | Size | Purpose |
+|------|------|---------|
+| [App.js](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/frontend/src/App.js) | 76 KB | Main dashboard with agent chat, results display, analytics visualization |
+| [App.css](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/frontend/src/App.css) | 47 KB | Full styling (dark theme, glassmorphism, animations) |
+| [LandingPage.js](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/frontend/src/LandingPage.js) | 16 KB | Marketing landing page for the product |
+| [api.js](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/frontend/src/api.js) | 3.5 KB | Axios API client connecting to FastAPI backend |
+
+**Key frontend tech**: React 19, Recharts for charting, Zustand for state management, react-markdown for rendering agent responses, Lucide for icons.
+
+---
+
+## File Stats Summary
+
+| Category | Files | Total Lines |
+|----------|-------|-------------|
+| Agents | 12 | ~4,400 |
+| Orchestrator (Nexus) | 1 | 1,447 |
+| Model Router | 1 | 846 |
+| Backend API | 1 | 1,101 |
+| Infrastructure | 6 | ~1,500 |
+| Integrations | 7 | ~2,900 |
+| Frontend | 4 | ~3,000+ |
+| **Total** | **~32** | **~15,000+** |
+
+---
+
+## Deployment
+
+- **Backend**: Dockerized, deployed to **Railway** ([railway.json](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/railway.json), [Dockerfile](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/Dockerfile))
+- **Frontend**: Deployed to **Vercel** ([vercel.json](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/frontend/vercel.json))
+- Full deployment guide: [DEPLOY.md](file:///c:/Users/shrav/OneDrive/Desktop/MarketingOS2.0/DEPLOY.md)
+
+---
+
+## How It All Works Together
+
+1. **User sends a request** (e.g., "Create SEO content for my SaaS product") via the React frontend
+2. **Frontend** → sends to FastAPI backend via Axios
+3. **Backend** → passes to **The Nexus** orchestrator
+4. **Nexus** uses AI to **smart-route** the request — detecting if it needs one agent or a pipeline
+5. **Data Intelligence** layer injects real business context (GA4 data, business profile, past insights)
+6. **Agent(s)** execute using the **Model Router** (tries Groq first → falls back to Gemini → OpenRouter → etc.)
+7. **Skeptic Agent** reviews the output for quality — forces revision if below threshold
+8. **Response Formatter** structures the result with metadata plus follow-up suggestions
+9. **Result** + recommendations are sent back through the API to the frontend dashboard

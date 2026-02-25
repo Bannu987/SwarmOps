@@ -5,7 +5,27 @@ export const useChatStore = create(
   persist(
     (set, get) => ({
       // State
-      messages: [],
+      messages: [{
+        id: 'mock-1',
+        role: 'agent',
+        agentId: 'content',
+        agentName: 'System Verification',
+        agentIcon: '⚙️',
+        content: `Here is the analysis you requested.
+
+## PRIORITY_ACTIONS
+- Review Google Ads budget allocation
+- Approve the new Q1 Content Strategy draft
+- Fix the broken links on the Pricing page
+
+## CONFIDENCE_SCORE
+85%
+
+## CROSS_IMPACT_SIGNALS
+- SEO Agent noted the pricing page links are affecting crawl budget.
+- PPC Agent suggests pausing ads to the broken pricing page.`,
+        quality: { confidence: 0.85 }
+      }],
       selectedAgentId: 'content',
       isStreaming: false,
       rightPanelOpen: false,
@@ -18,7 +38,7 @@ export const useChatStore = create(
         compactMode: false,
         autoSave: true
       },
-      
+
       // Message Actions
       addMessage: (message) => set((state) => ({
         messages: [
@@ -30,31 +50,31 @@ export const useChatStore = create(
           }
         ]
       })),
-      
+
       updateMessage: (id, updates) => set((state) => ({
         messages: state.messages.map(msg =>
           msg.id === id ? { ...msg, ...updates } : msg
         )
       })),
-      
+
       deleteMessage: (id) => set((state) => ({
         messages: state.messages.filter(msg => msg.id !== id)
       })),
-      
+
       clearMessages: () => set({ messages: [] }),
-      
+
       // Agent Actions
       setSelectedAgent: (agentId) => set({ selectedAgentId: agentId }),
-      
+
       // UI State Actions
       setStreaming: (isStreaming) => set({ isStreaming }),
-      
-      toggleRightPanel: () => set((state) => ({ 
-        rightPanelOpen: !state.rightPanelOpen 
+
+      toggleRightPanel: () => set((state) => ({
+        rightPanelOpen: !state.rightPanelOpen
       })),
-      
+
       setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
-      
+
       // Conversation Management
       createConversation: (title = 'New Conversation') => {
         const id = Date.now().toString();
@@ -74,7 +94,7 @@ export const useChatStore = create(
         }));
         return id;
       },
-      
+
       loadConversation: (id) => {
         const state = get();
         const conversation = state.conversations.find(c => c.id === id);
@@ -86,10 +106,10 @@ export const useChatStore = create(
           });
         }
       },
-      
+
       saveCurrentConversation: () => set((state) => {
         if (!state.currentConversationId) return state;
-        
+
         return {
           conversations: state.conversations.map(conv =>
             conv.id === state.currentConversationId
@@ -98,24 +118,24 @@ export const useChatStore = create(
           )
         };
       }),
-      
+
       deleteConversation: (id) => set((state) => ({
         conversations: state.conversations.filter(c => c.id !== id),
         currentConversationId: state.currentConversationId === id ? null : state.currentConversationId,
         messages: state.currentConversationId === id ? [] : state.messages
       })),
-      
+
       renameConversation: (id, title) => set((state) => ({
         conversations: state.conversations.map(c =>
           c.id === id ? { ...c, title } : c
         )
       })),
-      
+
       // Settings Actions
       updateSettings: (updates) => set((state) => ({
         settings: { ...state.settings, ...updates }
       })),
-      
+
       resetSettings: () => set({
         settings: {
           darkMode: true,
@@ -125,7 +145,7 @@ export const useChatStore = create(
           autoSave: true
         }
       }),
-      
+
       // Bulk Actions
       resetAll: () => set({
         messages: [],

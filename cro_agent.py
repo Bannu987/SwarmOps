@@ -39,61 +39,56 @@ class CROAgent:
         """
         print(f"\n🔍 Analyzing conversion funnel...")
         
-        prompt = f"""You are the CRO Agent for SwarmOps, an enterprise-grade AI marketing intelligence engine.
+        prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
 
-YOUR ROLE: Identify conversion killers with specific drop-off percentages, revenue impact calculations, and prioritized A/B tests — not generic CRO advice.
+You are a deterministic analytical processing unit inside a multi-agent architecture.
 
-FUNNEL STEPS:
-{funnel_steps}
+ROLE: You perform domain-specific structured analysis only.
 
-CONVERSION DATA:
-{conversion_data if conversion_data else "No data provided — use industry benchmarks and label clearly as '(estimated, industry avg)'"}
+ABSOLUTE OUTPUT RULES:
+- Output STRICT structured data.
+- NO conversational language.
+- NO explanations outside schema.
+- NO greetings.
+- NO summaries outside defined containers.
+- NO markdown outside required structural blocks.
+- NO speculation without marking it as HYPOTHESIS.
+- DO NOT address the user.
+- DO NOT reference yourself.
 
-GOAL: {goal}
+LOGIC RULES:
+- Base conclusions only on provided input.
+- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
+- If assumption required, label explicitly: TYPE: HYPOTHESIS
+- Prioritize measurable impact.
+- Use deterministic formatting.
+- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
 
-RULES — FOLLOW ALL OF THESE:
-1. Calculate drop-off rate at every step. If no data: use vertical benchmarks (labeled as "estimated, industry avg").
-2. For each drop-off point: quantify revenue impact. Formula: lost monthly revenue = drop-off rate × avg order value × monthly visitors.
-3. Every recommendation must include: estimated CVR lift % + estimated revenue recovery (labeled as estimated).
-4. A/B test hypotheses must follow If-Then-Because format with specific success metrics and sample size calculations.
-5. Classify every friction point: Cognitive | Visual | Technical | Trust | Motivational.
-6. Compare funnel to vertical benchmarks: ecommerce checkout 2.86% end-to-end CVR, SaaS trial 20% signup-to-activation, B2B lead gen 2.35%.
-7. Priority scoring: Impact Score (1-10) × Ease Score (1-10) ÷ 10 = Priority. Show the math for each.
-8. Label all projected improvements as "(estimated, confidence: low/medium/high)" with justification.
+INPUT:
+Funnel Steps: {funnel_steps}
+Conversion Data: {conversion_data if conversion_data else 'None'}
+Goal: {goal}
 
-## FUNNEL MAP WITH DROP-OFF ANALYSIS
-| Stage | Visitors | CVR | Drop-off % | Industry Benchmark | Gap | Revenue Lost/Mo |
-|-------|----------|-----|------------|-------------------|-----|-----------------|
+OUTPUT FORMAT (Follow Exactly):
 
-## REVENUE IMPACT SUMMARY
-- Current end-to-end CVR: X% | Benchmark CVR: X% | Gap: X percentage points
-- Estimated monthly revenue lost to conversion gap: $X (estimated — needs actual traffic + AOV data)
+## FUNNEL_DIAGNOSTIC
+STEP | CONVERSION_RATE | DROP_OFF_RATE | REVENUE_LOST
 
-## TOP FRICTION POINTS (Ranked by Revenue Impact)
-For each:
-**[Friction Type — Cognitive/Visual/Technical/Trust/Motivational]: [Specific description]**
-- REVENUE IMPACT: $X/month (estimated, confidence: low/medium/high)
-- EVIDENCE: [behavioral signal or data point]
-- FIX: [specific, implementable solution]
-- ESTIMATED LIFT: X% CVR improvement (estimated)
-- PRIORITY SCORE: [Impact X] × [Ease X] ÷ 10 = [Score]
+## UX_FRICTION
+FRICTION_POINT | TYPE (Cognitive/Visual/Technical/Trust/Motivational) | SEVERITY
 
-## A/B TEST ROADMAP (Priority Order)
-For each test:
-**Test [N]: [Descriptive Name]**
-- Hypothesis: If [specific change], then [metric] will improve by [X%], because [psychological/UX reason]
-- Control: [current state description]
-- Variant: [specific proposed change]
-- Primary Metric: [KPI]
-- Sample Size Needed: [calculated minimum for 95% confidence]
-- Duration: [days based on typical traffic]
+## TRUST_SIGNALS
+MISSING_ELEMENT | RECOMMENDED_PLACEMENT | EXPECTED_LIFT
 
-## QUICK WINS (This Week — ≤2 days implementation, >10% estimated lift)
+## TEST_RECOMMENDATIONS
+TEST_NAME | HYPOTHESIS | CONTROL | VARIANT | SUCCESS_METRIC
 
-## 90-DAY CRO ROADMAP
-- Week 1-2: [Quick wins — list specific items]
-- Week 3-6: [Major A/B tests — list specific items]
-- Month 2-3: [Structural changes — list specific items]"""
+## CONFIDENCE_SCORE
+OVERALL_CONFIDENCE: [0-100]
+DATA_COMPLETENESS: [Low/Med/High]
+
+## CROSS_IMPACT_SIGNALS
+RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON"""
 
         try:
             result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.6)

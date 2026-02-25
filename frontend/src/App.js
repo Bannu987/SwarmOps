@@ -1,29 +1,209 @@
 import React, { useState, useRef, useEffect } from 'react';
 import api from './api';
 import { useChatStore } from './stores/chatStore';
-import { 
+import {
   Send, Paperclip, Mic, Plus, Sparkles, Copy, Share2,
   ThumbsUp, ThumbsDown, RotateCcw, Loader2, Moon, Sun,
-  Bell, User, Search, ChevronDown, X, Settings, BarChart3,
-  Lightbulb, Cpu, HardDrive, Activity, AlertCircle, Users,
-  TrendingUp, TrendingDown, Eye, MousePointer, Target, Zap,
-  PenTool, DollarSign, Palette, Globe,
-  ArrowRight, Check, Clock,
-  Maximize2, Minimize2, RefreshCw, ExternalLink,
-  AtSign, Smile, CheckCircle2, Info,
-  Layers, Bookmark, Volume2, ChevronLeft, MessageSquare
+  Settings, Cpu, HardDrive, Activity, RefreshCw, BarChart3,
+  X, Check, ChevronDown, Clock, MessageSquare, AlertCircle,
+  Zap, Lightbulb, Users, Eye, Target, MousePointer,
+  ArrowRight, Search, FileText, CheckCircle2, Layout, Image,
+  Layers, Database, Bookmark, PlusCircle, Link, Mail,
+  TrendingDown, TrendingUp, Palette, PenTool, Globe, DollarSign,
+  AlertTriangle, Bell, Volume2, ChevronLeft
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { 
-  AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+import {
+  AreaChart, Area, BarChart, Bar, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell
 } from 'recharts';
 import './App.css';
 import LandingPage from './LandingPage';
 import './LandingPage.css';
 
+// --- Custom Markdown Parser ---
+function parseStructuredMarkdown(text) {
+  if (!text) return [];
+
+  const blocks = [];
+  const lines = text.split('\n');
+
+  let currentBlock = { type: 'markdown', content: '' };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.startsWith('## PRIORITY_ACTIONS')) {
+      if (currentBlock.content.trim()) blocks.push({ ...currentBlock });
+
+      let priorityContent = '';
+      i++; // Skip header
+      while (i < lines.length && !lines[i].startsWith('## ')) {
+        priorityContent += lines[i] + '\n';
+        i++;
+      }
+      i--; // Step back so outer loop catches next header
+
+      blocks.push({ type: 'priority_actions', content: priorityContent.trim() });
+      currentBlock = { type: 'markdown', content: '' };
+    }
+    else if (line.startsWith('## CONFIDENCE_SCORE')) {
+      if (currentBlock.content.trim()) blocks.push({ ...currentBlock });
+
+      let confidenceContent = '';
+      i++;
+      while (i < lines.length && !lines[i].startsWith('## ')) {
+        confidenceContent += lines[i] + '\n';
+        i++;
+      }
+      i--;
+
+      blocks.push({ type: 'confidence_score', content: confidenceContent.trim() });
+      currentBlock = { type: 'markdown', content: '' };
+    }
+    else if (line.startsWith('## CROSS_IMPACT_SIGNALS')) {
+      if (currentBlock.content.trim()) blocks.push({ ...currentBlock });
+
+      let crossImpactContent = '';
+      i++;
+      while (i < lines.length && !lines[i].startsWith('## ')) {
+        crossImpactContent += lines[i] + '\n';
+        i++;
+      }
+      i--;
+
+      blocks.push({ type: 'cross_impact', content: crossImpactContent.trim() });
+      currentBlock = { type: 'markdown', content: '' };
+    }
+    else {
+      currentBlock.content += line + '\n';
+    }
+  }
+
+  if (currentBlock.content.trim()) {
+    blocks.push(currentBlock);
+  }
+
+  return blocks;
+}
+
+// --- Custom Blocks Components ---
+
+function PriorityActionsBlock({ content }) {
+  // Parse bullet points
+  const actions = content.split('\n')
+    .filter(line => line.trim().startsWith('-') || line.trim().startsWith('*'))
+    .map(line => line.replace(/^[-*]\s*/, '').trim());
+
+  if (actions.length === 0) return null;
+
+  return (
+    <div className="custom-block priority-actions-block">
+      <div className="block-header">
+        <Target size={14} className="text-blue-400" />
+        <span>Priority Actions</span>
+      </div>
+      <div className="priority-actions-grid">
+        {actions.map((action, idx) => (
+          <div key={idx} className="action-card group cursor-pointer">
+            <div className="action-checkbox" />
+            <span className="action-text">{action}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ConfidenceScoreBlock({ content }) {
+  // Extract number if possible
+  const match = content.match(/(\d+)(?:\.\d+)?%/);
+  const score = match ? parseInt(match[1]) : null;
+  const rawText = content.replace(/[*#]/g, '').trim();
+
+  let statusClass = 'low';
+  if (score >= 80) statusClass = 'high';
+  else if (score >= 50) statusClass = 'medium';
+
+  return (
+    <div className="custom-block confidence-score-block">
+      <div className="block-header">
+        <Activity size={14} className={`text - status - ${statusClass} `} />
+        <span>Confidence Score</span>
+      </div>
+      <div className="confidence-indicator-container">
+        {score !== null ? (
+          <>
+            <div className={`confidence - score - value status - ${statusClass} `}>
+              {score}%
+            </div>
+            <div className="confidence-progress-bg">
+              <div
+                className={`confidence - progress - fill status - ${statusClass} `}
+                style={{ width: `${score}% ` }}
+              />
+            </div>
+          </>
+        ) : (
+          <span className="confidence-raw-text">{rawText}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CrossImpactSignalsBlock({ content }) {
+  // Clean up content
+  const items = content.split('\n')
+    .filter(line => line.trim().length > 0)
+    .map(line => line.replace(/^[-*]\s*/, '').trim());
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="custom-block cross-impact-block">
+      <div className="block-header">
+        <Zap size={14} className="text-yellow-400" />
+        <span>Cross-Impact Signals</span>
+      </div>
+      <div className="cross-impact-list">
+        {items.map((item, idx) => (
+          <div key={idx} className="cross-impact-item">
+            <AlertTriangle size={12} className="text-yellow-500/80 mr-2 flex-shrink-0 mt-0.5" />
+            <span className="cross-impact-text">{item}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Structured Content Renderer
+function StructuredContent({ text }) {
+  const blocks = parseStructuredMarkdown(text);
+
+  return (
+    <div className="structured-content">
+      {blocks.map((block, idx) => {
+        if (block.type === 'priority_actions') {
+          return <PriorityActionsBlock key={idx} content={block.content} />;
+        } else if (block.type === 'confidence_score') {
+          return <ConfidenceScoreBlock key={idx} content={block.content} />;
+        } else if (block.type === 'cross_impact') {
+          return <CrossImpactSignalsBlock key={idx} content={block.content} />;
+        } else {
+          return (
+            <ReactMarkdown key={idx} remarkPlugins={[remarkGfm]}>
+              {block.content}
+            </ReactMarkdown>
+          );
+        }
+      })}
+    </div>
+  );
+}
 
 // Agent configurations - 10 agents with real integration endpoints
 const AGENTS = [
@@ -507,14 +687,14 @@ function App() {
 
     // Summary
     if (result.summary) {
-      formatted += `## 📊 SUMMARY\n\n${result.summary}\n\n`;
+      formatted += `## 📊 SUMMARY\n\n${result.summary} \n\n`;
     }
 
     // Key Findings
     if (result.key_findings && Array.isArray(result.key_findings)) {
       formatted += `## 🔍 KEY FINDINGS\n\n`;
       result.key_findings.forEach((finding, i) => {
-        formatted += `${i + 1}. ${finding}\n`;
+        formatted += `${i + 1}. ${finding} \n`;
       });
       formatted += '\n';
     }
@@ -523,9 +703,9 @@ function App() {
     if (result.sources && Array.isArray(result.sources) && result.sources.length > 0) {
       formatted += `## 📚 SOURCES\n\n`;
       result.sources.slice(0, 10).forEach((source, i) => {
-        formatted += `${i + 1}. [${source.title}](${source.url})\n`;
+        formatted += `${i + 1}.[${source.title}](${source.url}) \n`;
         if (source.snippet) {
-          formatted += `   > ${source.snippet}\n`;
+          formatted += `   > ${source.snippet} \n`;
         }
       });
       formatted += '\n';
@@ -535,7 +715,7 @@ function App() {
     if (result.recommendations && Array.isArray(result.recommendations)) {
       formatted += `## 💡 RECOMMENDATIONS\n\n`;
       result.recommendations.forEach((rec, i) => {
-        formatted += `${i + 1}. ${rec}\n`;
+        formatted += `${i + 1}. ${rec} \n`;
       });
       formatted += '\n';
     }
@@ -544,7 +724,7 @@ function App() {
     if (result.search_queries_used && Array.isArray(result.search_queries_used)) {
       formatted += `## 🔎 SEARCH QUERIES USED\n\n`;
       result.search_queries_used.forEach((query, i) => {
-        formatted += `- ${query}\n`;
+        formatted += `- ${query} \n`;
       });
       formatted += '\n';
     }
@@ -552,10 +732,10 @@ function App() {
     if (result.models_used) {
       formatted += `## 🤖 MODELS USED\n\n`;
       if (result.models_used.query_generation) {
-        formatted += `- Query Generation: ${result.models_used.query_generation}\n`;
+        formatted += `- Query Generation: ${result.models_used.query_generation} \n`;
       }
       if (result.models_used.analysis) {
-        formatted += `- Analysis: ${result.models_used.analysis}\n`;
+        formatted += `- Analysis: ${result.models_used.analysis} \n`;
       }
       formatted += '\n';
     }
@@ -638,7 +818,7 @@ function App() {
         addMessage({
           id: Date.now() + Math.random(),
           role: 'system',
-          content: `⚠️ ${agentConfig.name} encountered an issue: ${errText}`,
+          content: `⚠️ ${agentConfig.name} encountered an issue: ${errText} `,
           timestamp: new Date().toISOString()
         });
       }
@@ -730,126 +910,126 @@ function App() {
           rateLimits={rateLimits}
         />
 
-          <div className="chat-area">
-            <div className="messages-wrap">
-              {messages.length === 0 ? (
-                <EmptyState
-                  suggestedPrompts={suggestedPrompts}
-                  setInput={setInput}
-                  setSelectedAgent={(id) => { setSelectedAgent(id); setSelectedAgents([id]); }}
-                  agents={AGENTS}
-                />
-              ) : (
-                <div className="messages-list">
-                  {messages.map((message, index) => (
-                    <MessageBubble
-                      key={message.id || index}
-                      message={message}
-                      isLatest={index === messages.length - 1}
-                    />
-                  ))}
-                  {loading && <LoadingMessage agent={selectedAgent} />}
-                  <div ref={messagesEndRef} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="input-area">
-            <div className="input-area-inner">
-              {agentDropdownOpen && (
-                <>
-                  <div className="dropdown-backdrop" onClick={() => setAgentDropdownOpen(false)} />
-                  <div className="agent-dropdown">
-                    <div className="agent-dropdown-header">AI Agents</div>
-                    <div className="agent-dropdown-list">
-                      {AGENTS.map(agent => (
-                        <button
-                          key={agent.id}
-                          className={`agent-dropdown-item ${selectedAgent.id === agent.id ? 'selected' : ''}`}
-                          onClick={() => { setSelectedAgent(agent.id); setSelectedAgents([agent.id]); setAgentDropdownOpen(false); }}
-                        >
-                          <span className="agent-dropdown-emoji">{agent.iconEmoji}</span>
-                          <div className="agent-dropdown-info">
-                            <span className="agent-dropdown-name">{agent.name}</span>
-                            <span className="agent-dropdown-model">{agent.model}</span>
-                          </div>
-                          {selectedAgent.id === agent.id && <Check size={14} className="dropdown-check" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-              <form onSubmit={handleSubmit}>
-                <div className="input-box">
-                  <button
-                    type="button"
-                    className="agent-pill"
-                    onClick={() => setAgentDropdownOpen(!agentDropdownOpen)}
-                  >
-                    <span>{selectedAgent.iconEmoji}</span>
-                    <span>{smartRoutingMode ? 'Auto' : selectedAgent.shortName}</span>
-                    <ChevronDown size={12} />
-                  </button>
-                  <textarea
-                    ref={textareaRef}
-                    className="input-textarea"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={smartRoutingMode ? 'Ask anything — Nexus routes to the best agent...' : `Ask ${selectedAgent.name} anything...`}
-                    rows={1}
-                    disabled={loading}
+        <div className="chat-area">
+          <div className="messages-wrap">
+            {messages.length === 0 ? (
+              <EmptyState
+                suggestedPrompts={suggestedPrompts}
+                setInput={setInput}
+                setSelectedAgent={(id) => { setSelectedAgent(id); setSelectedAgents([id]); }}
+                agents={AGENTS}
+              />
+            ) : (
+              <div className="messages-list">
+                {messages.map((message, index) => (
+                  <MessageBubble
+                    key={message.id || index}
+                    message={message}
+                    isLatest={index === messages.length - 1}
                   />
-                  <button
-                    type="submit"
-                    className={`send-btn ${input.trim() ? 'active' : 'inactive'}`}
-                    disabled={!input.trim() || loading}
-                  >
-                    {loading ? <Loader2 size={15} className="spinner" /> : <Send size={15} />}
-                  </button>
-                </div>
-              </form>
-              <p className="input-disclaimer">Enter to send · Shift+Enter new line · ⌘K commands</p>
-            </div>
+                ))}
+                {loading && <LoadingMessage agent={selectedAgent} />}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
           </div>
         </div>
 
-        {rightPanelOpen && (
-          <>
-            <div className="right-panel-backdrop" onClick={() => setRightPanelOpen(false)} />
-            <div className="right-panel-overlay">
-              <div className="panel-header">
-                <div className="panel-tabs">
-                  <button className={`panel-tab ${rightPanelTab === 'analytics' ? 'active' : ''}`} onClick={() => setRightPanelTab('analytics')}><BarChart3 size={14} /><span>Analytics</span></button>
-                  <button className={`panel-tab ${rightPanelTab === 'stats' ? 'active' : ''}`} onClick={() => setRightPanelTab('stats')}><Activity size={14} /><span>Stats</span></button>
-                  <button className={`panel-tab ${rightPanelTab === 'memory' ? 'active' : ''}`} onClick={() => setRightPanelTab('memory')}><HardDrive size={14} /><span>Memory</span></button>
-                  <button className={`panel-tab ${rightPanelTab === 'history' ? 'active' : ''}`} onClick={() => setRightPanelTab('history')}><Clock size={14} /><span>History</span></button>
-                  <button className={`panel-tab ${rightPanelTab === 'insights' ? 'active' : ''}`} onClick={() => setRightPanelTab('insights')}><Lightbulb size={14} /><span>Insights</span></button>
+        <div className="input-area">
+          <div className="input-area-inner">
+            {agentDropdownOpen && (
+              <>
+                <div className="dropdown-backdrop" onClick={() => setAgentDropdownOpen(false)} />
+                <div className="agent-dropdown">
+                  <div className="agent-dropdown-header">AI Agents</div>
+                  <div className="agent-dropdown-list">
+                    {AGENTS.map(agent => (
+                      <button
+                        key={agent.id}
+                        className={`agent - dropdown - item ${selectedAgent.id === agent.id ? 'selected' : ''} `}
+                        onClick={() => { setSelectedAgent(agent.id); setSelectedAgents([agent.id]); setAgentDropdownOpen(false); }}
+                      >
+                        <span className="agent-dropdown-emoji">{agent.iconEmoji}</span>
+                        <div className="agent-dropdown-info">
+                          <span className="agent-dropdown-name">{agent.name}</span>
+                          <span className="agent-dropdown-model">{agent.model}</span>
+                        </div>
+                        {selectedAgent.id === agent.id && <Check size={14} className="dropdown-check" />}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <button className="panel-close-btn" onClick={() => setRightPanelOpen(false)}><X size={16} /></button>
+              </>
+            )}
+            <form onSubmit={handleSubmit}>
+              <div className="input-box">
+                <button
+                  type="button"
+                  className="agent-pill"
+                  onClick={() => setAgentDropdownOpen(!agentDropdownOpen)}
+                >
+                  <span>{selectedAgent.iconEmoji}</span>
+                  <span>{smartRoutingMode ? 'Auto' : selectedAgent.shortName}</span>
+                  <ChevronDown size={12} />
+                </button>
+                <textarea
+                  ref={textareaRef}
+                  className="input-textarea"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={smartRoutingMode ? 'Ask anything — Nexus routes to the best agent...' : `Ask ${selectedAgent.name} anything...`}
+                  rows={1}
+                  disabled={loading}
+                />
+                <button
+                  type="submit"
+                  className={`send - btn ${input.trim() ? 'active' : 'inactive'} `}
+                  disabled={!input.trim() || loading}
+                >
+                  {loading ? <Loader2 size={15} className="spinner" /> : <Send size={15} />}
+                </button>
               </div>
-              <div className="panel-content">
-                {rightPanelTab === 'analytics' && <AnalyticsPanel trafficData={trafficData} conversionData={conversionData} realTimeData={realTimeAnalytics} />}
-                {rightPanelTab === 'stats' && <StatsPanel stats={stats} />}
-                {rightPanelTab === 'memory' && (
-                  <MemoryPanel
-                    memories={memories}
-                    department={memoryDepartment}
-                    setDepartment={setMemoryDepartment}
-                    agents={AGENTS}
-                    onClearMemory={async () => {
-                      try { await api.clearMemory(); setMemories([]); } catch (err) { console.error('Failed to clear memory'); }
-                    }}
-                  />
-                )}
-                {rightPanelTab === 'history' && <HistoryPanel history={taskHistory} days={historyDays} setDays={setHistoryDays} agents={AGENTS} />}
-                {rightPanelTab === 'insights' && <InsightsPanel agents={AGENTS} />}
+            </form>
+            <p className="input-disclaimer">Enter to send · Shift+Enter new line · ⌘K commands</p>
+          </div>
+        </div>
+      </div>
+
+      {rightPanelOpen && (
+        <>
+          <div className="right-panel-backdrop" onClick={() => setRightPanelOpen(false)} />
+          <div className="right-panel-overlay">
+            <div className="panel-header">
+              <div className="panel-tabs">
+                <button className={`panel - tab ${rightPanelTab === 'analytics' ? 'active' : ''} `} onClick={() => setRightPanelTab('analytics')}><BarChart3 size={14} /><span>Analytics</span></button>
+                <button className={`panel - tab ${rightPanelTab === 'stats' ? 'active' : ''} `} onClick={() => setRightPanelTab('stats')}><Activity size={14} /><span>Stats</span></button>
+                <button className={`panel - tab ${rightPanelTab === 'memory' ? 'active' : ''} `} onClick={() => setRightPanelTab('memory')}><HardDrive size={14} /><span>Memory</span></button>
+                <button className={`panel - tab ${rightPanelTab === 'history' ? 'active' : ''} `} onClick={() => setRightPanelTab('history')}><Clock size={14} /><span>History</span></button>
+                <button className={`panel - tab ${rightPanelTab === 'insights' ? 'active' : ''} `} onClick={() => setRightPanelTab('insights')}><Lightbulb size={14} /><span>Insights</span></button>
               </div>
+              <button className="panel-close-btn" onClick={() => setRightPanelOpen(false)}><X size={16} /></button>
             </div>
-          </>
-        )}
+            <div className="panel-content">
+              {rightPanelTab === 'analytics' && <AnalyticsPanel trafficData={trafficData} conversionData={conversionData} realTimeData={realTimeAnalytics} />}
+              {rightPanelTab === 'stats' && <StatsPanel stats={stats} />}
+              {rightPanelTab === 'memory' && (
+                <MemoryPanel
+                  memories={memories}
+                  department={memoryDepartment}
+                  setDepartment={setMemoryDepartment}
+                  agents={AGENTS}
+                  onClearMemory={async () => {
+                    try { await api.clearMemory(); setMemories([]); } catch (err) { console.error('Failed to clear memory'); }
+                  }}
+                />
+              )}
+              {rightPanelTab === 'history' && <HistoryPanel history={taskHistory} days={historyDays} setDays={setHistoryDays} agents={AGENTS} />}
+              {rightPanelTab === 'insights' && <InsightsPanel agents={AGENTS} />}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Modals */}
       {selectAgentsModal && (
@@ -903,7 +1083,7 @@ function Header({
       <div className="header-left">
         <button className="header-logo" onClick={() => setCommandPaletteOpen(true)}>SwarmOps</button>
         <button
-          className={`header-toggle ${smartRoutingMode ? 'active' : ''}`}
+          className={`header - toggle ${smartRoutingMode ? 'active' : ''} `}
           onClick={() => setSmartRoutingMode(!smartRoutingMode)}
           title="Smart Routing — Nexus auto-picks the best agent"
         >
@@ -915,7 +1095,7 @@ function Header({
 
       <div className="header-right">
         <button
-          className={`header-icon-btn ${feedbackLoopRunning ? 'active' : ''}`}
+          className={`header - icon - btn ${feedbackLoopRunning ? 'active' : ''} `}
           onClick={triggerFeedbackLoop}
           disabled={feedbackLoopRunning}
           title="Run Feedback Loop"
@@ -923,7 +1103,7 @@ function Header({
           {feedbackLoopRunning ? <Loader2 size={15} className="spinner" /> : <RefreshCw size={15} />}
         </button>
         <button
-          className={`header-icon-btn ${rightPanelOpen ? 'active' : ''}`}
+          className={`header - icon - btn ${rightPanelOpen ? 'active' : ''} `}
           onClick={() => { setRightPanelTab('analytics'); toggleRightPanel(); }}
           title="Analytics Panel (⌘B)"
         >
@@ -1006,7 +1186,7 @@ function MessageBubble({ message, isLatest }) {
   const providerKey = message.provider?.toLowerCase().split(' ')[0] || '';
 
   return (
-    <div className={`message agent-message ${isPipeline ? 'pipeline-message' : ''}`}>
+    <div className={`message agent - message ${isPipeline ? 'pipeline-message' : ''} `}>
       <div className="agent-emoji-icon">{message.agentIcon}</div>
       <div className="agent-message-body">
         <div className="agent-message-label">
@@ -1025,23 +1205,23 @@ function MessageBubble({ message, isLatest }) {
 
         {!isPipeline && (
           <div className="agent-message-content">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            <StructuredContent text={message.content} />
           </div>
         )}
 
         {(message.provider || message.latency_ms || message.quality) && !isPipeline && (
           <div className="message-meta-bar">
             {message.model && message.provider && (
-              <span className={`meta-badge provider-${providerKey}`}>{message.model}</span>
+              <span className={`meta - badge provider - ${providerKey} `}>{message.model}</span>
             )}
             {message.provider && (
-              <span className={`meta-badge provider-${providerKey}`}>{message.provider}</span>
+              <span className={`meta - badge provider - ${providerKey} `}>{message.provider}</span>
             )}
             {message.latency_ms && (
               <span className="meta-badge">{(message.latency_ms / 1000).toFixed(1)}s</span>
             )}
             {message.quality?.confidence != null && (
-              <span className={`meta-badge confidence-${getConfidenceLevel(message.quality.confidence)}`}>
+              <span className={`meta - badge confidence - ${getConfidenceLevel(message.quality.confidence)} `}>
                 {(message.quality.confidence * 100).toFixed(0)}%
               </span>
             )}
@@ -1050,15 +1230,15 @@ function MessageBubble({ message, isLatest }) {
         )}
 
         <div className="message-actions">
-          <button className={`msg-action-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
+          <button className={`msg - action - btn ${copied ? 'success' : ''} `} onClick={handleCopy}>
             {copied ? <Check size={12} /> : <Copy size={12} />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
           <button className="msg-action-btn"><Bookmark size={12} /><span>Save</span></button>
-          <button className={`msg-action-btn ${liked === true ? 'liked' : ''}`} onClick={() => setLiked(liked === true ? null : true)}>
+          <button className={`msg - action - btn ${liked === true ? 'liked' : ''} `} onClick={() => setLiked(liked === true ? null : true)}>
             <ThumbsUp size={12} />
           </button>
-          <button className={`msg-action-btn ${liked === false ? 'disliked' : ''}`} onClick={() => setLiked(liked === false ? null : false)}>
+          <button className={`msg - action - btn ${liked === false ? 'disliked' : ''} `} onClick={() => setLiked(liked === false ? null : false)}>
             <ThumbsDown size={12} />
           </button>
         </div>
@@ -1127,10 +1307,10 @@ function PipelineVisualization({ steps, totalLatency, expandedSteps, toggleStep 
       {/* Collapsible Step Details */}
       <div className="pipeline-steps-accordion">
         {steps.map((step, index) => (
-          <div key={index} className={`pipeline-step-card ${expandedSteps[index] ? 'expanded' : ''}`}>
+          <div key={index} className={`pipeline - step - card ${expandedSteps[index] ? 'expanded' : ''} `}>
             <button className="pipeline-step-header" onClick={() => toggleStep(index)}>
               <div className="step-header-left">
-                <div className={`step-icon confidence-${getConfidenceLevel(step.confidence)}`}>
+                <div className={`step - icon confidence - ${getConfidenceLevel(step.confidence)} `}>
                   <CheckCircle2 size={14} />
                 </div>
                 <span className="step-department">{step.department.toUpperCase()}</span>
@@ -1138,14 +1318,12 @@ function PipelineVisualization({ steps, totalLatency, expandedSteps, toggleStep 
               </div>
               <div className="step-header-right">
                 <span className="step-latency">{step.latency_ms}ms</span>
-                <ChevronDown size={16} className={`chevron ${expandedSteps[index] ? 'open' : ''}`} />
+                <ChevronDown size={16} className={`chevron ${expandedSteps[index] ? 'open' : ''} `} />
               </div>
             </button>
             {expandedSteps[index] && (
               <div className="pipeline-step-content">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {step.full_result || step.result}
-                </ReactMarkdown>
+                <StructuredContent text={step.full_result || step.result} />
               </div>
             )}
           </div>
@@ -1163,7 +1341,7 @@ function PipelineStep({ step, isParallel }) {
   };
 
   return (
-    <div className={`pipeline-step-box ${isParallel ? 'parallel' : ''}`}>
+    <div className={`pipeline - step - box ${isParallel ? 'parallel' : ''} `}>
       <div className="pipeline-step-name">{step.department.toUpperCase()}</div>
       <div className="pipeline-step-status">
         <div className="pipeline-status-dot" style={{ background: getStatusColor() }} />
@@ -1229,21 +1407,21 @@ function AnalyticsPanel({ trafficData, conversionData, realTimeData }) {
           <AreaChart data={trafficData}>
             <defs>
               <linearGradient id="gradientOrganic" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#818CF8" stopOpacity={0.4}/>
-                <stop offset="100%" stopColor="#818CF8" stopOpacity={0}/>
+                <stop offset="0%" stopColor="#818CF8" stopOpacity={0.4} />
+                <stop offset="100%" stopColor="#818CF8" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="gradientPaid" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#FBBF24" stopOpacity={0.4}/>
-                <stop offset="100%" stopColor="#FBBF24" stopOpacity={0}/>
+                <stop offset="0%" stopColor="#FBBF24" stopOpacity={0.4} />
+                <stop offset="100%" stopColor="#FBBF24" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="gradientSocial" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#F472B6" stopOpacity={0.4}/>
-                <stop offset="100%" stopColor="#F472B6" stopOpacity={0}/>
+                <stop offset="0%" stopColor="#F472B6" stopOpacity={0.4} />
+                <stop offset="100%" stopColor="#F472B6" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
             <XAxis dataKey="day" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
-            <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v/1000}k`} />
+            <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v / 1000} k`} />
             <Tooltip contentStyle={{ background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} />
             <Area type="monotone" dataKey="organic" stroke="#818CF8" strokeWidth={2} fill="url(#gradientOrganic)" />
             <Area type="monotone" dataKey="paid" stroke="#FBBF24" strokeWidth={2} fill="url(#gradientPaid)" />
@@ -1262,12 +1440,12 @@ function AnalyticsPanel({ trafficData, conversionData, realTimeData }) {
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={conversionData} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-            <XAxis type="number" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+            <XAxis type="number" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}% `} />
             <YAxis dataKey="page" type="category" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} width={70} />
-            <Tooltip contentStyle={{ background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} formatter={(v) => [`${v}%`, 'Conversion']} />
+            <Tooltip contentStyle={{ background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} formatter={(v) => [`${v}% `, 'Conversion']} />
             <Bar dataKey="conversions" radius={[0, 6, 6, 0]}>
               {conversionData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={['#34D399', '#22D3EE', '#818CF8', '#FBBF24', '#F472B6'][index % 5]} />
+                <Cell key={`cell - ${index} `} fill={['#34D399', '#22D3EE', '#818CF8', '#FBBF24', '#F472B6'][index % 5]} />
               ))}
             </Bar>
           </BarChart>
@@ -1282,10 +1460,10 @@ function MetricCard({ icon: Icon, label, value, change, positive }) {
   return (
     <div className="metric-card">
       <div className="metric-header">
-        <div className={`metric-icon ${positive ? 'positive' : 'negative'}`}>
+        <div className={`metric - icon ${positive ? 'positive' : 'negative'} `}>
           <Icon size={18} />
         </div>
-        <div className={`metric-change ${positive ? 'positive' : 'negative'}`}>
+        <div className={`metric - change ${positive ? 'positive' : 'negative'} `}>
           {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
           <span>{change}</span>
         </div>
@@ -1312,7 +1490,7 @@ function ActivityPanel({ agents }) {
           const AgentIcon = activity.agent.icon;
           return (
             <div key={i} className="activity-item">
-              <div className="activity-avatar" style={{ background: `linear-gradient(135deg, ${activity.agent.gradientFrom}, ${activity.agent.gradientTo})` }}>
+              <div className="activity-avatar" style={{ background: `linear - gradient(135deg, ${activity.agent.gradientFrom}, ${activity.agent.gradientTo})` }}>
                 <AgentIcon size={16} />
               </div>
               <div className="activity-content">
@@ -1322,7 +1500,7 @@ function ActivityPanel({ agents }) {
                 </div>
                 <div className="activity-target">{activity.target}</div>
                 <div className="activity-meta">
-                  <span className={`activity-status ${activity.status}`}>
+                  <span className={`activity - status ${activity.status} `}>
                     {activity.status === 'completed' ? <><CheckCircle2 size={12} /> Done</> : <><Loader2 size={12} className="spinner" /> Running</>}
                   </span>
                   <span className="activity-time">{activity.time}</span>
@@ -1351,18 +1529,18 @@ function InsightsPanel({ agents }) {
         {insights.map((insight, i) => {
           const AgentIcon = insight.agent.icon;
           return (
-            <div key={i} className={`insight-card priority-${insight.priority}`}>
+            <div key={i} className={`insight - card priority - ${insight.priority} `}>
               <div className="insight-priority-bar" />
               <div className="insight-content">
                 <div className="insight-header">
                   <h4 className="insight-title">{insight.title}</h4>
-                  <span className={`priority-badge ${insight.priority}`}>{insight.priority}</span>
+                  <span className={`priority - badge ${insight.priority} `}>{insight.priority}</span>
                 </div>
                 <p className="insight-description">{insight.description}</p>
                 <div className="insight-impact"><Zap size={14} /><span>{insight.impact}</span></div>
                 <div className="insight-footer">
                   <div className="insight-agent">
-                    <div className="insight-agent-icon" style={{ background: `linear-gradient(135deg, ${insight.agent.gradientFrom}, ${insight.agent.gradientTo})` }}>
+                    <div className="insight-agent-icon" style={{ background: `linear - gradient(135deg, ${insight.agent.gradientFrom}, ${insight.agent.gradientTo})` }}>
                       <AgentIcon size={12} />
                     </div>
                     <span>{insight.agent.shortName}</span>
@@ -1403,14 +1581,14 @@ function Footer({ activeAgents, totalTasks, toggleRightPanel, rightPanelOpen, se
         <div className="footer-info"><CheckCircle2 size={14} /><span>{totalTasks.toLocaleString()} tasks</span></div>
         <div className="footer-divider" />
         {/* Integration Status */}
-        <div className={`integration-status ${connectedCount > 0 ? 'connected' : 'disconnected'}`}>
+        <div className={`integration - status ${connectedCount > 0 ? 'connected' : 'disconnected'} `}>
           <Globe size={14} />
           <span>{connectedCount}/{totalIntegrations} integrations</span>
           {integrationStatus && (
             <div className="integration-tooltip">
               {Object.entries(integrationStatus.integrations || {}).map(([name, status]) => (
-                <div key={name} className={`integration-item ${status ? 'active' : 'inactive'}`}>
-                  <span className={`status-dot ${status ? 'online' : 'offline'}`} />
+                <div key={name} className={`integration - item ${status ? 'active' : 'inactive'} `}>
+                  <span className={`status - dot ${status ? 'online' : 'offline'} `} />
                   <span>{name.replace('_', ' ')}</span>
                 </div>
               ))}
@@ -1419,7 +1597,7 @@ function Footer({ activeAgents, totalTasks, toggleRightPanel, rightPanelOpen, se
         </div>
       </div>
       <div className="footer-right">
-        <button className={`footer-btn ${rightPanelOpen ? 'active' : ''}`} onClick={() => { setRightPanelTab('analytics'); toggleRightPanel(); }}>
+        <button className={`footer - btn ${rightPanelOpen ? 'active' : ''} `} onClick={() => { setRightPanelTab('analytics'); toggleRightPanel(); }}>
           <BarChart3 size={16} /><span>Analytics</span>
         </button>
         <button className="footer-btn" onClick={() => { setRightPanelTab('insights'); toggleRightPanel(); }}>
@@ -1455,11 +1633,11 @@ function SelectAgentsModal({ agents, selectedAgents, onSelectAgent, onClose }) {
             return (
               <button
                 key={agent.id}
-                className={`agent-list-item ${isAlreadySelected ? 'already-selected' : ''}`}
+                className={`agent - list - item ${isAlreadySelected ? 'already-selected' : ''} `}
                 onClick={() => !isAlreadySelected && onSelectAgent(agent.id)}
                 disabled={isAlreadySelected}
               >
-                <div className="agent-list-icon" style={{ background: `linear-gradient(135deg, ${agent.gradientFrom}, ${agent.gradientTo})` }}>
+                <div className="agent-list-icon" style={{ background: `linear - gradient(135deg, ${agent.gradientFrom}, ${agent.gradientTo})` }}>
                   <AgentIcon size={20} />
                 </div>
                 <div className="agent-list-info">
@@ -1511,7 +1689,7 @@ function CommandPalette({ agents, onClose, setSelectedAgent, setSettingsOpen, to
             const Icon = cmd.icon;
             return (
               <button key={cmd.id} className="command-item" onClick={() => { cmd.action(); onClose(); }}>
-                <div className="command-icon" style={cmd.color ? { background: `${cmd.color}20`, color: cmd.color } : {}}>
+                <div className="command-icon" style={cmd.color ? { background: `${cmd.color} 20`, color: cmd.color } : {}}>
                   <Icon size={18} />
                 </div>
                 <span className="command-label">{cmd.label}</span>
@@ -1540,11 +1718,11 @@ function SettingsModal({ darkMode, setDarkMode, soundEnabled, setSoundEnabled, o
           <div className="settings-section">
             <h4 className="settings-section-title">Appearance</h4>
             <div className="theme-selector">
-              <button className={`theme-option ${!darkMode ? 'active' : ''}`} onClick={() => setDarkMode(false)}>
+              <button className={`theme - option ${!darkMode ? 'active' : ''} `} onClick={() => setDarkMode(false)}>
                 <div className="theme-preview light"><div className="preview-header" /><div className="preview-content"><div className="preview-line" /><div className="preview-line short" /></div></div>
                 <div className="theme-info"><Sun size={16} /><span>Light</span></div>
               </button>
-              <button className={`theme-option ${darkMode ? 'active' : ''}`} onClick={() => setDarkMode(true)}>
+              <button className={`theme - option ${darkMode ? 'active' : ''} `} onClick={() => setDarkMode(true)}>
                 <div className="theme-preview dark"><div className="preview-header" /><div className="preview-content"><div className="preview-line" /><div className="preview-line short" /></div></div>
                 <div className="theme-info"><Moon size={16} /><span>Dark</span></div>
               </button>
@@ -1602,7 +1780,7 @@ function RateLimitMonitor({ rateLimits }) {
         else if (percentage >= 50) statusClass = 'warning';
 
         return (
-          <div key={provider} className={`rate-limit-badge ${statusClass}`}>
+          <div key={provider} className={`rate - limit - badge ${statusClass} `}>
             <span className="provider-name">{provider}</span>
             <span className="rate-count">{info.used}/{info.limit}</span>
           </div>
@@ -1653,7 +1831,7 @@ function StatsPanel({ stats }) {
         </div>
         <div className="stats-big-card">
           <div className="stats-big-label">Avg Confidence</div>
-          <div className={`stats-big-value confidence-${getConfidenceLevel((stats.avg_confidence || 0))}`}>
+          <div className={`stats - big - value confidence - ${getConfidenceLevel((stats.avg_confidence || 0))} `}>
             {((stats.avg_confidence || 0) * 100).toFixed(0)}%
           </div>
         </div>
@@ -1669,7 +1847,7 @@ function StatsPanel({ stats }) {
               <div className="stats-bar-wrapper">
                 <div
                   className="stats-bar-fill"
-                  style={{ width: `${(count / maxModelCount) * 100}%` }}
+                  style={{ width: `${(count / maxModelCount) * 100}% ` }}
                 />
                 <span className="stats-bar-count">{count}</span>
               </div>
@@ -1688,7 +1866,7 @@ function StatsPanel({ stats }) {
               <div className="stats-bar-wrapper">
                 <div
                   className="stats-bar-fill dept-fill"
-                  style={{ width: `${(count / maxDeptCount) * 100}%` }}
+                  style={{ width: `${(count / maxDeptCount) * 100}% ` }}
                 />
                 <span className="stats-bar-count">{count}</span>
               </div>
@@ -1707,7 +1885,7 @@ function StatsPanel({ stats }) {
               <div className="stats-bar-wrapper">
                 <div
                   className="stats-bar-fill provider-fill"
-                  style={{ width: `${(count / maxProviderCount) * 100}%` }}
+                  style={{ width: `${(count / maxProviderCount) * 100}% ` }}
                 />
                 <span className="stats-bar-count">{count}</span>
               </div>
@@ -1750,7 +1928,7 @@ function MemoryPanel({ memories, department, setDepartment, agents, onClearMemor
           memories.map((memory, index) => (
             <div key={index} className="memory-card">
               <div className="memory-card-header">
-                <span className={`memory-type-badge ${memory.type}`}>
+                <span className={`memory - type - badge ${memory.type} `}>
                   {memory.type}
                 </span>
                 <span className="memory-time">
@@ -1867,14 +2045,14 @@ function HistoryPanel({ history, days, setDays, agents }) {
               {filteredHistory.map((task, index) => (
                 <React.Fragment key={index}>
                   <tr
-                    className={`history-row ${expandedTask === index ? 'expanded' : ''}`}
+                    className={`history - row ${expandedTask === index ? 'expanded' : ''} `}
                     onClick={() => setExpandedTask(expandedTask === index ? null : index)}
                   >
                     <td className="history-time">{getRelativeTime(task.timestamp)}</td>
                     <td className="history-dept">{task.department?.toUpperCase() || 'N/A'}</td>
                     <td className="history-model">{task.model || 'N/A'}</td>
                     <td className="history-provider">{task.provider || 'N/A'}</td>
-                    <td className={`history-confidence confidence-${getConfidenceLevel(task.confidence || 0)}`}>
+                    <td className={`history - confidence confidence - ${getConfidenceLevel(task.confidence || 0)} `}>
                       {((task.confidence || 0) * 100).toFixed(0)}%
                     </td>
                     <td className="history-latency">{task.latency_ms || 0}ms</td>
@@ -1912,7 +2090,7 @@ function AppSidebar({ collapsed, setCollapsed, agents, selectedAgentId, setSelec
     : [];
 
   return (
-    <div className={`sidebar ${!collapsed ? 'expanded' : ''}`}>
+    <div className={`sidebar ${!collapsed ? 'expanded' : ''} `}>
       {/* Logo + collapse button */}
       <div className="sidebar-header">
         <div className="sidebar-logo">
@@ -1942,7 +2120,7 @@ function AppSidebar({ collapsed, setCollapsed, agents, selectedAgentId, setSelec
           return (
             <button
               key={agent.id}
-              className={`sidebar-nav-item ${selectedAgentId === agent.id ? 'active' : ''}`}
+              className={`sidebar - nav - item ${selectedAgentId === agent.id ? 'active' : ''} `}
               onClick={() => setSelectedAgent(agent.id)}
               title={agent.name}
             >

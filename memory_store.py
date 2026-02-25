@@ -278,6 +278,29 @@ class MemoryStore:
         conn.commit()
 
     # ------------------------------------------------------------------
+    # Brand Context (Nexus Context Injection)
+    # ------------------------------------------------------------------
+
+    def get_brand_context(self) -> dict:
+        """Get the core Brand Context for Nexus."""
+        keys = ["company_name", "industry", "target_audience", "budget_constraints", "current_funnel_bottleneck"]
+        conn = self._get_conn()
+        placeholders = ",".join("?" for _ in keys)
+        rows = conn.execute(f"SELECT key, value FROM business_profile WHERE key IN ({placeholders})", keys).fetchall()
+        context = {k: "Unknown" for k in keys}
+        for r in rows:
+            context[r["key"]] = r["value"]
+        return context
+
+    def update_brand_context(self, updates: dict):
+        """Update the Brand Context values via dictionary."""
+        allowed_keys = {"company_name", "industry", "target_audience", "budget_constraints", "current_funnel_bottleneck"}
+        for k, v in updates.items():
+            k_lower = k.lower().strip()
+            if k_lower in allowed_keys and v:
+                self.set_profile_key(k_lower, str(v))
+
+    # ------------------------------------------------------------------
     # Agent Insights
     # ------------------------------------------------------------------
 

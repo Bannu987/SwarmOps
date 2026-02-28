@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 import sys
 import os
 import io
+import json
 import requests
 
 # Fix Windows encoding — agent modules print emoji that crash charmap codec
@@ -218,6 +219,12 @@ def health():
         db_info["total_recommendations"] = len(recs)
     except Exception:
         pass
+
+    try:
+        from competitive_intel import get_competitive_intel
+        db_info["competitors_tracked"] = len(get_competitive_intel().list_competitors())
+    except Exception:
+        db_info["competitors_tracked"] = 0
 
     return {"status": "healthy", "agents": 10, "database": db_info}
 
@@ -1114,6 +1121,15 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         except Exception:
             pass  # never block on brand context injection
 
+        # --- inject Competitive Intelligence context (competition-aware agents) ---
+        try:
+            from competitive_intel import get_competitive_intel
+            _comp_context = get_competitive_intel().get_competitive_context()
+            if _comp_context:
+                msg = _comp_context + "\n\n" + msg
+        except Exception:
+            pass  # never block on competitive context injection
+
         # --- inject LearningEngine personalization context ---
         _learning_context = ""
         try:
@@ -1265,6 +1281,36 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                     "error": result.get("error", "Deep research failed"),
                     "result": result.get("summary", "Research unavailable")
                 }
+
+        elif agent == "competitive_intel":
+            # Route to dedicated Competitive Intelligence module
+            from competitive_intel import get_competitive_intel
+            ci = get_competitive_intel()
+            user_msg_lower = user_msg.lower()
+            # Detect what the user wants to do
+            if any(kw in user_msg_lower for kw in ("battle card", "battlecard", "battle-card")):
+                # Pull first tracked competitor as default
+                comps = ci.list_competitors()
+                if comps:
+                    result = ci.generate_battle_card(comps[0]["id"])
+                else:
+                    result = "No competitors tracked yet. Add competitors first via POST /api/competitors."
+            elif any(kw in user_msg_lower for kw in ("compare", "comparison", "landscape", "matrix")):
+                comp_result = ci.compare_competitors()
+                result = json.dumps(comp_result, indent=2)
+            elif any(kw in user_msg_lower for kw in ("alert", "change", "detect")):
+                alerts = ci.get_alerts(acknowledged=False)
+                result = f"Unacknowledged alerts ({len(alerts)}):\n" + json.dumps(alerts, indent=2)
+            else:
+                # General competitive analysis — compare all
+                comps = ci.list_competitors()
+                if comps:
+                    comp_result = ci.compare_competitors()
+                    result = json.dumps(comp_result, indent=2)
+                else:
+                    result = "No competitors tracked yet. Add competitors via POST /api/competitors."
+            skip_review = True  # Already structured output
+            agent_fn = None
 
         else:  # "nexus" or anything else → smart routing
             nexus = get_nexus()
@@ -1756,6 +1802,139 @@ def reset_learning():
         from learning_engine import get_learning_engine
         get_learning_engine().reset()
         return {"success": True, "message": "All learned preferences and interaction history cleared."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# COMPETITIVE INTELLIGENCE ENDPOINTS
+# ============================================================================
+
+class AddCompetitorRequest(BaseModel):
+    name: str
+    url: str
+
+class CompareCompetitorsRequest(BaseModel):
+    competitor_ids: Optional[List[str]] = None
+
+
+# IMPORTANT: static paths (/compare, /alerts) must be declared BEFORE /{id} routes
+# to prevent FastAPI from matching 'compare' or 'alerts' as a competitor_id.
+
+@app.post("/api/competitors")
+def add_competitor(request: AddCompetitorRequest):
+    """Add a new competitor to track. Triggers initial full analysis automatically."""
+    try:
+        from competitive_intel import get_competitive_intel
+        ci = get_competitive_intel()
+        competitor_id = ci.add_competitor(name=request.name, website_url=request.url)
+        comps = ci.list_competitors()
+        comp = next((c for c in comps if c["id"] == competitor_id), None)
+        return {
+            "success": True,
+            "competitor_id": competitor_id,
+            "name": request.name,
+            "url": request.url,
+            "competitor": comp,
+            "message": f"Added {request.name} and triggered initial analysis.",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/competitors")
+def list_competitors():
+    """List all tracked competitors with latest snapshot metadata."""
+    try:
+        from competitive_intel import get_competitive_intel
+        comps = get_competitive_intel().list_competitors()
+        return {"success": True, "competitors": comps, "count": len(comps)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/competitors/compare")
+def compare_all_competitors(competitor_ids: Optional[str] = None):
+    """
+    Generate a competitive comparison matrix across all tracked competitors.
+    Optionally pass ?competitor_ids=id1,id2 to compare a subset.
+    """
+    try:
+        from competitive_intel import get_competitive_intel
+        ids = competitor_ids.split(",") if competitor_ids else None
+        result = get_competitive_intel().compare_competitors(competitor_ids=ids)
+        return {"success": True, **result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/competitors/alerts")
+def get_competitive_alerts(acknowledged: bool = False):
+    """Get competitive alerts. Default: unacknowledged only. Use ?acknowledged=true for all."""
+    try:
+        from competitive_intel import get_competitive_intel
+        alerts = get_competitive_intel().get_alerts(acknowledged=acknowledged)
+        return {
+            "success": True,
+            "alerts": alerts,
+            "count": len(alerts),
+            "unacknowledged": len([a for a in alerts if not a.get("acknowledged")]),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/competitors/{competitor_id}")
+def remove_competitor(competitor_id: str):
+    """Remove a competitor and all associated snapshots and alerts."""
+    try:
+        from competitive_intel import get_competitive_intel
+        get_competitive_intel().remove_competitor(competitor_id)
+        return {"success": True, "message": f"Competitor {competitor_id} removed."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/competitors/{competitor_id}/analyze")
+def analyze_competitor(competitor_id: str):
+    """Run a full multi-dimensional analysis of a specific competitor."""
+    try:
+        from competitive_intel import get_competitive_intel
+        result = get_competitive_intel().analyze_competitor(competitor_id)
+        return {"success": True, **result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/competitors/{competitor_id}/snapshots")
+def get_competitor_snapshots(competitor_id: str, snapshot_type: Optional[str] = None):
+    """Get analysis history for a competitor. Optionally filter by type (seo/content/social/ads/website)."""
+    try:
+        from competitive_intel import get_competitive_intel
+        snaps = get_competitive_intel().get_snapshots(competitor_id, snapshot_type=snapshot_type)
+        return {"success": True, "competitor_id": competitor_id, "snapshots": snaps, "count": len(snaps)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/competitors/{competitor_id}/battle-card")
+def get_battle_card(competitor_id: str):
+    """Generate a comprehensive sales battle card vs a specific competitor."""
+    try:
+        from competitive_intel import get_competitive_intel
+        card = get_competitive_intel().generate_battle_card(competitor_id)
+        return {"success": True, "competitor_id": competitor_id, "battle_card": card}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/competitors/alerts/{alert_id}/acknowledge")
+def acknowledge_alert(alert_id: str):
+    """Mark a competitive alert as read/acknowledged."""
+    try:
+        from competitive_intel import get_competitive_intel
+        get_competitive_intel().acknowledge_alert(alert_id)
+        return {"success": True, "alert_id": alert_id, "message": "Alert acknowledged."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

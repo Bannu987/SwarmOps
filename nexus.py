@@ -698,7 +698,21 @@ class Nexus:
             'create', 'draft', 'compose', 'caption'
         ]
 
-        # Priority order: Brand > WebUX > CRO > Analytics > PPC > CRM > SEO > SMM > Research > Content
+        # COMPETITIVE INTELLIGENCE keywords — specific intel queries (checked FIRST before SEO
+        # to intercept 'competitor' when user wants tracked-competitor analysis/battle cards)
+        competitive_intel_keywords = [
+            'battle card', 'battlecard', 'battle-card',
+            'competitive intelligence', 'competitive analysis',
+            'add competitor', 'track competitor', 'competitive monitoring',
+            'how do we compare', 'compare us to', 'stack up against',
+            'market position', 'competitive landscape', 'who are our competitors',
+        ]
+
+        # Priority order: Competitive Intel > Brand > WebUX > CRO > Analytics > PPC > CRM > SEO > SMM > Research > Content
+        if any(keyword in goal_lower for keyword in competitive_intel_keywords):
+            print(f"✅ Decision: Competitive Intelligence Agent (detected competitive analysis task)")
+            return "competitive_intel"
+
         if any(keyword in goal_lower for keyword in brand_keywords):
             print(f"✅ Decision: Brand Strategist Agent (detected branding task)")
             return "brand"

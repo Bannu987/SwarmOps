@@ -123,6 +123,133 @@ export const api = {
       headers: { 'Content-Type': 'application/json' }
     });
     return response.data;
+  },
+
+  // Competitive Intelligence
+  competitors: {
+    list: async () => {
+      const r = await axios.get(`${API_BASE}/api/competitors`);
+      return r.data;
+    },
+    add: async (name, url) => {
+      const r = await axios.post(`${API_BASE}/api/competitors`, { name, url }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 90000
+      });
+      return r.data;
+    },
+    remove: async (id) => {
+      const r = await axios.delete(`${API_BASE}/api/competitors/${id}`);
+      return r.data;
+    },
+    analyze: async (id) => {
+      const r = await axios.post(`${API_BASE}/api/competitors/${id}/analyze`, {}, {
+        timeout: 90000
+      });
+      return r.data;
+    },
+    compare: async () => {
+      const r = await axios.get(`${API_BASE}/api/competitors/compare`, {
+        timeout: 90000
+      });
+      return r.data;
+    },
+    alerts: async () => {
+      const r = await axios.get(`${API_BASE}/api/competitors/alerts`);
+      return r.data;
+    },
+    acknowledgeAlert: async (id) => {
+      const r = await axios.post(`${API_BASE}/api/competitors/alerts/${id}/acknowledge`);
+      return r.data;
+    },
+    battleCard: async (id) => {
+      const r = await axios.get(`${API_BASE}/api/competitors/${id}/battle-card`, {
+        timeout: 90000
+      });
+      return r.data;
+    },
+    snapshots: async (id) => {
+      const r = await axios.get(`${API_BASE}/api/competitors/${id}/snapshots`);
+      return r.data;
+    }
+  },
+
+  // Brand DNA
+  brandDna: {
+    get: async () => {
+      const r = await axios.get(`${API_BASE}/api/brand-dna`);
+      return r.data;
+    },
+    extract: async (url) => {
+      const r = await axios.post(`${API_BASE}/api/brand-dna/extract`, { url }, {
+        timeout: 60000,
+        headers: { 'Content-Type': 'application/json' }
+      });
+      return r.data;
+    },
+    update: async (data) => {
+      const r = await axios.put(`${API_BASE}/api/brand-dna`, data, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      return r.data;
+    }
+  },
+
+  // Learning Engine
+  learning: {
+    preferences: async () => {
+      const r = await axios.get(`${API_BASE}/api/learning/preferences`);
+      return r.data;
+    },
+    insights: async (agent) => {
+      const r = await axios.get(`${API_BASE}/api/learning/insights/${agent}`);
+      return r.data;
+    },
+    feedback: async (agent, query, quality, notes) => {
+      const r = await axios.post(`${API_BASE}/api/learning/feedback`, {
+        agent, query, response_quality: quality, notes
+      }, { headers: { 'Content-Type': 'application/json' } });
+      return r.data;
+    },
+    reset: async () => {
+      const r = await axios.delete(`${API_BASE}/api/learning/reset`);
+      return r.data;
+    }
+  },
+
+  // Revenue Tracker
+  recommendations: {
+    list: async (agent) => {
+      const url = agent
+        ? `${API_BASE}/api/recommendations/${agent}`
+        : `${API_BASE}/api/recommendations`;
+      const r = await axios.get(url);
+      return r.data;
+    },
+    recordOutcome: async (id, actualImpact) => {
+      const r = await axios.post(`${API_BASE}/api/recommendations/${id}/outcome`, {
+        actual_impact: actualImpact
+      }, { headers: { 'Content-Type': 'application/json' } });
+      return r.data;
+    },
+    performance: async () => {
+      const r = await axios.get(`${API_BASE}/api/agent-performance`);
+      return r.data;
+    }
+  },
+
+  // Database
+  database: {
+    export: async () => {
+      const r = await axios.post(`${API_BASE}/api/database/export`);
+      return r.data;
+    },
+    import: async (data) => {
+      const r = await axios.post(`${API_BASE}/api/database/import`, data, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      return r.data;
+    }
   }
 };
 

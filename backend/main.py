@@ -786,6 +786,26 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         except Exception:
             pass  # never block on context injection
 
+        # --- inject BrandDNA context (brand voice + identity for all agents) ---
+        try:
+            from brand_dna import get_brand_dna
+            brand_context = get_brand_dna().get_brand_context()
+            if brand_context:
+                msg = brand_context + "\n\n" + msg
+        except Exception:
+            pass  # never block on brand context injection
+
+        # --- inject LearningEngine personalization context ---
+        _learning_context = ""
+        try:
+            from learning_engine import get_learning_engine
+            _learning_engine = get_learning_engine()
+            _learning_context = _learning_engine.get_context_boost(agent)
+            if _learning_context:
+                msg = _learning_context + "\n\n" + msg
+        except Exception:
+            _learning_engine = None
+
         # --- dispatch to the correct agent and capture a revision callable ---
         result = None
         agent_fn = None  # callable(prompt) -> str for revisions
@@ -999,6 +1019,24 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             except Exception:
                 pass  # never block on memory save
 
+        # --- auto-log recommendations to Revenue Tracker ---
+        try:
+            from revenue_tracker import get_revenue_tracker
+            get_revenue_tracker().auto_log_from_response(agent, final_text)
+        except Exception:
+            pass  # never block on revenue tracking
+
+        # --- record interaction in LearningEngine ---
+        try:
+            if locals().get("_learning_engine"):
+                _learning_engine.record_interaction(
+                    agent=agent,
+                    query=request.message,
+                    response_quality="good",
+                )
+        except Exception:
+            pass  # never block on learning
+
         response = {
             "success": True,
             "agent": agent,
@@ -1147,6 +1185,181 @@ def get_integration_status():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# BRAND DNA ENDPOINTS
+# ============================================================================
+
+class BrandDNAExtractRequest(BaseModel):
+    url: str
+
+class BrandDNAUpdateRequest(BaseModel):
+    brand_name: Optional[str] = None
+    tagline: Optional[str] = None
+    brand_voice: Optional[str] = None
+    value_proposition: Optional[str] = None
+    target_audience: Optional[str] = None
+    industry: Optional[str] = None
+
+@app.post("/api/brand-dna/extract")
+async def extract_brand_dna(request: BrandDNAExtractRequest):
+    """Extract BrandDNA from a website URL — analyzes brand voice, tone, audience, CTAs."""
+    try:
+        from brand_dna import get_brand_dna
+        result = await __import__("asyncio").get_event_loop().run_in_executor(
+            None, get_brand_dna().extract, request.url
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/brand-dna")
+def get_brand_dna_stored():
+    """Return the most recently extracted BrandDNA."""
+    try:
+        from brand_dna import get_brand_dna
+        dna = get_brand_dna().get_stored()
+        if not dna:
+            return {"success": False, "message": "No BrandDNA extracted yet. POST /api/brand-dna/extract first."}
+        return {"success": True, "brand_dna": dna}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/brand-dna")
+def update_brand_dna(request: BrandDNAUpdateRequest):
+    """Manually override specific BrandDNA fields."""
+    try:
+        from brand_dna import get_brand_dna, _get_conn
+        import json as _json
+        dna = get_brand_dna().get_stored()
+        if not dna:
+            return {"success": False, "message": "No BrandDNA found. Extract first."}
+        updates = request.dict(exclude_none=True)
+        dna.update(updates)
+        # Re-store updated dna
+        get_brand_dna()._store(dna.get("url", "manual"), dna)
+        return {"success": True, "updated_fields": list(updates.keys()), "brand_dna": dna}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# REVENUE TRACKER ENDPOINTS
+# ============================================================================
+
+class OutcomeRequest(BaseModel):
+    actual_impact: float  # decimal: 0.15 = 15%
+
+class RecommendationStatusRequest(BaseModel):
+    status: str  # pending / implemented / skipped / measured
+
+@app.get("/api/recommendations")
+def get_all_recommendations(limit: int = 50):
+    """List all tracked recommendations across all agents."""
+    try:
+        from revenue_tracker import get_revenue_tracker
+        recs = get_revenue_tracker().get_recommendation_history(limit=limit)
+        return {"success": True, "recommendations": recs, "count": len(recs)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/recommendations/{agent}")
+def get_agent_recommendations(agent: str, limit: int = 50):
+    """List tracked recommendations for a specific agent."""
+    try:
+        from revenue_tracker import get_revenue_tracker
+        recs = get_revenue_tracker().get_recommendation_history(agent=agent, limit=limit)
+        return {"success": True, "agent": agent, "recommendations": recs, "count": len(recs)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/recommendations/{rec_id}/outcome")
+def record_recommendation_outcome(rec_id: str, request: OutcomeRequest):
+    """Record the actual measured impact for a recommendation (e.g., actual_impact=0.12 = 12%)."""
+    try:
+        from revenue_tracker import get_revenue_tracker
+        get_revenue_tracker().record_outcome(rec_id, request.actual_impact)
+        return {"success": True, "recommendation_id": rec_id, "actual_impact": request.actual_impact}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/recommendations/{rec_id}/status")
+def update_recommendation_status(rec_id: str, request: RecommendationStatusRequest):
+    """Update the status of a recommendation (implemented / skipped / measured)."""
+    try:
+        from revenue_tracker import get_revenue_tracker
+        get_revenue_tracker().update_status(rec_id, request.status)
+        return {"success": True, "recommendation_id": rec_id, "status": request.status}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/agent-performance")
+def get_agent_performance_leaderboard():
+    """Agent accuracy leaderboard — which agents make the most accurate predictions."""
+    try:
+        from revenue_tracker import get_revenue_tracker
+        leaderboard = get_revenue_tracker().get_all_agent_performance()
+        return {"success": True, "leaderboard": leaderboard, "count": len(leaderboard)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# LEARNING ENGINE ENDPOINTS
+# ============================================================================
+
+class FeedbackRequest(BaseModel):
+    agent: str
+    query: str
+    response_quality: str = "good"  # good / modified / rejected
+    modification_notes: Optional[str] = None
+
+@app.get("/api/learning/preferences")
+def get_learning_preferences():
+    """Show all preferences the system has learned about this user."""
+    try:
+        from learning_engine import get_learning_engine
+        prefs = get_learning_engine().get_all_preferences()
+        context = get_learning_engine().get_context_boost("general")
+        return {"success": True, "preferences": prefs, "active_context": context, "count": len(prefs)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/learning/insights/{agent}")
+def get_learning_agent_insights(agent: str):
+    """What has the system learned about how this user interacts with this specific agent."""
+    try:
+        from learning_engine import get_learning_engine
+        insights = get_learning_engine().get_agent_insights(agent)
+        return {"success": True, **insights}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/learning/feedback")
+def submit_learning_feedback(request: FeedbackRequest):
+    """Submit feedback on an agent response to improve personalization."""
+    try:
+        from learning_engine import get_learning_engine
+        get_learning_engine().record_interaction(
+            agent=request.agent,
+            query=request.query,
+            response_quality=request.response_quality,
+            notes=request.modification_notes,
+        )
+        return {"success": True, "message": "Feedback recorded. System will adapt over time."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/learning/reset")
+def reset_learning():
+    """Reset all learned preferences and interaction history."""
+    try:
+        from learning_engine import get_learning_engine
+        get_learning_engine().reset()
+        return {"success": True, "message": "All learned preferences and interaction history cleared."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # RUN

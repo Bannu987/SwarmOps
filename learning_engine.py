@@ -6,26 +6,10 @@ Personalizes all agent responses without any manual configuration.
 
 import os
 import json
-import sqlite3
-import threading
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Optional
-
-# ---------------------------------------------------------------------------
-# Shared DB — same marketingos.db as memory_store.py / brand_dna.py
-# ---------------------------------------------------------------------------
-
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "marketingos.db")
-_local = threading.local()
-
-
-def _get_conn() -> sqlite3.Connection:
-    """Thread-local connection to marketingos.db."""
-    if not hasattr(_local, "conn") or _local.conn is None:
-        _local.conn = sqlite3.connect(DB_PATH)
-        _local.conn.row_factory = sqlite3.Row
-    return _local.conn
+from db import get_connection as _get_conn, DB_PATH
 
 
 def _init_tables():

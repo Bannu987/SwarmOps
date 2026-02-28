@@ -8,22 +8,22 @@ import json
 import os
 import threading
 from datetime import datetime, timedelta, timezone
+from db import get_connection as _db_get_connection, DB_PATH
 
 
 class MemoryStore:
     """Persistent memory for all SwarmOps agents using SQLite."""
 
-    def __init__(self, db_path="marketingos.db"):
-        self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), db_path)
+    def __init__(self, db_path=None):
+        # db_path param kept for backwards compatibility but ignored —
+        # all modules share the single DB_PATH from db.py
+        self.db_path = DB_PATH
         self._local = threading.local()
         self._init_tables()
 
     def _get_conn(self):
-        """Get a thread-local SQLite connection."""
-        if not hasattr(self._local, "conn") or self._local.conn is None:
-            self._local.conn = sqlite3.connect(self.db_path)
-            self._local.conn.row_factory = sqlite3.Row
-        return self._local.conn
+        """Get a thread-local SQLite connection via centralized db.py."""
+        return _db_get_connection()
 
     def _init_tables(self):
         conn = self._get_conn()

@@ -190,7 +190,36 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "agents": 10}
+    """Health check — includes database stats for monitoring."""
+    db_info = {}
+    try:
+        from db import get_db_path, get_db_size_mb, get_table_count, get_connection
+        conn = get_connection()
+        db_info["path"] = get_db_path()
+        db_info["size_mb"] = get_db_size_mb()
+        db_info["tables"] = get_table_count()
+
+        # brand_dna configured?
+        row = conn.execute("SELECT COUNT(*) as c FROM brand_dna").fetchone()
+        db_info["brand_dna_configured"] = row["c"] > 0 if row else False
+    except Exception:
+        pass
+
+    try:
+        from memory_store import get_memory_store
+        stats = get_memory_store().get_stats()
+        db_info["total_tasks"] = stats.get("total_tasks", 0)
+    except Exception:
+        pass
+
+    try:
+        from revenue_tracker import get_revenue_tracker
+        recs = get_revenue_tracker().get_recommendation_history(limit=1000)
+        db_info["total_recommendations"] = len(recs)
+    except Exception:
+        pass
+
+    return {"status": "healthy", "agents": 10, "database": db_info}
 
 @app.get("/api/debug-env")
 def debug_env():
@@ -701,6 +730,283 @@ async def deep_research_endpoint(request: DeepResearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
+# SMART ONBOARDING HELPER
+# Called at the very start of /api/chat before any agent logic.
+# Returns a response dict if onboarding is active, None if user is fully set up.
+# ============================================================================
+
+import re as _url_re
+_URL_PATTERN = _url_re.compile(
+    r'(https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9][a-zA-Z0-9\-]*\.[a-z]{2,}(?:/[^\s]*)?)',
+    _url_re.IGNORECASE
+)
+
+def _is_url(text: str) -> str | None:
+    """Extract a URL from text, or return None if none found."""
+    m = _URL_PATTERN.search(text.strip())
+    if not m:
+        return None
+    url = m.group(0)
+    if not url.startswith("http"):
+        url = "https://" + url
+    return url
+
+def _onboarding_complete() -> bool:
+    """
+    Return True if the user has EXPLICITLY completed or skipped onboarding.
+    NOTE: brand_dna table having rows does NOT mean complete — the URL step
+    stores BrandDNA mid-flow. Only check explicit completion markers.
+    """
+    try:
+        from memory_store import get_memory_store
+        mem = get_memory_store()
+        # Explicitly marked complete (step 3 finished or skip command used)
+        if mem.get_profile_key("onboarding_step") == "complete":
+            return True
+        # website_url set means either completed or manually configured via API
+        if mem.get_profile_key("website_url"):
+            return True
+    except Exception:
+        pass
+    return False
+
+async def _handle_onboarding(user_msg: str, agent: str):
+    """
+    Smart onboarding state machine.
+    Returns a response dict if onboarding is active, None if already complete or agent is not nexus.
+    """
+    # Only intercept nexus agent messages
+    if agent not in ("nexus", ""):
+        return None
+
+    # Check if already onboarded
+    if _onboarding_complete():
+        return None
+
+    try:
+        from memory_store import get_memory_store
+        mem = get_memory_store()
+        step = mem.get_profile_key("onboarding_step") or "1"
+
+        # ---- STEP 1: Ask for website URL ----
+        if step == "1":
+            url = _is_url(user_msg)
+            if url:
+                # User already sent a URL in their first message — fast-track to step 2
+                mem.set_profile_key("onboarding_step", "2_extracting")
+                mem.set_profile_key("website_url_pending", url)
+                return await _onboarding_extract_brand(url, mem)
+            else:
+                # First touch — set step and ask for URL
+                mem.set_profile_key("onboarding_step", "1")
+                return {
+                    "success": True,
+                    "agent": "nexus",
+                    "onboarding": True,
+                    "onboarding_step": 1,
+                    "onboarding_total": 3,
+                    "awaiting": "website_url",
+                    "result": (
+                        "Welcome to SwarmOps! I'm your AI marketing team — 11 specialized agents "
+                        "ready to help with SEO, content, PPC, CRM, analytics, and more.\n\n"
+                        "Before I give you specific advice instead of generic tips, let me learn about "
+                        "your business.\n\n"
+                        "**What's your website URL?** I'll analyze it automatically to understand "
+                        "your brand, audience, and market position."
+                    ),
+                    "model": "onboarding",
+                    "provider": "system",
+                    "latency_ms": 0,
+                }
+
+        # ---- STEP 1 → 2: User replied with URL ----
+        if step in ("1", "2_pending"):
+            url = _is_url(user_msg)
+            if url:
+                mem.set_profile_key("website_url_pending", url)
+                return await _onboarding_extract_brand(url, mem)
+            else:
+                # Still waiting for a URL
+                return {
+                    "success": True,
+                    "agent": "nexus",
+                    "onboarding": True,
+                    "onboarding_step": 1,
+                    "onboarding_total": 3,
+                    "awaiting": "website_url",
+                    "result": (
+                        "I need your website URL to analyse your brand automatically. "
+                        "Just paste it here — something like `https://yoursite.com`. "
+                        "If you don't have a website yet, type **skip** and I'll ask a few "
+                        "quick questions instead."
+                    ),
+                    "model": "onboarding",
+                    "provider": "system",
+                    "latency_ms": 0,
+                }
+
+        # ---- STEP 2: BrandDNA was extracted, now ask for goal ----
+        if step == "2":
+            goal = user_msg.strip()
+            if len(goal) < 3:
+                return {
+                    "success": True,
+                    "agent": "nexus",
+                    "onboarding": True,
+                    "onboarding_step": 2,
+                    "onboarding_total": 3,
+                    "awaiting": "primary_goal",
+                    "result": "What's your primary marketing goal? (e.g. increase traffic, generate leads, boost sales, build brand awareness)",
+                    "model": "onboarding",
+                    "provider": "system",
+                    "latency_ms": 0,
+                }
+            # Save goal and complete onboarding
+            mem.set_profile_key("primary_goal", goal)
+            mem.set_profile_key("onboarding_step", "complete")
+            mem.set_profile_key("website_url", mem.get_profile_key("website_url_pending") or "")
+
+            # Give first tailored recommendation based on goal
+            dna = None
+            try:
+                from brand_dna import get_brand_dna
+                dna = get_brand_dna().get_stored()
+            except Exception:
+                pass
+
+            brand_name = dna.get("brand_name", "your business") if dna else "your business"
+            industry = dna.get("industry", "") if dna else ""
+            industry_str = f" in the {industry} space" if industry else ""
+
+            # Map goal to first action
+            _goal_lower = goal.lower()
+            if any(w in _goal_lower for w in ["traffic", "visit", "seo", "organic", "search"]):
+                first_action = "Start with the **SEO agent** — ask it to find your top keyword opportunities."
+                second_action = "Then use the **Content agent** to create optimised articles targeting those keywords."
+            elif any(w in _goal_lower for w in ["lead", "prospect", "pipeline", "b2b"]):
+                first_action = "Start with the **CRM agent** — build a lead nurture email sequence."
+                second_action = "Then use the **CRO agent** to identify friction points on your landing pages."
+            elif any(w in _goal_lower for w in ["sale", "revenue", "conversion", "ecommerce"]):
+                first_action = "Start with the **CRO agent** — it'll audit your funnel and find where you're losing customers."
+                second_action = "Then use the **PPC agent** to build a paid campaign targeting high-intent buyers."
+            elif any(w in _goal_lower for w in ["brand", "awareness", "recognition", "social"]):
+                first_action = "Start with the **Brand Strategy agent** — define your voice and positioning."
+                second_action = "Then use the **SMM agent** to create a social content calendar."
+            else:
+                first_action = "Start by asking me anything — I'll route it to the right specialist automatically."
+                second_action = "Or ask for a full marketing audit to see where the biggest opportunities are."
+
+            return {
+                "success": True,
+                "agent": "nexus",
+                "onboarding": True,
+                "onboarding_step": 3,
+                "onboarding_total": 3,
+                "onboarding_complete": True,
+                "result": (
+                    f"You're all set! I now know {brand_name}{industry_str} — "
+                    f"every agent will use your brand context automatically.\n\n"
+                    f"**Your goal:** {goal}\n\n"
+                    f"**Here's where to start:**\n"
+                    f"1. {first_action}\n"
+                    f"2. {second_action}\n\n"
+                    f"Just ask me anything — I'll route it to the right specialist."
+                ),
+                "model": "onboarding",
+                "provider": "system",
+                "latency_ms": 0,
+            }
+
+        # ---- SKIP keyword — bypass onboarding ----
+        if "skip" in user_msg.lower():
+            mem.set_profile_key("onboarding_step", "complete")
+            mem.set_profile_key("website_url", "skipped")
+            return {
+                "success": True,
+                "agent": "nexus",
+                "onboarding_complete": True,
+                "result": (
+                    "No problem — onboarding skipped. You can always set your business profile later "
+                    "via the settings panel.\n\nWhat marketing challenge can I help you tackle today?"
+                ),
+                "model": "onboarding",
+                "provider": "system",
+                "latency_ms": 0,
+            }
+
+    except Exception as e:
+        print(f"[onboarding] error: {e}")
+        # Never block the chat — fall through to normal handling
+    return None
+
+
+async def _onboarding_extract_brand(url: str, mem) -> dict:
+    """Extract BrandDNA from URL and return step-2 onboarding response."""
+    dna_result = {"success": False}
+    try:
+        from brand_dna import get_brand_dna
+        import asyncio as _asyncio
+        dna_result = await _asyncio.get_event_loop().run_in_executor(
+            None, get_brand_dna().extract, url
+        )
+    except Exception as e:
+        print(f"[onboarding] BrandDNA extraction failed: {e}")
+
+    mem.set_profile_key("onboarding_step", "2")
+
+    if dna_result.get("success") and dna_result.get("brand_dna"):
+        dna = dna_result["brand_dna"]
+        brand_name = dna.get("brand_name", "your brand")
+        brand_voice = dna.get("brand_voice", "professional")
+        target_audience = dna.get("target_audience", "your audience")
+        industry = dna.get("industry", "")
+        tone_keywords = dna.get("tone_keywords", [])
+        tone_str = ", ".join(tone_keywords[:3]) if isinstance(tone_keywords, list) else ""
+
+        return {
+            "success": True,
+            "agent": "nexus",
+            "onboarding": True,
+            "onboarding_step": 2,
+            "onboarding_total": 3,
+            "awaiting": "primary_goal",
+            "brand_dna": dna,
+            "result": (
+                f"I've analysed **{url}** and here's what I found:\n\n"
+                f"**Brand:** {brand_name}\n"
+                f"**Industry:** {industry}\n"
+                f"**Voice:** {brand_voice}" + (f" — {tone_str}" if tone_str else "") + "\n"
+                f"**Audience:** {target_audience}\n\n"
+                f"Every agent will now write in {brand_name}'s voice automatically.\n\n"
+                f"**What's your primary marketing goal?**\n"
+                f"(e.g. increase traffic, generate leads, boost sales, build brand awareness)"
+            ),
+            "model": "onboarding",
+            "provider": "system",
+            "latency_ms": 0,
+        }
+    else:
+        # Extraction failed — ask manual questions
+        return {
+            "success": True,
+            "agent": "nexus",
+            "onboarding": True,
+            "onboarding_step": 2,
+            "onboarding_total": 3,
+            "awaiting": "primary_goal",
+            "result": (
+                f"I couldn't automatically analyse `{url}` (the site may block scrapers). "
+                f"No problem — I'll work with what you tell me.\n\n"
+                f"**What's your primary marketing goal?**\n"
+                f"(e.g. increase traffic, generate leads, boost sales, build brand awareness)"
+            ),
+            "model": "onboarding",
+            "provider": "system",
+            "latency_ms": 0,
+        }
+
+
+# ============================================================================
 # UNIFIED CHAT ENDPOINT — single entry point for all agents
 # ============================================================================
 
@@ -715,6 +1021,19 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         agent = request.agent.lower().strip()
         msg = request.message.strip()
         user_msg = request.message.strip()  # preserve raw user input before any augmentation
+
+        # ================================================================
+        # SMART ONBOARDING — runs before everything else
+        # Detects first-time users and guides them through 3-step setup:
+        #   Step 1: Ask for website URL
+        #   Step 2: Extract BrandDNA → ask for primary goal
+        #   Step 3: Save goal → complete onboarding, give first recommendation
+        # Skip if: business_profile has website_url OR brand_dna table has rows
+        # ================================================================
+        import re as _re_ob
+        _onboarding_result = await _handle_onboarding(user_msg, agent)
+        if _onboarding_result is not None:
+            return _onboarding_result
 
         # --- Check for Small-Talk / Greetings (Bypass Headless Nodes) ---
         import re as _re
@@ -1185,6 +1504,86 @@ def get_integration_status():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# DATABASE EXPORT / IMPORT ENDPOINTS
+# Safety net: export data before Railway redeploys, import to restore.
+# ============================================================================
+
+@app.post("/api/database/export")
+def database_export():
+    """
+    Export the entire database as a JSON payload.
+    Use this before a Railway redeploy to back up your data.
+    """
+    try:
+        from db import get_connection, DB_PATH, get_db_size_mb
+        conn = get_connection()
+
+        export = {"db_path": DB_PATH, "exported_at": __import__("datetime").datetime.utcnow().isoformat(), "tables": {}}
+
+        # Get all table names
+        tables = [
+            r["name"] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            ).fetchall()
+        ]
+
+        for table in tables:
+            rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+            export["tables"][table] = [dict(r) for r in rows]
+            export[f"{table}_count"] = len(rows)
+
+        export["total_tables"] = len(tables)
+        export["size_mb"] = get_db_size_mb()
+        return {"success": True, "export": export}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/database/import")
+async def database_import(request: Request):
+    """
+    Restore database from a JSON export payload.
+    WARNING: This REPLACES existing data for each imported table.
+    """
+    try:
+        body = await request.json()
+        export_data = body.get("export", body)  # accept both {export: ...} and raw export
+        tables_data = export_data.get("tables", {})
+
+        from db import get_connection
+        conn = get_connection()
+
+        imported = {}
+        for table, rows in tables_data.items():
+            if not rows:
+                imported[table] = 0
+                continue
+            # Get column names from first row
+            cols = list(rows[0].keys())
+            placeholders = ",".join("?" for _ in cols)
+            col_names = ",".join(cols)
+
+            # Clear and re-insert
+            conn.execute(f"DELETE FROM {table}")
+            count = 0
+            for row in rows:
+                try:
+                    conn.execute(
+                        f"INSERT OR REPLACE INTO {table} ({col_names}) VALUES ({placeholders})",
+                        [row.get(c) for c in cols]
+                    )
+                    count += 1
+                except Exception:
+                    pass  # skip malformed rows
+            imported[table] = count
+
+        conn.commit()
+        return {"success": True, "imported": imported}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # BRAND DNA ENDPOINTS

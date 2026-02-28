@@ -7,26 +7,10 @@ Like Google Pomelli, but built for all 11 SwarmOps agents.
 import os
 import re
 import json
-import sqlite3
-import threading
 import requests
 from datetime import datetime, timezone
 from typing import Optional
-
-# ---------------------------------------------------------------------------
-# Shared SQLite DB — same marketingos.db used by memory_store.py
-# ---------------------------------------------------------------------------
-
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "marketingos.db")
-_local = threading.local()
-
-
-def _get_conn() -> sqlite3.Connection:
-    """Thread-local SQLite connection to shared marketingos.db."""
-    if not hasattr(_local, "conn") or _local.conn is None:
-        _local.conn = sqlite3.connect(DB_PATH)
-        _local.conn.row_factory = sqlite3.Row
-    return _local.conn
+from db import get_connection as _get_conn, DB_PATH
 
 
 def _init_tables():

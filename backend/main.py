@@ -78,7 +78,7 @@ async def options_handler(request: Request, path: str):
         headers={
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Headers": "*",
         }
     )
 
@@ -272,49 +272,6 @@ def get_rate_limits():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/integrations/status")
-def integration_status():
-    """Check which integrations are connected"""
-    status = {}
-
-    try:
-        from integrations.wordpress import WordPress
-        status['wordpress'] = WordPress().available
-    except:
-        status['wordpress'] = False
-
-    try:
-        from integrations.hubspot import HubSpot
-        status['hubspot'] = HubSpot().available
-    except:
-        status['hubspot'] = False
-
-    try:
-        from integrations.dataforseo import DataForSEO
-        status['dataforseo'] = DataForSEO().available
-    except:
-        status['dataforseo'] = False
-
-    try:
-        from integrations.google_analytics import GoogleAnalytics
-        status['ga4'] = GoogleAnalytics().available
-    except:
-        status['ga4'] = False
-
-    try:
-        from integrations.google_search_console import GoogleSearchConsole
-        status['search_console'] = GoogleSearchConsole().available
-    except:
-        status['search_console'] = False
-
-    try:
-        from integrations.google_ads import GoogleAds
-        status['google_ads'] = GoogleAds().available
-    except:
-        status['google_ads'] = False
-
-    return {"integrations": status, "connected": sum(status.values()), "total": len(status)}
 
 # ============================================================================
 # NEXUS ENDPOINTS (Smart Routing)

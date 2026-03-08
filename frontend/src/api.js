@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = 'https://marketingos20-production.up.railway.app';
+const API_BASE = 'https://marketingos2-0.onrender.com';
 
 // Intercept HTML responses (Vercel SPA fallback when URL is wrong)
 axios.interceptors.response.use(

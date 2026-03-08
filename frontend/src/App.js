@@ -1002,11 +1002,11 @@ function App() {
           <div className="right-panel-overlay">
             <div className="panel-header">
               <div className="panel-tabs">
-                <button className={`panel - tab ${rightPanelTab === 'analytics' ? 'active' : ''} `} onClick={() => setRightPanelTab('analytics')}><BarChart3 size={14} /><span>Analytics</span></button>
-                <button className={`panel - tab ${rightPanelTab === 'stats' ? 'active' : ''} `} onClick={() => setRightPanelTab('stats')}><Activity size={14} /><span>Stats</span></button>
-                <button className={`panel - tab ${rightPanelTab === 'memory' ? 'active' : ''} `} onClick={() => setRightPanelTab('memory')}><HardDrive size={14} /><span>Memory</span></button>
-                <button className={`panel - tab ${rightPanelTab === 'history' ? 'active' : ''} `} onClick={() => setRightPanelTab('history')}><Clock size={14} /><span>History</span></button>
-                <button className={`panel - tab ${rightPanelTab === 'insights' ? 'active' : ''} `} onClick={() => setRightPanelTab('insights')}><Lightbulb size={14} /><span>Insights</span></button>
+                <button className={`panel-tab ${rightPanelTab === 'analytics' ? 'active' : ''}`} onClick={() => setRightPanelTab('analytics')}><BarChart3 size={14} /><span>Analytics</span></button>
+                <button className={`panel-tab ${rightPanelTab === 'stats' ? 'active' : ''}`} onClick={() => setRightPanelTab('stats')}><Activity size={14} /><span>Stats</span></button>
+                <button className={`panel-tab ${rightPanelTab === 'memory' ? 'active' : ''}`} onClick={() => setRightPanelTab('memory')}><HardDrive size={14} /><span>Memory</span></button>
+                <button className={`panel-tab ${rightPanelTab === 'history' ? 'active' : ''}`} onClick={() => setRightPanelTab('history')}><Clock size={14} /><span>History</span></button>
+                <button className={`panel-tab ${rightPanelTab === 'insights' ? 'active' : ''}`} onClick={() => setRightPanelTab('insights')}><Lightbulb size={14} /><span>Insights</span></button>
               </div>
               <button className="panel-close-btn" onClick={() => setRightPanelOpen(false)}><X size={16} /></button>
             </div>
@@ -1224,7 +1224,7 @@ function MessageBubble({ message, isLatest }) {
           </div>
         )}
 
-        {(message.provider || message.latency_ms || message.quality) && !isPipeline && (
+        {(message.provider || message.latency_ms || message.quality) && !isPipeline && message.provider !== 'system' && (
           <div className="message-meta-bar">
             {message.model && message.provider && (
               <span className={`meta-badge provider-${providerKey}`}>{message.model}</span>
@@ -1333,7 +1333,7 @@ function PipelineVisualization({ steps, totalLatency, expandedSteps, toggleStep 
               </div>
               <div className="step-header-right">
                 <span className="step-latency">{step.latency_ms}ms</span>
-                <ChevronDown size={16} className={`chevron ${expandedSteps[index] ? 'open' : ''} `} />
+                <ChevronDown size={16} className={`chevron ${expandedSteps[index] ? 'open' : ''}`} />
               </div>
             </button>
             {expandedSteps[index] && (
@@ -1475,10 +1475,10 @@ function MetricCard({ icon: Icon, label, value, change, positive }) {
   return (
     <div className="metric-card">
       <div className="metric-header">
-        <div className={`metric - icon ${positive ? 'positive' : 'negative'} `}>
+        <div className={`metric-icon ${positive ? 'positive' : 'negative'}`}>
           <Icon size={18} />
         </div>
-        <div className={`metric - change ${positive ? 'positive' : 'negative'} `}>
+        <div className={`metric-change ${positive ? 'positive' : 'negative'}`}>
           {positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
           <span>{change}</span>
         </div>
@@ -1505,7 +1505,7 @@ function ActivityPanel({ agents }) {
           const AgentIcon = activity.agent.icon;
           return (
             <div key={i} className="activity-item">
-              <div className="activity-avatar" style={{ background: `linear - gradient(135deg, ${activity.agent.gradientFrom}, ${activity.agent.gradientTo})` }}>
+              <div className="activity-avatar" style={{ background: `linear-gradient(135deg, ${activity.agent.gradientFrom}, ${activity.agent.gradientTo})` }}>
                 <AgentIcon size={16} />
               </div>
               <div className="activity-content">
@@ -1515,7 +1515,7 @@ function ActivityPanel({ agents }) {
                 </div>
                 <div className="activity-target">{activity.target}</div>
                 <div className="activity-meta">
-                  <span className={`activity - status ${activity.status} `}>
+                  <span className={`activity-status ${activity.status}`}>
                     {activity.status === 'completed' ? <><CheckCircle2 size={12} /> Done</> : <><Loader2 size={12} className="spinner" /> Running</>}
                   </span>
                   <span className="activity-time">{activity.time}</span>
@@ -1544,18 +1544,18 @@ function InsightsPanel({ agents }) {
         {insights.map((insight, i) => {
           const AgentIcon = insight.agent.icon;
           return (
-            <div key={i} className={`insight - card priority - ${insight.priority} `}>
+            <div key={i} className={`insight-card priority-${insight.priority}`}>
               <div className="insight-priority-bar" />
               <div className="insight-content">
                 <div className="insight-header">
                   <h4 className="insight-title">{insight.title}</h4>
-                  <span className={`priority - badge ${insight.priority} `}>{insight.priority}</span>
+                  <span className={`priority-badge ${insight.priority}`}>{insight.priority}</span>
                 </div>
                 <p className="insight-description">{insight.description}</p>
                 <div className="insight-impact"><Zap size={14} /><span>{insight.impact}</span></div>
                 <div className="insight-footer">
                   <div className="insight-agent">
-                    <div className="insight-agent-icon" style={{ background: `linear - gradient(135deg, ${insight.agent.gradientFrom}, ${insight.agent.gradientTo})` }}>
+                    <div className="insight-agent-icon" style={{ background: `linear-gradient(135deg, ${insight.agent.gradientFrom}, ${insight.agent.gradientTo})` }}>
                       <AgentIcon size={12} />
                     </div>
                     <span>{insight.agent.shortName}</span>
@@ -1596,14 +1596,14 @@ function Footer({ activeAgents, totalTasks, toggleRightPanel, rightPanelOpen, se
         <div className="footer-info"><CheckCircle2 size={14} /><span>{totalTasks.toLocaleString()} tasks</span></div>
         <div className="footer-divider" />
         {/* Integration Status */}
-        <div className={`integration - status ${connectedCount > 0 ? 'connected' : 'disconnected'} `}>
+        <div className={`integration-status ${connectedCount > 0 ? 'connected' : 'disconnected'}`}>
           <Globe size={14} />
           <span>{connectedCount}/{totalIntegrations} integrations</span>
           {integrationStatus && (
             <div className="integration-tooltip">
               {Object.entries(integrationStatus.integrations || {}).map(([name, status]) => (
-                <div key={name} className={`integration - item ${status ? 'active' : 'inactive'} `}>
-                  <span className={`status - dot ${status ? 'online' : 'offline'} `} />
+                <div key={name} className={`integration-item ${status ? 'active' : 'inactive'}`}>
+                  <span className={`status-dot ${status ? 'online' : 'offline'}`} />
                   <span>{name.replace('_', ' ')}</span>
                 </div>
               ))}
@@ -1612,7 +1612,7 @@ function Footer({ activeAgents, totalTasks, toggleRightPanel, rightPanelOpen, se
         </div>
       </div>
       <div className="footer-right">
-        <button className={`footer - btn ${rightPanelOpen ? 'active' : ''} `} onClick={() => { setRightPanelTab('analytics'); toggleRightPanel(); }}>
+        <button className={`footer-btn ${rightPanelOpen ? 'active' : ''}`} onClick={() => { setRightPanelTab('analytics'); toggleRightPanel(); }}>
           <BarChart3 size={16} /><span>Analytics</span>
         </button>
         <button className="footer-btn" onClick={() => { setRightPanelTab('insights'); toggleRightPanel(); }}>
@@ -1648,11 +1648,11 @@ function SelectAgentsModal({ agents, selectedAgents, onSelectAgent, onClose }) {
             return (
               <button
                 key={agent.id}
-                className={`agent - list - item ${isAlreadySelected ? 'already-selected' : ''} `}
+                className={`agent-list-item ${isAlreadySelected ? 'already-selected' : ''}`}
                 onClick={() => !isAlreadySelected && onSelectAgent(agent.id)}
                 disabled={isAlreadySelected}
               >
-                <div className="agent-list-icon" style={{ background: `linear - gradient(135deg, ${agent.gradientFrom}, ${agent.gradientTo})` }}>
+                <div className="agent-list-icon" style={{ background: `linear-gradient(135deg, ${agent.gradientFrom}, ${agent.gradientTo})` }}>
                   <AgentIcon size={20} />
                 </div>
                 <div className="agent-list-info">
@@ -1733,11 +1733,11 @@ function SettingsModal({ darkMode, setDarkMode, soundEnabled, setSoundEnabled, o
           <div className="settings-section">
             <h4 className="settings-section-title">Appearance</h4>
             <div className="theme-selector">
-              <button className={`theme - option ${!darkMode ? 'active' : ''} `} onClick={() => setDarkMode(false)}>
+              <button className={`theme-option ${!darkMode ? 'active' : ''}`} onClick={() => setDarkMode(false)}>
                 <div className="theme-preview light"><div className="preview-header" /><div className="preview-content"><div className="preview-line" /><div className="preview-line short" /></div></div>
                 <div className="theme-info"><Sun size={16} /><span>Light</span></div>
               </button>
-              <button className={`theme - option ${darkMode ? 'active' : ''} `} onClick={() => setDarkMode(true)}>
+              <button className={`theme-option ${darkMode ? 'active' : ''}`} onClick={() => setDarkMode(true)}>
                 <div className="theme-preview dark"><div className="preview-header" /><div className="preview-content"><div className="preview-line" /><div className="preview-line short" /></div></div>
                 <div className="theme-info"><Moon size={16} /><span>Dark</span></div>
               </button>
@@ -1795,7 +1795,7 @@ function RateLimitMonitor({ rateLimits }) {
         else if (percentage >= 50) statusClass = 'warning';
 
         return (
-          <div key={provider} className={`rate - limit - badge ${statusClass} `}>
+          <div key={provider} className={`rate-limit-badge ${statusClass}`}>
             <span className="provider-name">{provider}</span>
             <span className="rate-count">{info.used}/{info.limit}</span>
           </div>
@@ -1943,7 +1943,7 @@ function MemoryPanel({ memories, department, setDepartment, agents, onClearMemor
           memories.map((memory, index) => (
             <div key={index} className="memory-card">
               <div className="memory-card-header">
-                <span className={`memory - type - badge ${memory.type} `}>
+                <span className={`memory-type-badge ${memory.type}`}>
                   {memory.type}
                 </span>
                 <span className="memory-time">
@@ -2060,7 +2060,7 @@ function HistoryPanel({ history, days, setDays, agents }) {
               {filteredHistory.map((task, index) => (
                 <React.Fragment key={index}>
                   <tr
-                    className={`history - row ${expandedTask === index ? 'expanded' : ''} `}
+                    className={`history-row ${expandedTask === index ? 'expanded' : ''}`}
                     onClick={() => setExpandedTask(expandedTask === index ? null : index)}
                   >
                     <td className="history-time">{getRelativeTime(task.timestamp)}</td>
@@ -2105,7 +2105,7 @@ function AppSidebar({ collapsed, setCollapsed, agents, selectedAgentId, setSelec
     : [];
 
   return (
-    <div className={`sidebar ${!collapsed ? 'expanded' : ''} `}>
+    <div className={`sidebar ${!collapsed ? 'expanded' : ''}`}>
       {/* Logo + collapse button */}
       <div className="sidebar-header">
         <div className="sidebar-logo">

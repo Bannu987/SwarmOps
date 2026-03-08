@@ -130,19 +130,19 @@ function ConfidenceScoreBlock({ content }) {
   return (
     <div className="custom-block confidence-score-block">
       <div className="block-header">
-        <Activity size={14} className={`text - status - ${statusClass} `} />
+        <Activity size={14} className={`text-status-${statusClass}`} />
         <span>Confidence Score</span>
       </div>
       <div className="confidence-indicator-container">
         {score !== null ? (
           <>
-            <div className={`confidence - score - value status - ${statusClass} `}>
+            <div className={`confidence-score-value status-${statusClass}`}>
               {score}%
             </div>
             <div className="confidence-progress-bg">
               <div
-                className={`confidence - progress - fill status - ${statusClass} `}
-                style={{ width: `${score}% ` }}
+                className={`confidence-progress-fill status-${statusClass}`}
+                style={{ width: `${score}%` }}
               />
             </div>
           </>
@@ -946,7 +946,7 @@ function App() {
                     {AGENTS.map(agent => (
                       <button
                         key={agent.id}
-                        className={`agent - dropdown - item ${selectedAgent.id === agent.id ? 'selected' : ''} `}
+                        className={`agent-dropdown-item ${selectedAgent.id === agent.id ? 'selected' : ''}`}
                         onClick={() => { setSelectedAgent(agent.id); setSelectedAgents([agent.id]); setAgentDropdownOpen(false); }}
                       >
                         <span className="agent-dropdown-emoji">{agent.iconEmoji}</span>
@@ -984,7 +984,7 @@ function App() {
                 />
                 <button
                   type="submit"
-                  className={`send - btn ${input.trim() ? 'active' : 'inactive'} `}
+                  className={`send-btn ${input.trim() ? 'active' : 'inactive'}`}
                   disabled={!input.trim() || loading}
                 >
                   {loading ? <Loader2 size={15} className="spinner" /> : <Send size={15} />}
@@ -1083,7 +1083,7 @@ function Header({
       <div className="header-left">
         <button className="header-logo" onClick={() => setCommandPaletteOpen(true)}>SwarmOps</button>
         <button
-          className={`header - toggle ${smartRoutingMode ? 'active' : ''} `}
+          className={`header-toggle ${smartRoutingMode ? 'active' : ''}`}
           onClick={() => setSmartRoutingMode(!smartRoutingMode)}
           title="Smart Routing — Nexus auto-picks the best agent"
         >
@@ -1095,7 +1095,7 @@ function Header({
 
       <div className="header-right">
         <button
-          className={`header - icon - btn ${feedbackLoopRunning ? 'active' : ''} `}
+          className={`header-icon-btn ${feedbackLoopRunning ? 'active' : ''}`}
           onClick={triggerFeedbackLoop}
           disabled={feedbackLoopRunning}
           title="Run Feedback Loop"
@@ -1103,7 +1103,7 @@ function Header({
           {feedbackLoopRunning ? <Loader2 size={15} className="spinner" /> : <RefreshCw size={15} />}
         </button>
         <button
-          className={`header - icon - btn ${rightPanelOpen ? 'active' : ''} `}
+          className={`header-icon-btn ${rightPanelOpen ? 'active' : ''}`}
           onClick={() => { setRightPanelTab('analytics'); toggleRightPanel(); }}
           title="Analytics Panel (⌘B)"
         >
@@ -1157,6 +1157,21 @@ function MessageBubble({ message, isLatest }) {
     setExpandedSteps(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
+  const handleFeedback = async (quality) => {
+    const newVal = liked === quality ? null : quality;
+    setLiked(newVal);
+    if (newVal !== null && message.agentId) {
+      try {
+        await api.learning.feedback(
+          message.agentId,
+          message.content?.slice(0, 100) || '',
+          newVal,
+          ''
+        );
+      } catch (e) { /* silent */ }
+    }
+  };
+
   if (message.role === 'user') {
     return (
       <div className="message user-message">
@@ -1186,7 +1201,7 @@ function MessageBubble({ message, isLatest }) {
   const providerKey = message.provider?.toLowerCase().split(' ')[0] || '';
 
   return (
-    <div className={`message agent - message ${isPipeline ? 'pipeline-message' : ''} `}>
+    <div className={`message agent-message ${isPipeline ? 'pipeline-message' : ''}`}>
       <div className="agent-emoji-icon">{message.agentIcon}</div>
       <div className="agent-message-body">
         <div className="agent-message-label">
@@ -1212,16 +1227,16 @@ function MessageBubble({ message, isLatest }) {
         {(message.provider || message.latency_ms || message.quality) && !isPipeline && (
           <div className="message-meta-bar">
             {message.model && message.provider && (
-              <span className={`meta - badge provider - ${providerKey} `}>{message.model}</span>
+              <span className={`meta-badge provider-${providerKey}`}>{message.model}</span>
             )}
             {message.provider && (
-              <span className={`meta - badge provider - ${providerKey} `}>{message.provider}</span>
+              <span className={`meta-badge provider-${providerKey}`}>{message.provider}</span>
             )}
             {message.latency_ms && (
               <span className="meta-badge">{(message.latency_ms / 1000).toFixed(1)}s</span>
             )}
             {message.quality?.confidence != null && (
-              <span className={`meta - badge confidence - ${getConfidenceLevel(message.quality.confidence)} `}>
+              <span className={`meta-badge confidence-${getConfidenceLevel(message.quality.confidence)}`}>
                 {(message.quality.confidence * 100).toFixed(0)}%
               </span>
             )}
@@ -1230,15 +1245,15 @@ function MessageBubble({ message, isLatest }) {
         )}
 
         <div className="message-actions">
-          <button className={`msg - action - btn ${copied ? 'success' : ''} `} onClick={handleCopy}>
+          <button className={`msg-action-btn ${copied ? 'success' : ''}`} onClick={handleCopy}>
             {copied ? <Check size={12} /> : <Copy size={12} />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
           <button className="msg-action-btn"><Bookmark size={12} /><span>Save</span></button>
-          <button className={`msg - action - btn ${liked === true ? 'liked' : ''} `} onClick={() => setLiked(liked === true ? null : true)}>
+          <button className={`msg-action-btn ${liked === true ? 'liked' : ''}`} onClick={() => handleFeedback(true)}>
             <ThumbsUp size={12} />
           </button>
-          <button className={`msg - action - btn ${liked === false ? 'disliked' : ''} `} onClick={() => setLiked(liked === false ? null : false)}>
+          <button className={`msg-action-btn ${liked === false ? 'disliked' : ''}`} onClick={() => handleFeedback(false)}>
             <ThumbsDown size={12} />
           </button>
         </div>
@@ -1307,10 +1322,10 @@ function PipelineVisualization({ steps, totalLatency, expandedSteps, toggleStep 
       {/* Collapsible Step Details */}
       <div className="pipeline-steps-accordion">
         {steps.map((step, index) => (
-          <div key={index} className={`pipeline - step - card ${expandedSteps[index] ? 'expanded' : ''} `}>
+          <div key={index} className={`pipeline-step-card ${expandedSteps[index] ? 'expanded' : ''}`}>
             <button className="pipeline-step-header" onClick={() => toggleStep(index)}>
               <div className="step-header-left">
-                <div className={`step - icon confidence - ${getConfidenceLevel(step.confidence)} `}>
+                <div className={`step-icon confidence-${getConfidenceLevel(step.confidence)}`}>
                   <CheckCircle2 size={14} />
                 </div>
                 <span className="step-department">{step.department.toUpperCase()}</span>
@@ -1341,7 +1356,7 @@ function PipelineStep({ step, isParallel }) {
   };
 
   return (
-    <div className={`pipeline - step - box ${isParallel ? 'parallel' : ''} `}>
+    <div className={`pipeline-step-box ${isParallel ? 'parallel' : ''}`}>
       <div className="pipeline-step-name">{step.department.toUpperCase()}</div>
       <div className="pipeline-step-status">
         <div className="pipeline-status-dot" style={{ background: getStatusColor() }} />
@@ -1831,7 +1846,7 @@ function StatsPanel({ stats }) {
         </div>
         <div className="stats-big-card">
           <div className="stats-big-label">Avg Confidence</div>
-          <div className={`stats - big - value confidence - ${getConfidenceLevel((stats.avg_confidence || 0))} `}>
+          <div className={`stats-big-value confidence-${getConfidenceLevel((stats.avg_confidence || 0))}`}>
             {((stats.avg_confidence || 0) * 100).toFixed(0)}%
           </div>
         </div>
@@ -2052,7 +2067,7 @@ function HistoryPanel({ history, days, setDays, agents }) {
                     <td className="history-dept">{task.department?.toUpperCase() || 'N/A'}</td>
                     <td className="history-model">{task.model || 'N/A'}</td>
                     <td className="history-provider">{task.provider || 'N/A'}</td>
-                    <td className={`history - confidence confidence - ${getConfidenceLevel(task.confidence || 0)} `}>
+                    <td className={`history-confidence confidence-${getConfidenceLevel(task.confidence || 0)}`}>
                       {((task.confidence || 0) * 100).toFixed(0)}%
                     </td>
                     <td className="history-latency">{task.latency_ms || 0}ms</td>
@@ -2115,12 +2130,12 @@ function AppSidebar({ collapsed, setCollapsed, agents, selectedAgentId, setSelec
       {/* Agent navigation */}
       <div className="sidebar-nav">
         <span className="sidebar-section-title">Agents</span>
-        {agents.slice(0, 8).map((agent) => {
+        {agents.map((agent) => {
           const AgentIcon = agent.icon;
           return (
             <button
               key={agent.id}
-              className={`sidebar - nav - item ${selectedAgentId === agent.id ? 'active' : ''} `}
+              className={`sidebar-nav-item ${selectedAgentId === agent.id ? 'active' : ''}`}
               onClick={() => setSelectedAgent(agent.id)}
               title={agent.name}
             >

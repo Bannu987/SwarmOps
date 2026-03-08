@@ -148,7 +148,7 @@ export default function LandingPage({ onEnter }) {
     <div className="lp">
       {/* ── Nav ─────────────────────────────────────────── */}
       <nav className="lp-nav">
-        <span className="lp-nav-logo">SwarmOps</span>
+        <span className="lp-nav-logo" style={{ background: 'linear-gradient(135deg, #4F8CFF, #A78BFA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>SwarmOps</span>
         <div className="lp-nav-links">
           <button className="lp-nav-link" onClick={() => scrollTo('how')}>How It Works</button>
           <button className="lp-nav-link" onClick={() => scrollTo('agents')}>Agents</button>
@@ -332,7 +332,7 @@ export default function LandingPage({ onEnter }) {
 
       {/* ── Footer ──────────────────────────────────────── */}
       <footer className="lp-footer">
-        <span className="lp-footer-logo">SwarmOps</span>
+        <span className="lp-footer-logo" style={{ background: 'linear-gradient(135deg, #4F8CFF, #A78BFA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>SwarmOps</span>
         <p className="lp-footer-by">
           Built by{' '}
           <a href="https://github.com/Bannu987/MarketingOS2.0" target="_blank" rel="noopener noreferrer">

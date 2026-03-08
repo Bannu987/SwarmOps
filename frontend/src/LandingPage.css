@@ -13,16 +13,16 @@
   --text-secondary: #a0a0a0;
   --text-muted: #666666;
   --text-dim: #444444;
-  --accent: #3B82F6;
-  --accent-hover: #2563EB;
-  --gradient: linear-gradient(135deg, #3B82F6, #8B5CF6);
+  --accent: #4F8CFF;
+  --accent-hover: #3D7BEE;
+  --gradient: linear-gradient(135deg, #4F8CFF, #A78BFA);
   --success: #22C55E;
   --warning: #F59E0B;
   --error: #EF4444;
   --radius: 8px;
   --radius-lg: 12px;
   --radius-pill: 999px;
-  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --font: 'DM Sans', system-ui, -apple-system, sans-serif;
   --mono: 'JetBrains Mono', 'Fira Code', monospace;
 
   font-family: var(--font);

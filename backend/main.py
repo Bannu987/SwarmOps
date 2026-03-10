@@ -738,80 +738,137 @@ async def _handle_onboarding(user_msg: str, agent: str):
     """
     Smart onboarding state machine.
     Returns a response dict if onboarding is active, None if already complete or agent is not nexus.
+
+    Only triggers for nexus agent when the message contains marketing intent.
+    General questions ("what is AI"), specific agent queries, and skip phrases bypass onboarding.
     """
-    # Only intercept nexus agent messages
+    # Non-nexus agents never get onboarding
     if agent not in ("nexus", ""):
         return None
 
-    # Check if already onboarded
+    # Already onboarded — nothing to do
     if _onboarding_complete():
         return None
 
     try:
         from memory_store import get_memory_store
         mem = get_memory_store()
-        step = mem.get_profile_key("onboarding_step") or "1"
+        raw_step = mem.get_profile_key("onboarding_step")
+        # "unstarted" = we have never shown the onboarding prompt yet
+        step = raw_step if raw_step else "unstarted"
 
-        # ---- STEP 1: Ask for website URL ----
-        if step == "1":
+        _msg_lower = user_msg.lower().strip()
+
+        # ---- SKIP / bypass phrases — complete onboarding permanently ----
+        _SKIP_WORDS = ['skip', 'no thanks', 'later', 'not now', 'no onboarding', 'bypass']
+        if any(s in _msg_lower for s in _SKIP_WORDS):
+            mem.set_profile_key("onboarding_step", "complete")
+            mem.set_profile_key("website_url", "skipped")
+            return {
+                "success": True,
+                "agent": "nexus",
+                "onboarding_complete": True,
+                "result": (
+                    "No problem — onboarding skipped. You can always set your business profile later "
+                    "via the settings panel.\n\nWhat marketing challenge can I help you tackle today?"
+                ),
+                "model": "onboarding",
+                "provider": "system",
+                "latency_ms": 0,
+            }
+
+        # ---- If onboarding has not started yet, apply intent gate ----
+        if step == "unstarted":
+            # Patterns that indicate a general question — route normally without onboarding
+            _BYPASS_PREFIXES = [
+                'what is', 'what are', 'what does', 'what was', 'what were', "what's",
+                'how to', 'how do', 'how does', 'how can', 'how would', 'how is',
+                'tell me', 'explain', 'define', 'describe',
+                'who is', 'who are', 'why is', 'why does', 'why are',
+                'when is', 'where is', 'can you tell', 'do you know',
+                'give me a', 'show me a', 'list ', 'write me', 'write a',
+            ]
+            if any(_msg_lower.startswith(p) for p in _BYPASS_PREFIXES):
+                return None
+
+            # Signals that the user wants marketing help for THEIR business
+            _MARKETING_SIGNALS = [
+                'marketing', 'seo', 'ppc', 'ads ', ' ad ', 'campaign', 'content strategy',
+                'my business', 'my website', 'my brand', 'my company', 'my store', 'my shop',
+                'help me grow', 'help me with', 'help with my', 'help my',
+                'grow my', 'traffic', 'leads', 'sales', 'revenue', 'conversion',
+                'social media', 'email marketing', 'funnel', 'keyword', 'rank my',
+                'audit my', 'analyse my', 'analyze my', 'improve my', 'boost my',
+                'increase my', 'promote my', 'launch my', 'our brand', 'our website',
+                'our company', 'our business', 'our product',
+            ]
+            if not any(s in _msg_lower for s in _MARKETING_SIGNALS):
+                # No marketing intent detected — route normally
+                return None
+
+            # Marketing intent confirmed — show onboarding step 1
+            mem.set_profile_key("onboarding_step", "1")
             url = _is_url(user_msg)
             if url:
-                # User already sent a URL in their first message — fast-track to step 2
+                # Fast-track: they included a URL in their first message
                 mem.set_profile_key("onboarding_step", "2_extracting")
                 mem.set_profile_key("website_url_pending", url)
                 return await _onboarding_extract_brand(url, mem)
-            else:
-                # First touch — set step and ask for URL
-                mem.set_profile_key("onboarding_step", "1")
-                return {
-                    "success": True,
-                    "agent": "nexus",
-                    "onboarding": True,
-                    "onboarding_step": 1,
-                    "onboarding_total": 3,
-                    "awaiting": "website_url",
-                    "result": (
-                        "Welcome to SwarmOps! I'm your AI marketing team — 11 specialized agents "
-                        "ready to help with SEO, content, PPC, CRM, analytics, and more.\n\n"
-                        "Before I give you specific advice instead of generic tips, let me learn about "
-                        "your business.\n\n"
-                        "**What's your website URL?** I'll analyze it automatically to understand "
-                        "your brand, audience, and market position."
-                    ),
-                    "model": "onboarding",
-                    "provider": "system",
-                    "latency_ms": 0,
-                }
+            return {
+                "success": True,
+                "agent": "nexus",
+                "onboarding": True,
+                "onboarding_step": 1,
+                "onboarding_total": 3,
+                "awaiting": "website_url",
+                "result": (
+                    "Welcome to SwarmOps! I'm your AI marketing team — 11 specialized agents "
+                    "ready to help with SEO, content, PPC, CRM, analytics, and more.\n\n"
+                    "Before I give you specific advice instead of generic tips, let me learn about "
+                    "your business.\n\n"
+                    "**What's your website URL?** I'll analyze it automatically to understand "
+                    "your brand, audience, and market position.\n\n"
+                    "_Type **skip** if you'd rather jump straight in._"
+                ),
+                "model": "onboarding",
+                "provider": "system",
+                "latency_ms": 0,
+            }
 
-        # ---- STEP 1 → 2: User replied with URL ----
+        # ---- STEP 1: Waiting for URL (prompt already shown) ----
         if step in ("1", "2_pending"):
             url = _is_url(user_msg)
             if url:
                 mem.set_profile_key("website_url_pending", url)
                 return await _onboarding_extract_brand(url, mem)
-            else:
-                # Still waiting for a URL
-                return {
-                    "success": True,
-                    "agent": "nexus",
-                    "onboarding": True,
-                    "onboarding_step": 1,
-                    "onboarding_total": 3,
-                    "awaiting": "website_url",
-                    "result": (
-                        "I need your website URL to analyse your brand automatically. "
-                        "Just paste it here — something like `https://yoursite.com`. "
-                        "If you don't have a website yet, type **skip** and I'll ask a few "
-                        "quick questions instead."
-                    ),
-                    "model": "onboarding",
-                    "provider": "system",
-                    "latency_ms": 0,
-                }
+            # Still waiting for a URL
+            return {
+                "success": True,
+                "agent": "nexus",
+                "onboarding": True,
+                "onboarding_step": 1,
+                "onboarding_total": 3,
+                "awaiting": "website_url",
+                "result": (
+                    "I need your website URL to analyse your brand automatically. "
+                    "Just paste it here — something like `https://yoursite.com`.\n\n"
+                    "_Type **skip** to jump straight in without a profile._"
+                ),
+                "model": "onboarding",
+                "provider": "system",
+                "latency_ms": 0,
+            }
 
-        # ---- STEP 2: BrandDNA was extracted, now ask for goal ----
+        # ---- STEP 2: BrandDNA extracted, waiting for goal ----
         if step == "2":
+            _GOAL_PATTERNS = [
+                'increase', 'generate', 'boost', 'grow', 'improve', 'build',
+                'get more', 'reduce', 'optimize', 'optimise', 'launch', 'drive',
+                'traffic', 'leads', 'sales', 'awareness', 'revenue', 'conversions',
+                'engagement', 'want to', 'need to', 'trying to', 'goal is',
+            ]
             goal = user_msg.strip()
+
             if len(goal) < 3:
                 return {
                     "success": True,
@@ -825,6 +882,11 @@ async def _handle_onboarding(user_msg: str, agent: str):
                     "provider": "system",
                     "latency_ms": 0,
                 }
+
+            # If it doesn't look like a goal (e.g. a question), use a default and complete
+            if not any(p in goal.lower() for p in _GOAL_PATTERNS):
+                goal = "grow my business"
+
             # Save goal and complete onboarding
             mem.set_profile_key("primary_goal", goal)
             mem.set_profile_key("onboarding_step", "complete")
@@ -842,7 +904,6 @@ async def _handle_onboarding(user_msg: str, agent: str):
             industry = dna.get("industry", "") if dna else ""
             industry_str = f" in the {industry} space" if industry else ""
 
-            # Map goal to first action
             _goal_lower = goal.lower()
             if any(w in _goal_lower for w in ["traffic", "visit", "seo", "organic", "search"]):
                 first_action = "Start with the **SEO agent** — ask it to find your top keyword opportunities."
@@ -875,23 +936,6 @@ async def _handle_onboarding(user_msg: str, agent: str):
                     f"1. {first_action}\n"
                     f"2. {second_action}\n\n"
                     f"Just ask me anything — I'll route it to the right specialist."
-                ),
-                "model": "onboarding",
-                "provider": "system",
-                "latency_ms": 0,
-            }
-
-        # ---- SKIP keyword — bypass onboarding ----
-        if "skip" in user_msg.lower():
-            mem.set_profile_key("onboarding_step", "complete")
-            mem.set_profile_key("website_url", "skipped")
-            return {
-                "success": True,
-                "agent": "nexus",
-                "onboarding_complete": True,
-                "result": (
-                    "No problem — onboarding skipped. You can always set your business profile later "
-                    "via the settings panel.\n\nWhat marketing challenge can I help you tackle today?"
                 ),
                 "model": "onboarding",
                 "provider": "system",

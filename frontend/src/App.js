@@ -305,8 +305,6 @@ function App() {
   const [conversations, setConversations] = useState(loadConvos);
   const [currentConvoId, setCurrentConvoId] = useState(() => `convo-${Date.now()}`);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [rateLimits, setRateLimits] = useState(null);
-  const [stats, setStats] = useState(null);
   const [smartMode, setSmartMode] = useState(false);
 
   const messagesEndRef = useRef(null);
@@ -374,17 +372,6 @@ function App() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  // Fetch rate limits
-  useEffect(() => {
-    api.rateLimits().then(setRateLimits).catch(() => {});
-    const t = setInterval(() => api.rateLimits().then(setRateLimits).catch(() => {}), 30000);
-    return () => clearInterval(t);
-  }, []);
-
-  // Fetch stats after messages
-  useEffect(() => {
-    api.stats().then(setStats).catch(() => {});
-  }, [messages]);
 
   const formatDeepResearchResult = (result) => {
     if (!result || typeof result !== 'object') return String(result);
@@ -707,7 +694,7 @@ function App() {
             </div>
             <div className="right-panel-content">
               {rightPanelTab === 'insights' && <InsightsTab />}
-              {rightPanelTab === 'analytics' && <AnalyticsTab stats={stats} rateLimits={rateLimits} />}
+              {rightPanelTab === 'analytics' && <AnalyticsTab />}
               {rightPanelTab === 'competitors' && <CompetitorsTab />}
               {rightPanelTab === 'brand' && <BrandDnaTab />}
               {rightPanelTab === 'settings' && (
@@ -1009,7 +996,15 @@ function InsightsTab() {
   );
 }
 
-function AnalyticsTab({ stats, rateLimits }) {
+function AnalyticsTab() {
+  const [stats, setStats] = useState(null);
+  const [rateLimits, setRateLimits] = useState(null);
+
+  useEffect(() => {
+    api.stats().then(setStats).catch(() => {});
+    api.rateLimits().then(setRateLimits).catch(() => {});
+  }, []);
+
   return (
     <div className="rp-tab-content">
       <h3 className="rp-section-title">Analytics</h3>

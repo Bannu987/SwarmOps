@@ -269,6 +269,21 @@ const CONVO_KEY = 'swarmops-conversations';
 const DARK_KEY = 'swarmops-darkmode';
 const LAUNCH_KEY = 'swarmops-launched';
 
+/* Never block the UI — every API call gets a hard timeout */
+const fetchWithTimeout = async (apiFn, timeoutMs = 10000) => {
+  try {
+    return await Promise.race([
+      apiFn(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), timeoutMs)
+      )
+    ]);
+  } catch (e) {
+    console.log('API call skipped:', e.message);
+    return null;
+  }
+};
+
 function loadConvos() {
   try { return JSON.parse(localStorage.getItem(CONVO_KEY) || '[]'); } catch { return []; }
 }
@@ -949,49 +964,51 @@ function LoadingDots({ agent }) {
 /* ─────────────────────────────────────────────────────────────
    RIGHT PANEL TABS
 ───────────────────────────────────────────────────────────── */
+const STATIC_INSIGHTS = [
+  { title: 'Content Gap', desc: 'Competitors rank for "AI marketing automation" — no content from you.', priority: 'high', impact: '+2,400 visits/mo' },
+  { title: 'PPC Opportunity', desc: 'High-intent keywords underutilized in current campaigns.', priority: 'medium', impact: '340 more conversions' },
+  { title: 'A/B Test Ready', desc: 'Homepage CTA has enough traffic for a 2-week test.', priority: 'low', impact: '+18% CVR potential' },
+];
+
 function InsightsTab() {
-  const [insights, setInsights] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [insights, setInsights] = useState(STATIC_INSIGHTS); // show instantly
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    api.learning.insights('nexus').then(d => {
-      setInsights(d.insights || (Array.isArray(d) ? d : []));
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
-
-  const staticInsights = [
-    { title: 'Content Gap', desc: 'Competitors rank for "AI marketing automation" — no content from you.', priority: 'high', impact: '+2,400 visits/mo' },
-    { title: 'PPC Opportunity', desc: 'High-intent keywords underutilized in current campaigns.', priority: 'medium', impact: '340 more conversions' },
-    { title: 'A/B Test Ready', desc: 'Homepage CTA has enough traffic for a 2-week test.', priority: 'low', impact: '+18% CVR potential' },
-  ];
-
-  const displayInsights = insights.length > 0 ? insights : staticInsights;
+  const refresh = async () => {
+    setRefreshing(true);
+    const d = await fetchWithTimeout(() => api.learning.insights('nexus'));
+    if (d) {
+      const list = d.insights || (Array.isArray(d) ? d : []);
+      if (list.length > 0) setInsights(list);
+    }
+    setRefreshing(false);
+  };
 
   return (
     <div className="rp-tab-content">
-      <h3 className="rp-section-title">AI Insights</h3>
-      {loading ? (
-        <div className="rp-loading"><Loader2 size={20} className="spin" /><span>Loading…</span></div>
-      ) : (
-        <div className="insights-list">
-          {displayInsights.map((ins, i) => (
-            <div key={i} className={'insight-card priority-' + (ins.priority || 'low')}>
-              <div className="insight-priority-bar" />
-              <div className="insight-body">
-                <div className="insight-head">
-                  <span className="insight-title">{ins.title}</span>
-                  <span className={'priority-chip ' + (ins.priority || 'low')}>{ins.priority || 'info'}</span>
-                </div>
-                <p className="insight-desc">{ins.desc || ins.description || ins.content}</p>
-                {ins.impact && (
-                  <div className="insight-impact"><Zap size={12} /><span>{ins.impact}</span></div>
-                )}
+      <div className="rp-section-head">
+        <h3 className="rp-section-title">AI Insights</h3>
+        <button className="rp-add-btn" onClick={refresh} disabled={refreshing} title="Refresh from AI">
+          {refreshing ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
+        </button>
+      </div>
+      <div className="insights-list">
+        {insights.map((ins, i) => (
+          <div key={i} className={'insight-card priority-' + (ins.priority || 'low')}>
+            <div className="insight-priority-bar" />
+            <div className="insight-body">
+              <div className="insight-head">
+                <span className="insight-title">{ins.title}</span>
+                <span className={'priority-chip ' + (ins.priority || 'low')}>{ins.priority || 'info'}</span>
               </div>
+              <p className="insight-desc">{ins.desc || ins.description || ins.content}</p>
+              {ins.impact && (
+                <div className="insight-impact"><Zap size={12} /><span>{ins.impact}</span></div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1001,8 +1018,8 @@ function AnalyticsTab() {
   const [rateLimits, setRateLimits] = useState(null);
 
   useEffect(() => {
-    api.stats().then(setStats).catch(() => {});
-    api.rateLimits().then(setRateLimits).catch(() => {});
+    fetchWithTimeout(() => api.stats()).then(d => { if (d) setStats(d); });
+    fetchWithTimeout(() => api.rateLimits()).then(d => { if (d) setRateLimits(d); });
   }, []);
 
   return (
@@ -1077,7 +1094,7 @@ function AnalyticsTab() {
 
 function CompetitorsTab() {
   const [competitors, setCompetitors] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // don't block on mount
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newUrl, setNewUrl] = useState('');
@@ -1085,10 +1102,11 @@ function CompetitorsTab() {
   const [battleCard, setBattleCard] = useState(null);
 
   useEffect(() => {
-    api.competitors.list().then(d => {
-      setCompetitors(d.competitors || d || []);
+    setLoading(true);
+    fetchWithTimeout(() => api.competitors.list()).then(d => {
+      if (d) setCompetitors(d.competitors || d || []);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    });
   }, []);
 
   const addCompetitor = async () => {
@@ -1191,15 +1209,16 @@ function CompetitorsTab() {
 
 function BrandDnaTab() {
   const [brandDna, setBrandDna] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // don't block on mount
   const [extracting, setExtracting] = useState(false);
   const [url, setUrl] = useState('');
 
   useEffect(() => {
-    api.brandDna.get().then(d => {
-      setBrandDna(d.brand_dna || d || null);
+    setLoading(true);
+    fetchWithTimeout(() => api.brandDna.get()).then(d => {
+      if (d) setBrandDna(d.brand_dna || d || null);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    });
   }, []);
 
   const extract = async () => {

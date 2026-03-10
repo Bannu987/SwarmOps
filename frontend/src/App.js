@@ -222,6 +222,8 @@ function parseMarkdown(text) {
       if (combined.trim()) {
         elements.push(<p key={key++} className="md-p">{parseInline(combined)}</p>);
       }
+    } else {
+      i++; // Safety: advance past unhandled line (e.g. lone | character) to prevent infinite loop
     }
   }
 

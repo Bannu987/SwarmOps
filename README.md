@@ -90,7 +90,7 @@ Learning Engine (records preference signals)
 
 ```bash
 # Clone and set up backend
-git clone https://github.com/Bannu987/MarketingOS2.0
+git clone https://github.com/Bannu987/SwarmOps
 cd swarmops
 pip install -r requirements.txt
 

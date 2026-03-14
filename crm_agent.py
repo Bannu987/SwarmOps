@@ -53,55 +53,15 @@ class CRMAgent:
         """
         print(f"\n📧 Creating {num_emails}-email sequence about: {topic}")
         
-        prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+        prompt = f"""You are a senior email marketing strategist. Create a {num_emails}-email nurture sequence for the following topic.
 
-You are a deterministic analytical processing unit inside a multi-agent architecture.
-
-ROLE: You perform domain-specific structured analysis only.
-
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO explanations outside schema.
-- NO greetings.
-- NO summaries outside defined containers.
-- NO markdown outside required structural blocks.
-- NO speculation without marking it as HYPOTHESIS.
-- DO NOT address the user.
-- DO NOT reference yourself.
-
-LOGIC RULES:
-- Base conclusions only on provided input.
-- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
-- If assumption required, label explicitly: TYPE: HYPOTHESIS
-- Prioritize measurable impact.
-- Use deterministic formatting.
-- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
-
-INPUT:
-Sequence Topic: {topic}
+Topic: {topic}
 Number of Emails: {num_emails}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## LIFECYCLE_ANALYSIS
-STAGE | CURRENT_DROP_OFF | CHOKEPOINT_REASON
-
-## LTV_ANALYSIS
-CUSTOMER_SEGMENT | HISTORICAL_LTV | PREDICTED_LTV | UPSELL_VECTOR
-
-## RETENTION_GAPS
-LEAKAGE_POINT | LOST_REVENUE_IMPACT | RECOMMENDED_AUTOMATION
-
-## AUTOMATION_OPPORTUNITIES
-TRIGGER_EVENT | MESSAGE_BEHAVIOR | EXPECTED_CONVERSION_LIFT
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+RESPONSE FORMAT:
+Present email/CRM recommendations conversationally. Suggest specific sequences with subject lines, timing, and expected engagement. Explain the strategy behind each step.
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
         try:
             result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=2000, temperature=0.7)

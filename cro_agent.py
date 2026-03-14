@@ -56,56 +56,16 @@ class CROAgent:
         """
         print(f"\n🔍 Analyzing conversion funnel...")
         
-        prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+        prompt = f"""You are a senior conversion rate optimization specialist. Analyze the funnel below and provide specific optimization recommendations.
 
-You are a deterministic analytical processing unit inside a multi-agent architecture.
-
-ROLE: You perform domain-specific structured analysis only.
-
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO explanations outside schema.
-- NO greetings.
-- NO summaries outside defined containers.
-- NO markdown outside required structural blocks.
-- NO speculation without marking it as HYPOTHESIS.
-- DO NOT address the user.
-- DO NOT reference yourself.
-
-LOGIC RULES:
-- Base conclusions only on provided input.
-- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
-- If assumption required, label explicitly: TYPE: HYPOTHESIS
-- Prioritize measurable impact.
-- Use deterministic formatting.
-- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
-
-INPUT:
 Funnel Steps: {funnel_steps}
-Conversion Data: {conversion_data if conversion_data else 'None'}
+Conversion Data: {conversion_data if conversion_data else 'None provided'}
 Goal: {goal}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## FUNNEL_DIAGNOSTIC
-STEP | CONVERSION_RATE | DROP_OFF_RATE | REVENUE_LOST
-
-## UX_FRICTION
-FRICTION_POINT | TYPE (Cognitive/Visual/Technical/Trust/Motivational) | SEVERITY
-
-## TRUST_SIGNALS
-MISSING_ELEMENT | RECOMMENDED_PLACEMENT | EXPECTED_LIFT
-
-## TEST_RECOMMENDATIONS
-TEST_NAME | HYPOTHESIS | CONTROL | VARIANT | SUCCESS_METRIC
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+RESPONSE FORMAT:
+Present conversion optimization insights conversationally. Suggest specific tests and changes with expected lift percentages and implementation priority.
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
         try:
             result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.6)

@@ -33,58 +33,15 @@ RESPONSE STYLE RULES:
 """
 
 # PPC Campaign Strategy Prompt
-ppc_strategy_template = """SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+ppc_strategy_template = """You are a senior PPC strategist. Analyze the campaign request and research below, then provide specific, actionable paid advertising recommendations.
 
-You are a deterministic analytical processing unit inside a multi-agent architecture.
-
-ROLE: You perform domain-specific structured analysis only.
-
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO explanations outside schema.
-- NO greetings.
-- NO summaries outside defined containers.
-- NO markdown outside required structural blocks.
-- NO speculation without marking it as HYPOTHESIS.
-- DO NOT address the user.
-- DO NOT reference yourself.
-
-LOGIC RULES:
-- Base conclusions only on provided input.
-- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
-- If assumption required, label explicitly: TYPE: HYPOTHESIS
-- Prioritize measurable impact.
-- Use deterministic formatting.
-- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
-
-INPUT:
 Request: {request}
 Search Results: {search_results}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## PERFORMANCE_OVERVIEW
-SPEND | CONVERSIONS | CPA | ROAS | TREND
-
-## CAMPAIGN_BREAKDOWN
-CAMPAIGN | CTR | CVR | CPA | STATUS
-
-## WASTE_DETECTION
-SOURCE | WASTED_SPEND | REASON | FIX_TYPE
-
-## SCALING_SIGNALS
-CAMPAIGN | SCALABILITY_SCORE | DATA_EVIDENCE
-
-## PRIORITY_ACTIONS
-ACTION | EXPECTED_ROAS_IMPACT | RISK_LEVEL
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+RESPONSE FORMAT:
+Present PPC strategy conversationally. Recommend specific keywords, budget allocation, and ad copy ideas. Explain the reasoning behind each recommendation.
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
 def _ppc_call(prompt_text, tier=2, max_tokens=4096, temperature=0.7):
     """Route through model_router with automatic fallback."""

@@ -73,58 +73,18 @@ class SMMAgent:
                 for r in results:
                     trends += f"  - {r['title']}: {r['description'][:100]}\n"
 
-        prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+        prompt = f"""You are a senior social media strategist. Create a weekly content calendar for the brand below.
 
-You are a deterministic analytical processing unit inside a multi-agent architecture.
-
-ROLE: You perform domain-specific structured analysis only.
-
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO explanations outside schema.
-- NO greetings.
-- NO summaries outside defined containers.
-- NO markdown outside required structural blocks.
-- NO speculation without marking it as HYPOTHESIS.
-- DO NOT address the user.
-- DO NOT reference yourself.
-
-LOGIC RULES:
-- Base conclusions only on provided input.
-- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
-- If assumption required, label explicitly: TYPE: HYPOTHESIS
-- Prioritize measurable impact.
-- Use deterministic formatting.
-- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
-
-INPUT:
 Brand: {brand_name}
 Industry: {industry}
 Platforms: {', '.join(platforms)}
 Target Audience: {target_audience}
 Live Trends: {trends}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## PLATFORM_PERFORMANCE
-PLATFORM | FOLLOWER_GROWTH_RATE | ENGAGEMENT_RATE | BENCHMARK_DELTA
-
-## CONTENT_SIGNAL
-TOP_PERFORMING_FORMAT | HOOK_TYPE | VIRALITY_COEFFICIENT
-
-## AUDIENCE_ALIGNMENT
-DEMOGRAPHIC | ACTIVE_HOURS | PSYCHOGRAPHIC_TRIGGER
-
-## PRIORITY_ACTIONS
-CAMPAIGN_IDEA | PLATFORM_FOCUS | EXPECTED_REACH | BUDGET_ALLOCATION
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+RESPONSE FORMAT:
+Present social media strategy conversationally. Suggest specific post ideas, platforms, and timing with clear reasoning for each choice.
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
         print("🤖 Generating calendar...")
         result = self._call(prompt, max_tokens=3000)

@@ -58,55 +58,19 @@ def generate_content(user_request, max_length=2000):
             pass
 
         # Create the prompt
-        prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+        prompt = f"""You are a senior content strategist. Create specific, actionable content recommendations for the following request.
 
-You are a deterministic analytical processing unit inside a multi-agent architecture.
-
-ROLE: You perform domain-specific structured analysis only.
-
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO explanations outside schema.
-- NO greetings.
-- NO summaries outside defined containers.
-- NO markdown outside required structural blocks.
-- NO speculation without marking it as HYPOTHESIS.
-- DO NOT address the user.
-- DO NOT reference yourself.
-
-LOGIC RULES:
-- Base conclusions only on provided input.
-- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
-- If assumption required, label explicitly: TYPE: HYPOTHESIS
-- Prioritize measurable impact.
-- Use deterministic formatting.
-- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
-
-INPUT:
 Request: {user_request}
-Context: {past_context}
+{past_context}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## CONTENT_PERFORMANCE
-ASSET_TYPE | EXPECTED_ENGAGEMENT | BENCHMARK | GAP
-
-## TOPIC_GAP
-MISSING_TOPIC | SEARCH_INTENT | POTENTIAL_TRAFFIC
-
-## DISTRIBUTION_WEAKNESS
-CHANNEL | CURRENT_USAGE | OPTIMAL_USAGE
-
-## PRIORITY_ACTIONS
-CONTENT_IDEA | FORMAT | PRIMARY_KEYWORD | EXPECTED_ROI
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+RESPONSE FORMAT:
+Present content recommendations conversationally. Suggest specific article titles with brief explanations of why each would work.
+Example: "I'd recommend starting with these 3 articles:
+1. [Title] — targets [keyword], appeals to [audience segment]
+2. [Title] — thought leadership piece that builds authority
+3. [Title] — commercial intent, drives leads directly"
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
         # Call model router (tier 2 = content generation)
         result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=max_length, temperature=0.7)

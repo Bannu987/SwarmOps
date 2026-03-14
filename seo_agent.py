@@ -33,58 +33,16 @@ RESPONSE STYLE RULES:
 """
 
 # SEO Analysis Prompt
-seo_analysis_template = """SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+seo_analysis_template = """You are a senior SEO strategist. Analyze the task and search results below, then provide specific, actionable keyword and SEO recommendations.
 
-You are a deterministic analytical processing unit inside a multi-agent architecture.
-
-ROLE: You perform domain-specific structured analysis only.
-
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO explanations outside schema.
-- NO greetings.
-- NO summaries outside defined containers.
-- NO markdown outside required structural blocks.
-- NO speculation without marking it as HYPOTHESIS.
-- DO NOT address the user.
-- DO NOT reference yourself.
-
-LOGIC RULES:
-- Base conclusions only on provided input.
-- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
-- If assumption required, label explicitly: TYPE: HYPOTHESIS
-- Prioritize measurable impact.
-- Use deterministic formatting.
-- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
-
-INPUT:
 Task: {task}
 Search Results: {search_results}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## TECHNICAL_AUDIT
-ISSUE | SEVERITY | EVIDENCE | INDEXING_IMPACT
-
-## KEYWORD_GAP
-KEYWORD | SEARCH_INTENT | CURRENT_POSITION | OPPORTUNITY_SCORE
-
-## CONTENT_DEFICIENCIES
-PAGE | MISSING_ELEMENTS | ESTIMATED_TRAFFIC_LOSS
-
-## LINK_PROFILE
-DOMAIN_AUTHORITY | REF_DOMAINS | RISK_SCORE
-
-## PRIORITY_ACTIONS
-ACTION | IMPACT | EFFORT | SEO_LEVERAGE_SCORE
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+RESPONSE FORMAT:
+Present keyword findings conversationally. Lead with the top 3 opportunities and explain WHY each matters for this brand. Include search intent and competition level in natural language.
+Example: "Your highest-opportunity keyword is [keyword] — it has strong commercial intent and aligns with your positioning. Competition is moderate, making it achievable within 3-6 months."
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
 def _seo_call(prompt_text, tier=2, max_tokens=4096, temperature=0.7):
     """Route through model_router with automatic fallback."""
@@ -186,32 +144,17 @@ def find_keywords(topic, num_keywords=10):
     except Exception:
         pass
 
-    keyword_prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
-ROLE: You perform domain-specific structured analysis only.
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO markdown outside required structural blocks.
-- DO NOT address the user.
-INPUT:
+    keyword_prompt = f"""You are a senior SEO strategist. Find keyword opportunities for the topic below.
+
 Task: Find {num_keywords} keyword opportunities for {topic}
 Search Results: {formatted_results}
 {past_context}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## KEYWORD_GAP
-KEYWORD | SEARCH_INTENT | CURRENT_POSITION | OPPORTUNITY_SCORE
-(List {num_keywords} rows based on the data)
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON
-
-CRITICAL: Start your response IMMEDIATELY with the character "#". Do not output a single word before the "## KEYWORD_GAP" header."""
+RESPONSE FORMAT:
+Present keyword findings conversationally. Lead with the top 3 opportunities and explain WHY each matters. Include search intent and competition level in natural language.
+Example: "Your highest-opportunity keyword is [keyword] — it has strong commercial intent and aligns with your positioning. Competition is moderate, making it achievable within 3-6 months."
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
     result = _seo_call(keyword_prompt, tier=2)
 
@@ -245,31 +188,15 @@ def competitor_analysis(niche, num_competitors=5):
         for r in results
     ])
     
-    analysis_prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
-ROLE: You perform domain-specific structured analysis only.
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO markdown outside required structural blocks.
-- DO NOT address the user.
-INPUT:
-Task: Analyze top competitors in the {niche} space
+    analysis_prompt = f"""You are a senior SEO strategist. Analyze top competitors in the {niche} space.
+
+Task: Analyze top {num_competitors} competitors in the {niche} space
 Competitors Data: {competitor_data}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## COMPETITOR_AUDIT
-COMPETITOR | MARKET_SHARE_ESTIMATE | KEY_STRENGTHS | TARGET_KEYWORDS | DIFFERENTIATION_OPPORTUNITY
-(List exactly {num_competitors} rows based on the data)
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON
-
-CRITICAL: Start your response IMMEDIATELY with the character "#". Do not output a single word before the "## COMPETITOR_AUDIT" header."""
+RESPONSE FORMAT:
+Present competitor analysis conversationally. Highlight each competitor's key strengths, target keywords, and where gaps exist for differentiation. Be specific and actionable.
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
     result = _seo_call(analysis_prompt, tier=4)
 
@@ -301,31 +228,15 @@ def content_gap_analysis(topic):
         for r in results
     ])
     
-    gap_prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
-ROLE: You perform domain-specific structured analysis only.
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO markdown outside required structural blocks.
-- DO NOT address the user.
-INPUT:
+    gap_prompt = f"""You are a senior SEO strategist. Identify content gaps and opportunities for the topic below.
+
 Task: Identify content gaps and opportunities for {topic}
 Existing Content: {existing_content}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## CONTENT_DEFICIENCIES
-TOPIC_GAP | UNDERSERVED_QUESTIONS | RECOMMENDED_FORMAT | ESTIMATED_TRAFFIC_POTENTIAL
-(List at least 5 rows based on the data)
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON
-
-CRITICAL: Start your response IMMEDIATELY with the character "#". Do not output a single word before the "## CONTENT_DEFICIENCIES" header."""
+RESPONSE FORMAT:
+Present content gap findings conversationally. Highlight underserved questions and topics, recommend specific content formats, and explain the traffic potential for each gap.
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
     result = _seo_call(gap_prompt, tier=2)
 

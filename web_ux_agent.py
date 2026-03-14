@@ -68,58 +68,18 @@ class WebUXAgent:
         
         style_guide = style_examples.get(style.lower(), style_examples["modern"])
         
-        prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+        prompt = f"""You are a senior UX/web designer. Design a high-converting landing page for the product below.
 
-You are a deterministic analytical processing unit inside a multi-agent architecture.
-
-ROLE: You perform domain-specific structured analysis only.
-
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO explanations outside schema.
-- NO greetings.
-- NO summaries outside defined containers.
-- NO markdown outside required structural blocks.
-- NO speculation without marking it as HYPOTHESIS.
-- DO NOT address the user.
-- DO NOT reference yourself.
-
-LOGIC RULES:
-- Base conclusions only on provided input.
-- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
-- If assumption required, label explicitly: TYPE: HYPOTHESIS
-- Prioritize measurable impact.
-- Use deterministic formatting.
-- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
-
-INPUT:
 Product/Service: {product}
 Target Audience: {target_audience}
 Goal: {goal}
 Key Benefits: {key_benefits}
 Style: {style} — {style_guide}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## UX_HEALTH
-PAGE_LOAD | MOBILE_RESPONSIVENESS_SCORE | ACCESSIBILITY_SCORE
-
-## STRUCTURE_WEAKNESS
-UI_COMPONENT | HEURISTIC_VIOLATED | CONVERSION_IMPACT
-
-## TRUST_GAPS
-MISSING_PROOF_ELEMENT | RECOMMENDED_ADDITION | EXPECTED_LIFT
-
-## IMPROVEMENT_ACTIONS
-ACTION | DEV_EFFORT (High/Med/Low) | EXPECTED_CVR_IMPACT
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+RESPONSE FORMAT:
+Present UX recommendations conversationally. Identify specific friction points and suggest improvements with expected impact on conversions.
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
         try:
             result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=3000, temperature=0.7)

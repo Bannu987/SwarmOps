@@ -56,57 +56,17 @@ class BrandStrategistAgent:
         """
         print(f"\n🎨 Creating brand strategy for {company_name}...")
         
-        prompt = f"""SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+        prompt = f"""You are a senior brand strategist. Develop a comprehensive brand strategy for the company below.
 
-You are a deterministic analytical processing unit inside a multi-agent architecture.
-
-ROLE: You perform domain-specific structured analysis only.
-
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO explanations outside schema.
-- NO greetings.
-- NO summaries outside defined containers.
-- NO markdown outside required structural blocks.
-- NO speculation without marking it as HYPOTHESIS.
-- DO NOT address the user.
-- DO NOT reference yourself.
-
-LOGIC RULES:
-- Base conclusions only on provided input.
-- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
-- If assumption required, label explicitly: TYPE: HYPOTHESIS
-- Prioritize measurable impact.
-- Use deterministic formatting.
-- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
-
-INPUT:
 Company: {company_name}
 Industry: {industry}
 Target Audience: {target_audience}
 Unique Value: {unique_value}
 
-OUTPUT FORMAT (Follow Exactly):
-
-## POSITIONING_ANALYSIS
-COMPETITOR | THEIR_POSITIONING | OUR_DIFFERENTIATOR
-
-## MESSAGE_GAPS
-CURRENT_MESSAGING_FLAW | RECOMMENDED_PIVOT | EVIDENCE
-
-## ICP_ALIGNMENT
-AUDIENCE_SEGMENT | PAIN_POINT | VALUE_PILLAR
-
-## BRAND_LEVERAGE_OPPORTUNITIES
-OPPORTUNITY | REQUIRED_ACTION | POTENTIAL_LIFT
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+RESPONSE FORMAT:
+Present brand strategy conversationally. Analyze positioning, messaging, and differentiation. Be specific to this brand's industry and audience.
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
         try:
             result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.7)

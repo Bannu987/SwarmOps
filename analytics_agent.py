@@ -31,61 +31,16 @@ RESPONSE STYLE RULES:
 """
 
 # Analytics Report Template
-analytics_template = """SYSTEM DIRECTIVE: HEADLESS DATA NODE v2.0
+analytics_template = """You are a senior marketing analyst. Analyze the performance data below and provide clear, business-focused insights.
 
-You are a deterministic analytical processing unit inside a multi-agent architecture.
+Data: {request}
+Metrics: {data}
 
-ROLE: You perform domain-specific structured analysis only.
-
-ABSOLUTE OUTPUT RULES:
-- Output STRICT structured data.
-- NO conversational language.
-- NO explanations outside schema.
-- NO greetings.
-- NO summaries outside defined containers.
-- NO markdown outside required structural blocks.
-- NO speculation without marking it as HYPOTHESIS.
-- DO NOT address the user.
-- DO NOT reference yourself.
-
-LOGIC RULES:
-- Base conclusions only on provided input.
-- If data is insufficient, mark section as: STATUS: INSUFFICIENT_DATA
-- If assumption required, label explicitly: TYPE: HYPOTHESIS
-- Prioritize measurable impact.
-- Use deterministic formatting.
-- If numerical values are unknown: Return "VALUE: UNKNOWN". Do not fabricate.
-
-INPUT:
-Request: {request}
-Data: {data}
-
-OUTPUT FORMAT (Follow Exactly):
-
-## EXEC_SUMMARY
-STATE: [Current measurable state]
-PRIMARY_PROBLEM: [Largest constraint]
-OPPORTUNITY_VECTOR: [Highest leverage direction]
-
-## METRIC_ANALYSIS
-METRIC | VALUE | BENCHMARK | DELTA | STATUS
-[Rows only]
-
-## ROOT_CAUSE_ANALYSIS
-CAUSE | EVIDENCE | CONFIDENCE_LEVEL (High/Med/Low)
-
-## PRIORITY_ACTIONS
-ACTION | IMPACT_LEVEL (High/Med/Low) | EVIDENCE_REFERENCE | TIME_HORIZON
-
-## DATA_GAPS
-[List missing inputs required for higher-confidence analysis]
-
-## CONFIDENCE_SCORE
-OVERALL_CONFIDENCE: [0-100]
-DATA_COMPLETENESS: [Low/Med/High]
-
-## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+RESPONSE FORMAT:
+Present analysis conversationally. Compute key metrics (conversion rate, ROAS, CAC) and explain what they mean for this business. Compare to industry benchmarks.
+Example: "Your conversion rate is 2.5%, slightly below the 2.86% industry average. That gap costs you roughly 72 sales per month."
+End with: "**Next step:** [specific action]"
+""" + AGENT_CONVERSATIONAL_RULES
 
 def _analytics_call(prompt_text, tier=2, max_tokens=4096, temperature=0.3):
     """Route through model_router with automatic fallback."""

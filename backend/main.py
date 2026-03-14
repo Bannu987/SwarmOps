@@ -759,6 +759,15 @@ async def _handle_onboarding(user_msg: str, agent: str):
 
         _msg_lower = user_msg.lower().strip()
 
+        # ---- Audit intent — bypass onboarding entirely ----
+        _AUDIT_KEYWORDS = [
+            'audit', 'site audit', 'website audit', 'marketing audit',
+            'full analysis', 'grade my site', 'check my site', 'analyze my website',
+            'analyse my website', 'audit my website', 'audit my site',
+        ]
+        if any(k in _msg_lower for k in _AUDIT_KEYWORDS):
+            return None  # Let audit routing handle it
+
         # ---- SKIP / bypass phrases — complete onboarding permanently ----
         _SKIP_WORDS = ['skip', 'no thanks', 'later', 'not now', 'no onboarding', 'bypass']
         if any(s in _msg_lower for s in _SKIP_WORDS):
@@ -1283,6 +1292,41 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                     "result": result.get("summary", "Research unavailable")
                 }
 
+        elif agent == "audit":
+            # Route to Marketing Audit engine
+            from marketing_audit import get_marketing_audit
+            import asyncio as _asyncio
+            _audit_url = _is_url(user_msg)
+            if not _audit_url:
+                # Try stored brand URL
+                try:
+                    from memory_store import get_memory_store
+                    _audit_url = get_memory_store().get_profile_key("website_url")
+                except Exception:
+                    _audit_url = None
+            if not _audit_url or _audit_url == "skipped":
+                result = "Please provide a URL to audit. Example: 'audit https://yoursite.com'"
+            else:
+                audit_report = await _asyncio.get_event_loop().run_in_executor(
+                    None, get_marketing_audit().run_full_audit, _audit_url
+                )
+                grade = audit_report.get("grade", "?")
+                score = audit_report.get("overall_score", 0)
+                exec_summary = audit_report.get("executive_summary", "")
+                priority_actions = audit_report.get("priority_actions", [])
+                actions_str = "\n".join(
+                    f"• [{a.get('section','').upper()}] {a.get('action','')}"
+                    for a in priority_actions[:5]
+                )
+                result = (
+                    f"**Marketing Audit Complete: Grade {grade} ({score}/100)**\n\n"
+                    f"{exec_summary}\n\n"
+                    f"**Top Priority Actions:**\n{actions_str}\n\n"
+                    f"_Full report available via GET /api/audit/{audit_report.get('id', '')}_"
+                )
+            skip_review = True
+            agent_fn = None
+
         elif agent == "competitive_intel":
             # Route to dedicated Competitive Intelligence module
             from competitive_intel import get_competitive_intel
@@ -1311,6 +1355,56 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 else:
                     result = "No competitors tracked yet. Add competitors via POST /api/competitors."
             skip_review = True  # Already structured output
+            agent_fn = None
+
+        elif agent in ("nexus", "") and any(kw in _msg_lower for kw in (
+            "audit", "analyze my website", "marketing audit", "check my site",
+            "review my website", "site audit", "website analysis", "grade my site",
+            "full analysis", "analyse my website", "audit my site", "audit my website",
+        )):
+            # Nexus audit detection — route to marketing audit engine
+            from marketing_audit import get_marketing_audit
+            import asyncio as _asyncio
+            _audit_url = _is_url(user_msg)
+            if not _audit_url:
+                try:
+                    from memory_store import get_memory_store as _ms
+                    _audit_url = _ms().get_profile_key("website_url")
+                except Exception:
+                    _audit_url = None
+            if not _audit_url or _audit_url == "skipped":
+                result = (
+                    "I'd love to run a full marketing audit!\n\n"
+                    "**Which URL should I audit?** Just paste it here:\n"
+                    "_e.g. `https://yourwebsite.com`_"
+                )
+                skip_review = True
+            else:
+                audit_report = await _asyncio.get_event_loop().run_in_executor(
+                    None, get_marketing_audit().run_full_audit, _audit_url
+                )
+                grade = audit_report.get("grade", "?")
+                score = audit_report.get("overall_score", 0)
+                exec_summary = audit_report.get("executive_summary", "")
+                priority_actions = audit_report.get("priority_actions", [])
+                scores = audit_report.get("scores", {})
+                scores_str = " | ".join(
+                    f"{k.upper()} {v}" for k, v in scores.items()
+                )
+                actions_str = "\n".join(
+                    f"• [{a.get('section','').upper()}] {a.get('action','')}"
+                    for a in priority_actions[:5]
+                )
+                result = (
+                    f"**Marketing Audit Complete**\n\n"
+                    f"**Grade: {grade}** ({score}/100)\n"
+                    f"_{scores_str}_\n\n"
+                    f"{exec_summary}\n\n"
+                    f"**Top 5 Priority Actions:**\n{actions_str}\n\n"
+                    f"_Full report stored. Ask me about any specific section (SEO, CRO, Content, etc.) for deep analysis._"
+                )
+                skip_review = True
+            agent = "nexus"
             agent_fn = None
 
         else:  # "nexus" or anything else → smart routing
@@ -1936,6 +2030,60 @@ def acknowledge_alert(alert_id: str):
         from competitive_intel import get_competitive_intel
         get_competitive_intel().acknowledge_alert(alert_id)
         return {"success": True, "alert_id": alert_id, "message": "Alert acknowledged."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# MARKETING AUDIT ENDPOINTS
+# ============================================================================
+
+class AuditRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/audit")
+async def run_marketing_audit(request: AuditRequest):
+    """
+    Full marketing audit: BrandDNA + 7 parallel audit sections + letter grade.
+    SEO, Content, CRO, Messaging, PPC, Competitive, Growth.
+    Heavy operation — allow up to 120 seconds.
+    """
+    try:
+        from marketing_audit import get_marketing_audit
+        import asyncio
+        audit = get_marketing_audit()
+        # Run blocking audit in thread pool to avoid blocking event loop
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, audit.run_full_audit, request.url
+        )
+        return {"success": True, **result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/audit/history")
+def get_audit_history(limit: int = 20):
+    """List past marketing audits with grade and score summary."""
+    try:
+        from marketing_audit import get_marketing_audit
+        history = get_marketing_audit().get_audit_history(limit=limit)
+        return {"success": True, "audits": history, "count": len(history)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/audit/{audit_id}")
+def get_audit_report(audit_id: str):
+    """Retrieve a full stored audit report by ID."""
+    try:
+        from marketing_audit import get_marketing_audit
+        report = get_marketing_audit().get_audit_by_id(audit_id)
+        if not report:
+            raise HTTPException(status_code=404, detail="Audit not found")
+        return {"success": True, **report}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

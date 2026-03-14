@@ -1,20 +1,24 @@
 """
-BrandDNA Auto-Extraction — SwarmOps
-Extracts brand identity from a website URL and injects it into all agent prompts.
-Like Google Pomelli, but built for all 11 SwarmOps agents.
+BrandDNA Auto-Extraction — SwarmOps (World-Class Edition)
+Crawls 14+ pages, extracts 20+ brand dimensions, injects into all agent prompts.
+Anti-hallucination: returns 'not_found' for anything not explicitly on the site.
 """
 
 import os
 import re
 import json
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Optional
 from db import get_connection as _get_conn, DB_PATH
 
 
+# ---------------------------------------------------------------------------
+# DB Init
+# ---------------------------------------------------------------------------
+
 def _init_tables():
-    """Create brand_dna table if it doesn't exist."""
     conn = _get_conn()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS brand_dna (
@@ -42,191 +46,445 @@ _init_tables()
 
 
 # ---------------------------------------------------------------------------
-# HTML Parsing — no BeautifulSoup (not in requirements), pure regex
+# Page crawling — multi-page with parallel fetching
 # ---------------------------------------------------------------------------
 
-def _fetch_page(url: str, timeout: int = 10) -> str:
-    """
-    Fetch homepage HTML. Returns empty string on failure.
-    Uses a realistic User-Agent to avoid bot blocks.
-    """
+COMMON_PATHS = [
+    "", "/about", "/pricing", "/features", "/product", "/products",
+    "/solutions", "/use-cases", "/platform", "/customers",
+    "/case-studies", "/blog", "/resources", "/integrations"
+]
+
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
+
+def _fetch_page(url: str, timeout: int = 5) -> str:
+    """Fetch a single page. Returns empty string on any failure."""
     try:
         if not url.startswith("http"):
             url = "https://" + url
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-        resp = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        resp.raise_for_status()
-        return resp.text
-    except Exception as e:
-        print(f"[brand_dna] Fetch error for {url}: {e}")
-        return ""
+        resp = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
+        if resp.status_code == 200:
+            return resp.text
+    except Exception:
+        pass
+    return ""
 
 
-def _extract_page_signals(html: str, url: str) -> dict:
+def _fetch_all_pages(base_url: str) -> str:
     """
-    Extract brand signals from raw HTML using regex.
-    Returns a dict of extracted text signals for LLM analysis.
+    Crawl up to 14 pages in parallel (max 5 concurrent, 5s timeout each).
+    Returns combined extracted text from all successful pages.
     """
-    signals = {}
+    if not base_url.startswith("http"):
+        base_url = "https://" + base_url
 
-    # Title tag
-    title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
-    signals["title"] = re.sub(r"<[^>]+>", "", title_match.group(1)).strip() if title_match else ""
+    # Strip trailing slash
+    base_url = base_url.rstrip("/")
 
-    # Meta description
-    meta_desc = re.search(
-        r'<meta\s+name=["\']description["\']\s+content=["\']([^"\']+)["\']',
-        html, re.IGNORECASE
-    ) or re.search(
-        r'<meta\s+content=["\']([^"\']+)["\']\s+name=["\']description["\']',
+    urls = [base_url + path for path in COMMON_PATHS]
+
+    collected_texts = []
+
+    def fetch_and_extract(url):
+        html = _fetch_page(url, timeout=5)
+        if html:
+            return _html_to_text(html, url)
+        return None
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(fetch_and_extract, url): url for url in urls}
+        for future in as_completed(futures, timeout=30):
+            try:
+                result = future.result()
+                if result:
+                    collected_texts.append(result)
+            except Exception:
+                pass
+
+    if not collected_texts:
+        # Fallback: search for brand info
+        collected_texts.append(_fallback_search(base_url))
+
+    # Combine all pages — cap at 12000 chars to avoid LLM token overflow
+    combined = "\n\n---PAGE BREAK---\n\n".join(collected_texts)
+    return combined[:12000]
+
+
+def _html_to_text(html: str, url: str) -> str:
+    """Convert HTML to clean text preserving key brand signals."""
+    # Remove scripts and styles
+    clean = re.sub(r"<script[^>]*>.*?</script>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    clean = re.sub(r"<style[^>]*>.*?</style>", " ", clean, flags=re.DOTALL | re.IGNORECASE)
+
+    # Extract key structured signals first
+    signals = []
+
+    title_m = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    if title_m:
+        signals.append("TITLE: " + re.sub(r"<[^>]+>", "", title_m.group(1)).strip())
+
+    meta_desc_m = re.search(
+        r'<meta\s+(?:name=["\']description["\']\s+content=["\']([^"\']+)["\']|'
+        r'content=["\']([^"\']+)["\']\s+name=["\']description["\'])',
         html, re.IGNORECASE
     )
-    signals["meta_description"] = meta_desc.group(1).strip() if meta_desc else ""
+    if meta_desc_m:
+        desc = meta_desc_m.group(1) or meta_desc_m.group(2)
+        signals.append("META DESC: " + desc.strip())
 
-    # OG title and description (often cleaner brand messaging)
-    og_title = re.search(r'<meta\s+property=["\']og:title["\']\s+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
-    signals["og_title"] = og_title.group(1).strip() if og_title else ""
+    og_title_m = re.search(r'<meta\s+property=["\']og:title["\']\s+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    if og_title_m:
+        signals.append("OG TITLE: " + og_title_m.group(1).strip())
 
-    og_desc = re.search(r'<meta\s+property=["\']og:description["\']\s+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
-    signals["og_description"] = og_desc.group(1).strip() if og_desc else ""
+    og_desc_m = re.search(r'<meta\s+property=["\']og:description["\']\s+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    if og_desc_m:
+        signals.append("OG DESC: " + og_desc_m.group(1).strip())
 
-    # H1 tags (hero headline — key brand signal)
     h1_matches = re.findall(r"<h1[^>]*>(.*?)</h1>", html, re.IGNORECASE | re.DOTALL)
-    h1_texts = [re.sub(r"<[^>]+>", "", h).strip() for h in h1_matches if h.strip()]
-    signals["h1_tags"] = h1_texts[:3]
+    for h in h1_matches[:3]:
+        t = re.sub(r"<[^>]+>", "", h).strip()
+        if t:
+            signals.append("H1: " + t)
 
-    # H2 tags (subheadings — value props)
     h2_matches = re.findall(r"<h2[^>]*>(.*?)</h2>", html, re.IGNORECASE | re.DOTALL)
-    h2_texts = [re.sub(r"<[^>]+>", "", h).strip() for h in h2_matches if h.strip()]
-    signals["h2_tags"] = h2_texts[:5]
+    for h in h2_matches[:5]:
+        t = re.sub(r"<[^>]+>", "", h).strip()
+        if t:
+            signals.append("H2: " + t)
 
-    # CTA buttons and links (action language)
-    button_matches = re.findall(r"<(?:button|a)[^>]*>(.*?)</(?:button|a)>", html, re.IGNORECASE | re.DOTALL)
-    cta_texts = []
-    for btn in button_matches:
-        text = re.sub(r"<[^>]+>", "", btn).strip()
-        if 2 < len(text) < 50 and any(
-            word in text.lower() for word in
+    # CTAs
+    btn_matches = re.findall(r"<(?:button|a)[^>]*>(.*?)</(?:button|a)>", html, re.IGNORECASE | re.DOTALL)
+    ctas = []
+    for btn in btn_matches:
+        t = re.sub(r"<[^>]+>", "", btn).strip()
+        if 2 < len(t) < 50 and any(
+            w in t.lower() for w in
             ["get", "start", "try", "sign", "book", "demo", "join", "free", "buy",
-             "learn", "explore", "request", "contact", "watch", "download"]
+             "learn", "explore", "request", "contact", "watch", "download", "pricing"]
         ):
-            cta_texts.append(text)
-    signals["cta_patterns"] = list(dict.fromkeys(cta_texts))[:10]  # dedupe, cap at 10
+            ctas.append(t)
+    if ctas:
+        signals.append("CTAS: " + " | ".join(list(dict.fromkeys(ctas))[:8]))
 
-    # Color palette — hex codes from inline styles and CSS
-    hex_colors = re.findall(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b", html)
-    # Filter out near-white / near-black, dedupe
-    meaningful_colors = []
-    seen = set()
-    for c in hex_colors:
-        full = c if len(c) == 6 else c[0]*2 + c[1]*2 + c[2]*2
-        val = int(full, 16)
-        if val not in (0x000000, 0xFFFFFF, 0xffffff, 0x000) and full not in seen:
-            seen.add(full)
-            meaningful_colors.append("#" + full.upper())
-        if len(meaningful_colors) >= 8:
-            break
-    signals["color_palette"] = meaningful_colors
+    # Pricing signals
+    price_m = re.findall(r'\$[\d,]+(?:\.\d{2})?(?:/(?:mo|month|yr|year|user))?', html)
+    if price_m:
+        signals.append("PRICES FOUND: " + ", ".join(list(dict.fromkeys(price_m))[:5]))
 
-    # Domain name as fallback brand name
-    domain_match = re.search(r"https?://(?:www\.)?([^/]+)", url)
-    signals["domain"] = domain_match.group(1).split(".")[0].capitalize() if domain_match else ""
+    # Social links
+    social_m = re.findall(r'https?://(?:www\.)?(twitter|linkedin|instagram|facebook|youtube|tiktok)\.com/[^\s"\']+', html, re.IGNORECASE)
+    if social_m:
+        signals.append("SOCIAL: " + ", ".join(set(m.lower() for m in social_m[:5])))
 
-    # Body text sample for voice analysis (first 2000 chars of visible text)
-    body_text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
-    body_text = re.sub(r"<style[^>]*>.*?</style>", "", body_text, flags=re.DOTALL | re.IGNORECASE)
-    body_text = re.sub(r"<[^>]+>", " ", body_text)
-    body_text = re.sub(r"\s+", " ", body_text).strip()
-    signals["body_sample"] = body_text[:2000]
+    # Body text sample
+    body = re.sub(r"<[^>]+>", " ", clean)
+    body = re.sub(r"\s+", " ", body).strip()
 
-    return signals
+    signals_text = "\n".join(signals)
+    page_url_label = f"[PAGE: {url}]"
+    return f"{page_url_label}\n{signals_text}\n{body[:1500]}"
+
+
+def _fallback_search(url: str) -> str:
+    """Use search when direct crawl fails."""
+    try:
+        from model_router import search_brave, search_serper
+        domain_m = re.search(r"https?://(?:www\.)?([^/]+)", url)
+        domain = domain_m.group(1) if domain_m else url
+        results = search_brave(f"site:{domain} about company", max_results=3)
+        if not results:
+            results = search_serper(f"{domain} company brand about", max_results=3)
+        if results:
+            combined = " ".join(r.get("description", "") + " " + r.get("title", "") for r in results)
+            return f"[SEARCH FALLBACK for {url}]\n{combined}"
+    except Exception:
+        pass
+    return ""
 
 
 # ---------------------------------------------------------------------------
-# LLM Analysis
+# LLM Extraction — comprehensive 20+ field anti-hallucination prompt
 # ---------------------------------------------------------------------------
 
-_EXTRACTION_SYSTEM_PROMPT = """You are a brand intelligence analyst.
-You analyze website content and extract structured brand DNA.
-Return ONLY valid JSON — no markdown, no explanation, just the JSON object."""
+_SYSTEM_PROMPT = """You are an expert brand intelligence analyst.
+Analyze website content and return ONLY valid JSON — no markdown, no explanation.
+CRITICAL: If information cannot be found in the content, return "not_found" instead of guessing.
+NEVER hallucinate or invent data. Only extract what is explicitly present."""
 
-_EXTRACTION_PROMPT_TEMPLATE = """Analyze this website content and extract the brand DNA.
+_EXTRACTION_PROMPT = """You are an expert brand intelligence analyst. Analyze this website content
+and extract comprehensive brand intelligence.
 
-Website URL: {url}
-Page Title: {title}
-Meta Description: {meta_description}
-OG Title: {og_title}
-OG Description: {og_description}
-H1 Headlines: {h1_tags}
-H2 Subheadings: {h2_tags}
-CTA Buttons Found: {cta_patterns}
-Body Text Sample: {body_sample}
+CRITICAL: If information cannot be found in the content, return "not_found"
+instead of guessing. NEVER hallucinate or invent data.
 
-Return ONLY this exact JSON structure (no markdown, no explanation):
+Return ONLY valid JSON with this exact structure:
+
 {{
-  "brand_name": "string — company name",
-  "tagline": "string — main hero tagline or value statement",
-  "brand_voice": "string — one of: formal / casual / technical / friendly / professional / bold / authoritative",
-  "tone_keywords": ["adj1", "adj2", "adj3", "adj4", "adj5"],
-  "value_proposition": "string — the main benefit or promise in 1-2 sentences",
-  "target_audience": "string — who this brand serves",
-  "industry": "string — one of: ecommerce / saas / b2b / b2c / healthcare / fintech / edtech / agency / media / other",
-  "competitors": ["competitor1", "competitor2"],
-  "content_style": {{
-    "avg_sentence_length": "short / medium / long",
-    "reading_level": "simple / intermediate / advanced",
-    "uses_emoji": true or false,
-    "uses_jargon": true or false
+  "brand_name": "string",
+  "tagline": "string or not_found",
+  "industry": "specific industry",
+  "sub_industry": "niche or not_found",
+
+  "brand_voice": {{
+    "tone": "formal/casual/technical/friendly/authoritative/playful",
+    "personality_traits": ["trait1", "trait2", "trait3", "trait4", "trait5"],
+    "writing_style": "concise/detailed/storytelling/data-driven",
+    "formality_level": 7,
+    "emoji_usage": "none/minimal/moderate/heavy",
+    "jargon_level": "none/low/medium/high"
   }},
-  "cta_patterns": ["cta1", "cta2", "cta3"]
-}}"""
+
+  "visual_identity": {{
+    "design_style": "minimal/corporate/playful/tech/startup/luxury",
+    "visual_mood": ["modern", "clean", "bold"],
+    "background_style": "light/dark/mixed",
+    "ui_complexity": "simple/moderate/complex",
+    "illustration_style": "none/3D/cartoon/flat/photography"
+  }},
+
+  "value_proposition": {{
+    "primary": "main value prop or not_found",
+    "supporting": ["point1", "point2", "point3"],
+    "unique_differentiator": "what makes them different"
+  }},
+
+  "target_audience": {{
+    "primary": "main audience",
+    "segments": ["segment1", "segment2"],
+    "company_size": "startup/smb/mid-market/enterprise/all",
+    "decision_maker": "role they sell to or not_found"
+  }},
+
+  "products_services": [
+    {{"name": "string", "description": "string", "category": "string"}}
+  ],
+
+  "pricing": {{
+    "model": "freemium/subscription/one-time/custom/not_found",
+    "starting_price": "price or not_found",
+    "has_free_tier": "true/false/not_found",
+    "enterprise_plan": "true/false/not_found"
+  }},
+
+  "business_objectives": {{
+    "primary_goal": "lead_generation/ecommerce/subscriptions/awareness/not_found",
+    "conversion_type": "demo/signup/purchase/contact/not_found",
+    "sales_motion": "self-serve/sales-assisted/enterprise/not_found"
+  }},
+
+  "brand_positioning": {{
+    "market_position": "premium/mid-market/budget",
+    "key_differentiators": ["diff1", "diff2", "diff3"],
+    "innovation_level": "traditional/moderate/highly_innovative"
+  }},
+
+  "customer_pain_points": ["pain1", "pain2", "pain3"],
+
+  "marketing_funnel": {{
+    "lead_magnets": ["type1", "type2"],
+    "signup_flow": "simple/multi-step/not_found",
+    "trial_available": "true/false/not_found",
+    "email_capture_present": "true/false/not_found"
+  }},
+
+  "content_strategy": {{
+    "blog_exists": true,
+    "content_topics": ["topic1", "topic2"],
+    "content_formats": ["blog", "case_studies", "videos"],
+    "content_frequency": "daily/weekly/monthly/sporadic/not_found"
+  }},
+
+  "seo_signals": {{
+    "meta_title": "string or not_found",
+    "meta_description": "string or not_found",
+    "h1_text": "string or not_found",
+    "estimated_keywords": ["kw1", "kw2", "kw3"]
+  }},
+
+  "trust_signals": {{
+    "testimonials": true,
+    "case_studies": true,
+    "client_logos": true,
+    "certifications": [],
+    "media_mentions": []
+  }},
+
+  "authority_signals": {{
+    "thought_leadership": true,
+    "educational_content": true,
+    "research_reports": false,
+    "community_presence": false
+  }},
+
+  "social_presence": {{
+    "platforms_detected": ["twitter", "linkedin"],
+    "primary_platform": "string or not_found"
+  }},
+
+  "technology_signals": {{
+    "platform": "string or not_found",
+    "integrations_mentioned": []
+  }},
+
+  "competitors": {{
+    "mentioned_on_site": [],
+    "implied_competitors": []
+  }},
+
+  "cta_patterns": ["CTA1", "CTA2"],
+
+  "overall_scores": {{
+    "website_quality": 8,
+    "messaging_clarity": 7,
+    "trust_factor": 9,
+    "seo_readiness": 6,
+    "conversion_optimization": 7
+  }}
+}}
+
+Website content from multiple pages:
+{content}
+"""
 
 
-def _analyze_with_llm(signals: dict, url: str) -> Optional[dict]:
-    """
-    Send extracted signals to the LLM and get structured JSON back.
-    Returns parsed dict or None on failure.
-    """
+def _analyze_with_llm(content: str, url: str) -> Optional[dict]:
+    """Send all collected page content to LLM for comprehensive extraction."""
     try:
         from model_router import call_model_sync
-        prompt = _EXTRACTION_PROMPT_TEMPLATE.format(
-            url=url,
-            title=signals.get("title", ""),
-            meta_description=signals.get("meta_description", ""),
-            og_title=signals.get("og_title", ""),
-            og_description=signals.get("og_description", ""),
-            h1_tags=", ".join(signals.get("h1_tags", [])),
-            h2_tags=", ".join(signals.get("h2_tags", [])),
-            cta_patterns=", ".join(signals.get("cta_patterns", [])),
-            body_sample=signals.get("body_sample", "")[:1500],
-        )
+        prompt = _EXTRACTION_PROMPT.format(content=content[:10000])
         result = call_model_sync(
             prompt=prompt,
-            system_prompt=_EXTRACTION_SYSTEM_PROMPT,
+            system_prompt=_SYSTEM_PROMPT,
             tier=2,
-            max_tokens=1024,
-            temperature=0.3,  # Low temp for consistent structured output
+            max_tokens=2048,
+            temperature=0.2,
         )
         raw = result.get("content", "")
-
-        # Strip markdown fences if model wraps in ```json
         clean = raw.strip()
         if clean.startswith("```"):
             clean = re.sub(r"^```[a-z]*\n?", "", clean)
             clean = re.sub(r"\n?```$", "", clean)
-
-        return json.loads(clean.strip())
+        parsed = json.loads(clean.strip())
+        return parsed
     except Exception as e:
         print(f"[brand_dna] LLM analysis failed: {e}")
         return None
+
+
+def _minimal_fallback(url: str) -> dict:
+    """Minimal fallback when everything fails."""
+    domain_m = re.search(r"https?://(?:www\.)?([^/]+)", url)
+    domain = domain_m.group(1).split(".")[0].capitalize() if domain_m else "Unknown"
+    return {
+        "brand_name": domain,
+        "tagline": "not_found",
+        "industry": "not_found",
+        "sub_industry": "not_found",
+        "brand_voice": {
+            "tone": "not_found",
+            "personality_traits": [],
+            "writing_style": "not_found",
+            "formality_level": 5,
+            "emoji_usage": "not_found",
+            "jargon_level": "not_found",
+        },
+        "visual_identity": {
+            "design_style": "not_found",
+            "visual_mood": [],
+            "background_style": "not_found",
+            "ui_complexity": "not_found",
+            "illustration_style": "not_found",
+        },
+        "value_proposition": {
+            "primary": "not_found",
+            "supporting": [],
+            "unique_differentiator": "not_found",
+        },
+        "target_audience": {
+            "primary": "not_found",
+            "segments": [],
+            "company_size": "not_found",
+            "decision_maker": "not_found",
+        },
+        "products_services": [],
+        "pricing": {
+            "model": "not_found",
+            "starting_price": "not_found",
+            "has_free_tier": "not_found",
+            "enterprise_plan": "not_found",
+        },
+        "business_objectives": {
+            "primary_goal": "not_found",
+            "conversion_type": "not_found",
+            "sales_motion": "not_found",
+        },
+        "brand_positioning": {
+            "market_position": "not_found",
+            "key_differentiators": [],
+            "innovation_level": "not_found",
+        },
+        "customer_pain_points": [],
+        "marketing_funnel": {
+            "lead_magnets": [],
+            "signup_flow": "not_found",
+            "trial_available": "not_found",
+            "email_capture_present": "not_found",
+        },
+        "content_strategy": {
+            "blog_exists": False,
+            "content_topics": [],
+            "content_formats": [],
+            "content_frequency": "not_found",
+        },
+        "seo_signals": {
+            "meta_title": "not_found",
+            "meta_description": "not_found",
+            "h1_text": "not_found",
+            "estimated_keywords": [],
+        },
+        "trust_signals": {
+            "testimonials": False,
+            "case_studies": False,
+            "client_logos": False,
+            "certifications": [],
+            "media_mentions": [],
+        },
+        "authority_signals": {
+            "thought_leadership": False,
+            "educational_content": False,
+            "research_reports": False,
+            "community_presence": False,
+        },
+        "social_presence": {
+            "platforms_detected": [],
+            "primary_platform": "not_found",
+        },
+        "technology_signals": {
+            "platform": "not_found",
+            "integrations_mentioned": [],
+        },
+        "competitors": {
+            "mentioned_on_site": [],
+            "implied_competitors": [],
+        },
+        "cta_patterns": [],
+        "overall_scores": {
+            "website_quality": 0,
+            "messaging_clarity": 0,
+            "trust_factor": 0,
+            "seo_readiness": 0,
+            "conversion_optimization": 0,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -235,85 +493,70 @@ def _analyze_with_llm(signals: dict, url: str) -> Optional[dict]:
 
 class BrandDNA:
     """
-    Extracts, stores, and serves brand identity from a website URL.
-    Thread-safe singleton pattern — use get_brand_dna() factory.
+    Extracts, stores, and serves rich brand identity from a website URL.
+    Crawls 14+ pages in parallel. Anti-hallucination enforced.
+    Thread-safe singleton — use get_brand_dna() factory.
     """
 
     def extract(self, url: str) -> dict:
         """
-        Full pipeline: fetch → parse → LLM analyze → store → return.
-        Never raises — returns error dict on failure.
+        Full pipeline: crawl 14 pages → combine → LLM analyze → store → return.
+        Never raises. Returns error dict on failure.
         """
         try:
-            print(f"[brand_dna] Extracting BrandDNA from: {url}")
+            if not url.startswith("http"):
+                url = "https://" + url
+            print(f"[brand_dna] Crawling {url} across {len(COMMON_PATHS)} pages...")
 
-            # 1. Fetch the homepage
-            html = _fetch_page(url)
-            if not html:
-                # Fallback: try Brave search for brand info
-                html = self._fallback_search(url)
+            # 1. Crawl all pages in parallel
+            content = _fetch_all_pages(url)
+            if not content.strip():
+                print(f"[brand_dna] No content retrieved — using search fallback")
 
-            # 2. Extract signals from HTML
-            signals = _extract_page_signals(html, url)
-
-            # 3. LLM analysis
-            dna = _analyze_with_llm(signals, url)
+            # 2. LLM comprehensive extraction
+            dna = _analyze_with_llm(content, url)
             if not dna:
-                # Minimal fallback from signals
-                dna = {
-                    "brand_name": signals.get("domain", "Unknown Brand"),
-                    "tagline": signals.get("og_title") or signals.get("title", ""),
-                    "brand_voice": "professional",
-                    "tone_keywords": ["professional", "clear", "direct", "reliable", "modern"],
-                    "value_proposition": signals.get("meta_description", ""),
-                    "target_audience": "General audience",
-                    "industry": "other",
-                    "competitors": [],
-                    "content_style": {
-                        "avg_sentence_length": "medium",
-                        "reading_level": "intermediate",
-                        "uses_emoji": False,
-                        "uses_jargon": False,
-                    },
-                    "cta_patterns": signals.get("cta_patterns", []),
-                }
+                dna = _minimal_fallback(url)
 
-            # 4. Merge in color palette from HTML (LLM doesn't extract these)
-            dna["color_palette"] = signals.get("color_palette", [])
+            # 3. Attach metadata
             dna["url"] = url
+            dna["extracted_at"] = datetime.now(timezone.utc).isoformat()
 
-            # 5. Store in DB
+            # 4. Store
             self._store(url, dna)
 
-            print(f"[brand_dna] Extracted: {dna.get('brand_name')} | {dna.get('industry')} | {dna.get('brand_voice')}")
+            brand = dna.get("brand_name", "unknown")
+            industry = dna.get("industry", "unknown")
+            voice = dna.get("brand_voice", {})
+            tone = voice.get("tone", "unknown") if isinstance(voice, dict) else str(voice)
+            print(f"[brand_dna] Extracted: {brand} | {industry} | {tone}")
+
             return {"success": True, "brand_dna": dna}
 
         except Exception as e:
             print(f"[brand_dna] Extraction error: {e}")
             return {"success": False, "error": str(e)}
 
-    def _fallback_search(self, url: str) -> str:
-        """Use Brave/Serper to get brand info if direct fetch fails."""
-        try:
-            from model_router import search_brave, search_serper
-            domain = re.search(r"https?://(?:www\.)?([^/]+)", url)
-            brand_domain = domain.group(1) if domain else url
-            results = search_brave(f"site:{brand_domain} brand about", max_results=3)
-            if not results:
-                results = search_serper(f"{brand_domain} company about", max_results=3)
-            if results:
-                combined = " ".join(r.get("description", "") for r in results)
-                return f"<title>{brand_domain}</title><meta name='description' content='{combined}'>"
-        except Exception:
-            pass
-        return ""
-
     def _store(self, url: str, dna: dict):
-        """Upsert BrandDNA into the database (one row — always overwrite latest)."""
+        """Upsert BrandDNA — one row per domain, always overwrite latest."""
         try:
             conn = _get_conn()
-            # Delete old entry for this domain, keep only latest
             conn.execute("DELETE FROM brand_dna WHERE url = ?", (url,))
+
+            # Backward-compat columns: extract from new rich schema
+            brand_name = dna.get("brand_name", "")
+            tagline = dna.get("tagline", "")
+            bv = dna.get("brand_voice", {})
+            brand_voice = bv.get("tone", "") if isinstance(bv, dict) else str(bv)
+            tone_kw = bv.get("personality_traits", []) if isinstance(bv, dict) else []
+            vp = dna.get("value_proposition", {})
+            value_prop = vp.get("primary", "") if isinstance(vp, dict) else str(vp)
+            ta = dna.get("target_audience", {})
+            target_aud = ta.get("primary", "") if isinstance(ta, dict) else str(ta)
+            industry = dna.get("industry", "")
+            comps = dna.get("competitors", {})
+            competitors = comps.get("mentioned_on_site", []) if isinstance(comps, dict) else []
+
             conn.execute(
                 """INSERT INTO brand_dna
                    (url, brand_name, tagline, brand_voice, tone_keywords,
@@ -321,17 +564,12 @@ class BrandDNA:
                     content_style, color_palette, cta_patterns, raw_json)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    url,
-                    dna.get("brand_name", ""),
-                    dna.get("tagline", ""),
-                    dna.get("brand_voice", ""),
-                    json.dumps(dna.get("tone_keywords", [])),
-                    dna.get("value_proposition", ""),
-                    dna.get("target_audience", ""),
-                    dna.get("industry", ""),
-                    json.dumps(dna.get("competitors", [])),
-                    json.dumps(dna.get("content_style", {})),
-                    json.dumps(dna.get("color_palette", [])),
+                    url, brand_name, tagline, brand_voice,
+                    json.dumps(tone_kw),
+                    value_prop, target_aud, industry,
+                    json.dumps(competitors),
+                    json.dumps(dna.get("content_strategy", {})),
+                    json.dumps([]),  # color_palette not extracted by LLM
                     json.dumps(dna.get("cta_patterns", [])),
                     json.dumps(dna),
                 )
@@ -359,8 +597,9 @@ class BrandDNA:
 
     def get_brand_context(self) -> str:
         """
-        Returns a formatted brand context string for injection into agent prompts.
-        Returns empty string if no BrandDNA has been extracted yet.
+        Rich brand context string injected into all agent prompts.
+        Includes voice, positioning, pain points, audience segments.
+        Returns empty string if no BrandDNA extracted yet.
         """
         try:
             dna = self.get_stored()
@@ -368,24 +607,103 @@ class BrandDNA:
                 return ""
 
             brand_name = dna.get("brand_name", "")
-            industry = dna.get("industry", "")
-            brand_voice = dna.get("brand_voice", "")
-            target_audience = dna.get("target_audience", "")
-            value_proposition = dna.get("value_proposition", "")
-            tone_keywords = dna.get("tone_keywords", [])
-            tone_str = ", ".join(tone_keywords) if isinstance(tone_keywords, list) else tone_keywords
-
-            if not brand_name:
+            if not brand_name or brand_name == "not_found":
                 return ""
 
-            return (
-                f"BRAND CONTEXT: {brand_name} is a {industry} company. "
-                f"Voice: {brand_voice}. "
-                f"Target audience: {target_audience}. "
-                f"Value proposition: {value_proposition}. "
-                f"Tone: {tone_str}. "
-                f"Write all content matching this brand identity."
+            industry = dna.get("industry", "not_found")
+            sub_industry = dna.get("sub_industry", "")
+
+            # Brand voice
+            bv = dna.get("brand_voice", {})
+            if isinstance(bv, dict):
+                tone = bv.get("tone", "professional")
+                traits = bv.get("personality_traits", [])
+                writing_style = bv.get("writing_style", "")
+                formality = bv.get("formality_level", 5)
+                jargon = bv.get("jargon_level", "medium")
+                emoji = bv.get("emoji_usage", "none")
+            else:
+                tone = str(bv)
+                traits = []
+                writing_style = formality = jargon = emoji = ""
+            traits_str = ", ".join(traits[:4]) if traits else ""
+
+            # Audience
+            ta = dna.get("target_audience", {})
+            if isinstance(ta, dict):
+                audience = ta.get("primary", "general audience")
+                segments = ta.get("segments", [])
+                co_size = ta.get("company_size", "")
+                decision_maker = ta.get("decision_maker", "")
+            else:
+                audience = str(ta)
+                segments = co_size = decision_maker = ""
+
+            # Value prop
+            vp = dna.get("value_proposition", {})
+            if isinstance(vp, dict):
+                primary_vp = vp.get("primary", "")
+                differentiator = vp.get("unique_differentiator", "")
+            else:
+                primary_vp = str(vp)
+                differentiator = ""
+
+            # Pain points
+            pain_points = dna.get("customer_pain_points", [])
+            pain_str = "; ".join(pain_points[:3]) if pain_points else ""
+
+            # Positioning
+            bp = dna.get("brand_positioning", {})
+            if isinstance(bp, dict):
+                market_pos = bp.get("market_position", "")
+                differentiators = bp.get("key_differentiators", [])
+            else:
+                market_pos = ""
+                differentiators = []
+            diff_str = "; ".join(differentiators[:3]) if differentiators else ""
+
+            # Build rich context
+            parts = [f"BRAND CONTEXT FOR {brand_name.upper()}:"]
+            if industry and industry != "not_found":
+                ind_str = industry
+                if sub_industry and sub_industry != "not_found":
+                    ind_str += f" / {sub_industry}"
+                parts.append(f"Industry: {ind_str}")
+            if primary_vp and primary_vp != "not_found":
+                parts.append(f"Value Proposition: {primary_vp}")
+            if audience and audience != "not_found":
+                aud_str = audience
+                if co_size and co_size != "not_found":
+                    aud_str += f" ({co_size})"
+                if decision_maker and decision_maker != "not_found":
+                    aud_str += f", targeting {decision_maker}"
+                parts.append(f"Target Audience: {aud_str}")
+            if tone and tone != "not_found":
+                voice_str = f"Brand Voice: {tone}"
+                if traits_str:
+                    voice_str += f" — {traits_str}"
+                if writing_style:
+                    voice_str += f", {writing_style} style"
+                if emoji and emoji != "not_found":
+                    voice_str += f", emoji usage: {emoji}"
+                parts.append(voice_str)
+            if pain_str:
+                parts.append(f"Customer Pain Points: {pain_str}")
+            if diff_str:
+                parts.append(f"Key Differentiators: {diff_str}")
+            if market_pos and market_pos != "not_found":
+                parts.append(f"Market Position: {market_pos}")
+            if differentiator and differentiator != "not_found":
+                parts.append(f"Unique Differentiator: {differentiator}")
+
+            parts.append(
+                f"INSTRUCTION: Write all content matching {brand_name}'s brand identity. "
+                f"Match the tone ({tone}), use language appropriate for {audience}, "
+                f"and focus on their core value proposition."
             )
+
+            return "\n".join(parts)
+
         except Exception as e:
             print(f"[brand_dna] get_brand_context error: {e}")
             return ""

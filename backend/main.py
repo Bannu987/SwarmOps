@@ -1132,6 +1132,93 @@ def _check_multi_agent_trigger(user_message: str):
             return agents
     return None
 
+
+def _rank_agent_results(agent_results: dict) -> list:
+    """Rank agent results by response quality/length as confidence proxy."""
+    import re as _re_rank
+    ranked = []
+    for agent_id, result in agent_results.items():
+        text = str(result)
+        score = 0.5  # base score
+
+        if len(text) > 200: score += 0.1
+        if len(text) > 500: score += 0.1
+
+        if _re_rank.search(r'\d+%|\$\d+|\d+x', text): score += 0.15
+
+        if any(w in text.lower() for w in ['recommend', 'suggest', 'priority', 'action', 'should']):
+            score += 0.1
+
+        score = min(score, 1.0)
+        ranked.append((agent_id, result, score))
+
+    ranked.sort(key=lambda x: x[2], reverse=True)
+    return ranked
+
+# ============================================================================
+# CONVERSATION MEMORY — persist highlights across sessions for Nexus context
+# ============================================================================
+
+def _update_conversation_memory(user_message: str, agent_response: str, brand_context: dict):
+    """Store conversation highlights in conversation_memory table."""
+    try:
+        import re as _re_mem
+        from db import get_connection as _mem_conn
+        conn = _mem_conn()
+
+        numbers = _re_mem.findall(
+            r'\$[\d,]+|\d+%|\d+x|\d+\s*visitors|\d+\s*sales', user_message
+        )
+        metrics = ", ".join(numbers) if numbers else ""
+
+        strategy_keywords = [
+            'seo', 'content', 'ppc', 'email', 'social', 'cro',
+            'retargeting', 'blog', 'landing page', 'campaign',
+        ]
+        found = [k for k in strategy_keywords if k in agent_response.lower()]
+        strategies = ", ".join(found) if found else ""
+
+        industry = brand_context.get("industry", "") if isinstance(brand_context, dict) else ""
+
+        conn.execute(
+            """INSERT INTO conversation_memory
+               (user_goal, industry, strategies_discussed, metrics_mentioned, key_insights)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                user_message[:200],
+                industry,
+                strategies,
+                metrics,
+                agent_response[:500],
+            ),
+        )
+        conn.commit()
+    except Exception:
+        pass  # never block on memory
+
+
+def _get_conversation_context() -> str:
+    """Return recent conversation highlights to inject into Nexus prompts."""
+    try:
+        from db import get_connection as _ctx_conn
+        conn = _ctx_conn()
+        rows = conn.execute(
+            "SELECT strategies_discussed, metrics_mentioned FROM conversation_memory "
+            "ORDER BY created_at DESC LIMIT 3"
+        ).fetchall()
+        if not rows:
+            return ""
+        parts = []
+        for row in rows:
+            if row[0]:
+                parts.append(f"Previously discussed: {row[0]}")
+            if row[1]:
+                parts.append(f"Known metrics: {row[1]}")
+        return "CONVERSATION HISTORY:\n" + "\n".join(parts) if parts else ""
+    except Exception:
+        return ""
+
+
 # ============================================================================
 # UNIFIED CHAT ENDPOINT — single entry point for all agents
 # ============================================================================
@@ -1265,18 +1352,20 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                             pass
 
                 if _agent_results:
-                    # Build synthesis prompt for Nexus
-                    _synthesis_parts = []
-                    for _ag, _res in _agent_results.items():
-                        _synthesis_parts.append(f"=== {_ag.upper()} AGENT ===\n{str(_res)[:800]}")
+                    # Rank results by quality confidence
+                    _ranked = _rank_agent_results(_agent_results)
+
+                    # Build synthesis prompt using ranked order
+                    _agent_findings = ""
+                    for _ag_id, _ag_res, _ag_score in _ranked:
+                        _agent_findings += f"\n{_ag_id.upper()} Agent (confidence: {_ag_score:.1f}):\n{str(_ag_res)[:400]}\n"
 
                     _synthesis_prompt = f"""The user asked: "{user_msg}"
 
-I ran {len(_agent_results)} specialized agents in parallel. Here are their findings:
+I ran {len(_agent_results)} specialized agents in parallel. Here are their findings, ranked by response quality (higher confidence = more detailed/data-backed):
+{_agent_findings}
 
-{chr(10).join(_synthesis_parts)}
-
-Synthesize this into ONE cohesive strategic response. Highlight the 3 highest-impact actions. Keep it under 300 words. Be conversational, not a data dump. End with "**What would you like to dive deeper on?**" """
+Synthesize this into ONE cohesive strategic response. Weight insights from higher-confidence agents more heavily. Highlight the 3 highest-impact actions. Keep it under 300 words. Be conversational, not a data dump. End with "**What would you like to dive deeper on?**" """
 
                     nexus = get_nexus()
                     result = nexus.apply_nexus_persona(user_msg, _synthesis_prompt)
@@ -1285,7 +1374,7 @@ Synthesize this into ONE cohesive strategic response. Highlight the 3 highest-im
                         "success": True,
                         "agent": "nexus",
                         "multi_agent": True,
-                        "agents_used": list(_agent_results.keys()),
+                        "agents_used": [{"agent": ag, "confidence": sc} for ag, _, sc in _ranked],
                         "result": result,
                         "model": "multi-agent-synthesis",
                         "provider": "swarmops",
@@ -1330,6 +1419,11 @@ Synthesize this into ONE cohesive strategic response. Highlight the 3 highest-im
                 msg = _comp_context + "\n\n" + msg
         except Exception:
             pass  # never block on competitive context injection
+
+        # --- inject conversation memory (past sessions, strategies, metrics) ---
+        _conv_context = _get_conversation_context()
+        if _conv_context:
+            msg = _conv_context + "\n\n" + msg
 
         # --- inject LearningEngine personalization context ---
         _learning_context = ""
@@ -1654,6 +1748,18 @@ Synthesize this into ONE cohesive strategic response. Highlight the 3 highest-im
                 )
         except Exception:
             pass  # never block on learning
+
+        # --- update conversation memory for future context ---
+        try:
+            _brand_ctx_dict = {}
+            try:
+                from brand_dna import get_brand_dna as _bdna_mem
+                _brand_ctx_dict = get_brand_dna().get_stored() or {}
+            except Exception:
+                pass
+            _update_conversation_memory(user_msg, final_text, _brand_ctx_dict)
+        except Exception:
+            pass  # never block on conversation memory
 
         response = {
             "success": True,

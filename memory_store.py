@@ -84,6 +84,20 @@ class MemoryStore:
             CREATE INDEX IF NOT EXISTS idx_tasklog_dept ON task_log(department);
             CREATE INDEX IF NOT EXISTS idx_tasklog_date ON task_log(created_at);
             CREATE INDEX IF NOT EXISTS idx_insights_dept ON agent_insights(department);
+
+            -- Conversation Memory: cross-session highlights for Nexus context building
+            CREATE TABLE IF NOT EXISTS conversation_memory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_goal TEXT,
+                industry TEXT,
+                competitors TEXT,
+                strategies_discussed TEXT,
+                metrics_mentioned TEXT,
+                key_insights TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_conv_mem_date ON conversation_memory(created_at);
         """)
         conn.commit()
 

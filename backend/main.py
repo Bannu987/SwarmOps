@@ -113,98 +113,77 @@ def _extract_text(result):
 
 
 def _format_audit_chat_result(audit_report: dict) -> str:
-    """Format a full audit report into rich markdown for chat display."""
+    """Convert audit data to a conversational, CMO-quality chat response."""
     def _score_emoji(s):
         if s >= 80: return "🟢"
         if s >= 60: return "🟡"
         return "🔴"
 
+    grade = audit_report.get("grade", "N/A")
+    overall_score = audit_report.get("overall_score", 0)
     brand = audit_report.get("brand", {})
-    brand_name = brand.get("name", audit_report.get("url", "Website"))
-    grade = audit_report.get("grade", "?")
-    score = audit_report.get("overall_score", 0)
+    brand_name = brand.get("name", audit_report.get("url", "your website"))
+    url = audit_report.get("url", "")
     exec_summary = audit_report.get("executive_summary", "")
     scores = audit_report.get("scores", {})
-    priority_actions = audit_report.get("priority_actions", [])
-    simulation = audit_report.get("improvement_simulation", {}).get("overall", {})
-    sections = audit_report.get("sections", {})
+    actions = audit_report.get("priority_actions", [])
+    audit_id = audit_report.get("id", "")
 
-    # Score table rows
-    score_rows = "\n".join(
-        f"| {k.upper()} | {v}/100 | {_score_emoji(v)} |"
-        for k, v in scores.items()
-    )
+    # Score table
+    score_lines = []
+    for section, score in scores.items():
+        score_lines.append(f"| {section.replace('_', ' ').title()} | {score}/100 | {_score_emoji(score)} |")
+    score_table = "\n".join(score_lines)
 
-    # Collect strengths (sections scoring 75+)
-    strengths = []
-    for k, v in scores.items():
-        if v >= 75:
-            section_data = sections.get(f"{k}_audit", sections.get(f"{k}_strategy", sections.get(f"{k}_landscape", sections.get(f"{k}_opportunities", {}))))
-            recs = section_data.get("recommendations", [])
-            if recs:
-                strengths.append(f"**{k.upper()}** ({v}/100): {recs[0]}")
-            else:
-                strengths.append(f"**{k.upper()}** scores {v}/100 — strong foundation")
-    strengths_str = "\n".join(f"- {s}" for s in strengths[:3]) or "- Analysis in progress"
+    # Top 5 priority actions
+    action_lines = []
+    for i, action in enumerate(actions[:5], 1):
+        if isinstance(action, dict):
+            act_text = action.get("action", str(action))
+            is_quick = action.get("type") == "quick_win"
+            tag = " ⚡" if is_quick else ""
+            action_lines.append(f"{i}.{tag} {act_text}")
+        else:
+            action_lines.append(f"{i}. {action}")
+    actions_text = "\n".join(action_lines)
 
-    # Collect weaknesses (sections scoring under 70)
-    weaknesses = []
-    for k, v in sorted(scores.items(), key=lambda x: x[1]):
-        if v < 70:
-            section_key = f"{k}_audit" if f"{k}_audit" in sections else list(sections.keys())[0] if sections else ""
-            section_data = sections.get(section_key, {})
-            qw = section_data.get("quick_wins", [])
-            weaknesses.append(f"**{k.upper()}** ({v}/100): {qw[0] if qw else 'Needs improvement'}")
-    weaknesses_str = "\n".join(f"- {w}" for w in weaknesses[:3]) or "- No critical weaknesses"
+    # Identify top strengths and critical gaps
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    top_strength = sorted_scores[0][0].replace("_", " ").title() if sorted_scores else "N/A"
+    worst_gap = sorted_scores[-1][0].replace("_", " ").title() if sorted_scores else "N/A"
+    worst_score = sorted_scores[-1][1] if sorted_scores else 0
 
-    # Priority actions (numbered, with expected impact)
-    actions_lines = []
-    for i, a in enumerate(priority_actions[:5], 1):
-        action = a.get("action", str(a)) if isinstance(a, dict) else str(a)
-        section = a.get("section", "").upper() if isinstance(a, dict) else ""
-        atype = a.get("type", "") if isinstance(a, dict) else ""
-        tag = f"[{section}]" if section else ""
-        type_tag = " ⚡" if atype == "quick_win" else ""
-        actions_lines.append(f"{i}. {tag}{type_tag} {action}")
-    actions_str = "\n".join(actions_lines)
+    report_link = f"\n\n📄 **[Download Full Report](/api/audit/{audit_id}/report)**" if audit_id else ""
 
-    # Impact section
-    traffic = simulation.get("estimated_traffic_increase", "+15-35%")
-    conversions = simulation.get("estimated_conversion_increase", "+10-20%")
-    revenue = simulation.get("estimated_revenue_opportunity", "Significant upside")
-    timeframe = simulation.get("timeframe", "3-6 months")
-    potential_grade = simulation.get("potential_grade", "")
+    return f"""## {brand_name} Marketing Audit — Grade **{grade}** ({overall_score}/100)
 
-    report_id = audit_report.get("id", "")
-
-    output = f"""## Marketing Audit: {brand_name}
-**Grade: {grade} ({score}/100)**
-
-### Executive Summary
 {exec_summary}
 
-### Scores
+---
+
+### Score Breakdown
+
 | Section | Score | Status |
 |---------|-------|--------|
-{score_rows}
+{score_table}
 
-### Key Strengths
-{strengths_str}
+---
 
-### Key Weaknesses
-{weaknesses_str}
+### Top Priority Actions
 
-### Top 5 Priority Actions
-{actions_str}
+{actions_text}
 
-### Estimated Impact ({timeframe})
-- Traffic: {traffic}
-- Conversions: {conversions}
-- Revenue Opportunity: {revenue}{f' | Potential Grade: {potential_grade}' if potential_grade else ''}
+---
 
-_Full report stored.{f' Download: GET /api/audit/{report_id}/report' if report_id else ''} Ask about any section for deep analysis._"""
+**Biggest strength:** {top_strength} is your strongest area — lean into it.
 
-    return output
+**Biggest opportunity:** {worst_gap} scored {worst_score}/100 — this is your highest-leverage improvement area.{report_link}
+
+**Would you like me to:**
+- 📊 Deep-dive into any specific section?
+- 🎯 Build a 90-day improvement roadmap?
+- ⚡ Focus only on quick wins (1-2 week fixes)?
+- 🔍 Run a competitor comparison?"""
 
 
 # ============================================================================
@@ -1119,6 +1098,41 @@ async def _onboarding_extract_brand(url: str, mem) -> dict:
 
 
 # ============================================================================
+# MULTI-AGENT ORCHESTRATION — parallel agent dispatch for complex queries
+# ============================================================================
+
+MULTI_AGENT_TRIGGERS = {
+    "more traffic": ["seo", "content", "research"],
+    "get traffic": ["seo", "content", "research"],
+    "increase traffic": ["seo", "content", "research"],
+    "grow traffic": ["seo", "content", "research"],
+    "more leads": ["cro", "ppc", "crm"],
+    "generate leads": ["cro", "ppc", "crm"],
+    "lead generation": ["cro", "ppc", "crm"],
+    "more sales": ["cro", "crm", "analytics"],
+    "increase conversions": ["cro", "analytics", "content"],
+    "improve conversions": ["cro", "analytics", "content"],
+    "brand awareness": ["smm", "content", "brand"],
+    "social media strategy": ["smm", "content", "research"],
+    "full marketing strategy": ["seo", "content", "ppc", "cro", "smm"],
+    "marketing plan": ["seo", "content", "ppc", "cro", "smm"],
+    "launch": ["seo", "ppc", "content", "smm"],
+    "product launch": ["seo", "ppc", "content", "smm"],
+    "reduce churn": ["crm", "analytics", "cro"],
+    "retain customers": ["crm", "analytics", "cro"],
+    "grow revenue": ["cro", "crm", "ppc", "analytics"],
+    "increase revenue": ["cro", "crm", "ppc", "analytics"],
+}
+
+def _check_multi_agent_trigger(user_message: str):
+    """Returns list of agents to run in parallel, or None if single-agent."""
+    msg_lower = user_message.lower()
+    for trigger, agents in MULTI_AGENT_TRIGGERS.items():
+        if trigger in msg_lower:
+            return agents
+    return None
+
+# ============================================================================
 # UNIFIED CHAT ENDPOINT — single entry point for all agents
 # ============================================================================
 
@@ -1195,6 +1209,88 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                     "provider": "multi-agent",
                     "latency_ms": result.get("total_latency_ms", 0)
                 }
+
+        # --- Multi-agent orchestration for complex nexus queries ---
+        if agent == "nexus" or agent == "":
+            _multi_agents = _check_multi_agent_trigger(user_msg)
+            if _multi_agents:
+                print(f"\n🔀 MULTI-AGENT TRIGGERED: {_multi_agents} for '{user_msg[:50]}'")
+                import concurrent.futures as _cf
+
+                def _run_agent_safe(ag_name: str) -> tuple:
+                    try:
+                        if ag_name == "seo":
+                            from seo_agent import find_keyword_opportunities, find_keywords
+                            r = find_keyword_opportunities(user_msg)
+                            if not r:
+                                r = find_keywords(user_msg)
+                            return (ag_name, r or "No data available")
+                        elif ag_name == "content":
+                            from content_agent import generate_content
+                            return (ag_name, generate_content(user_msg) or "No data available")
+                        elif ag_name == "ppc":
+                            from ppc_agent import create_campaign_strategy
+                            return (ag_name, create_campaign_strategy(user_msg) or "No data available")
+                        elif ag_name == "crm":
+                            from crm_agent import create_email_sequence
+                            return (ag_name, create_email_sequence(user_msg, num_emails=3) or "No data available")
+                        elif ag_name == "analytics":
+                            from analytics_agent import analyze_performance
+                            return (ag_name, analyze_performance(user_msg, user_msg) or "No data available")
+                        elif ag_name == "smm":
+                            from smm_agent import create_social_calendar
+                            return (ag_name, create_social_calendar(industry="General", brand_voice="Professional", target_audience="General audience") or "No data available")
+                        elif ag_name == "brand":
+                            from brand_strategist_agent import create_brand_strategy
+                            return (ag_name, create_brand_strategy(company_name="Company", industry="General", target_audience="General audience", unique_value=user_msg) or "No data available")
+                        elif ag_name == "cro":
+                            from cro_agent import analyze_funnel
+                            return (ag_name, analyze_funnel(funnel_steps=user_msg, conversion_data="", goal="increase conversions") or "No data available")
+                        elif ag_name == "research":
+                            from research_agent import research_topic
+                            return (ag_name, research_topic(user_msg) or "No data available")
+                        else:
+                            return (ag_name, "Agent not available")
+                    except Exception as _e:
+                        return (ag_name, f"Agent encountered an error: {str(_e)[:100]}")
+
+                _agent_results = {}
+                with _cf.ThreadPoolExecutor(max_workers=5) as _pool:
+                    _futures = {_pool.submit(_run_agent_safe, ag): ag for ag in _multi_agents[:5]}
+                    for _fut in _cf.as_completed(_futures, timeout=30):
+                        try:
+                            _ag_name, _ag_result = _fut.result(timeout=30)
+                            _agent_results[_ag_name] = _ag_result
+                        except Exception:
+                            pass
+
+                if _agent_results:
+                    # Build synthesis prompt for Nexus
+                    _synthesis_parts = []
+                    for _ag, _res in _agent_results.items():
+                        _synthesis_parts.append(f"=== {_ag.upper()} AGENT ===\n{str(_res)[:800]}")
+
+                    _synthesis_prompt = f"""The user asked: "{user_msg}"
+
+I ran {len(_agent_results)} specialized agents in parallel. Here are their findings:
+
+{chr(10).join(_synthesis_parts)}
+
+Synthesize this into ONE cohesive strategic response. Highlight the 3 highest-impact actions. Keep it under 300 words. Be conversational, not a data dump. End with "**What would you like to dive deeper on?**" """
+
+                    nexus = get_nexus()
+                    result = nexus.apply_nexus_persona(user_msg, _synthesis_prompt)
+
+                    return {
+                        "success": True,
+                        "agent": "nexus",
+                        "multi_agent": True,
+                        "agents_used": list(_agent_results.keys()),
+                        "result": result,
+                        "model": "multi-agent-synthesis",
+                        "provider": "swarmops",
+                        "latency_ms": 0,
+                    }
 
         # --- recall past memories and prepend context ---
         try:

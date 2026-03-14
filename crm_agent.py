@@ -11,6 +11,23 @@ from model_router import call_model_sync
 # Load environment variables
 load_dotenv()
 
+# ---------------------------------------------------------------------------
+# AGENT CONVERSATIONAL RULES — appended to all prompts
+# ---------------------------------------------------------------------------
+AGENT_CONVERSATIONAL_RULES = """
+
+RESPONSE STYLE RULES:
+- Write in clear, professional prose — not as a data dump or raw report
+- Always explain WHY a finding matters, not just WHAT it is
+- Reference the brand/business by name when brand context is provided
+- Keep responses between 150-250 words unless more detail is clearly needed
+- Suggest ONE specific next step at the end of every response
+- Never output raw JSON, raw metrics tables, or unformatted lists as your main response
+- If data is unavailable, say so honestly and provide strategic guidance instead
+- Format key insights with **bold** for scannability
+- End every response with: "**Next step:** [specific action]"
+"""
+
 
 class CRMAgent:
     """
@@ -84,8 +101,8 @@ OVERALL_CONFIDENCE: [0-100]
 DATA_COMPLETENESS: [Low/Med/High]
 
 ## CROSS_IMPACT_SIGNALS
-RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON"""
-        
+RELATED_DEPARTMENT | POTENTIAL_IMPACT | REASON""" + AGENT_CONVERSATIONAL_RULES
+
         try:
             result_data = call_model_sync(prompt=prompt, tier=2, max_tokens=2000, temperature=0.7)
             result = result_data["content"]

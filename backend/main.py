@@ -112,6 +112,101 @@ def _extract_text(result):
     return str(result)
 
 
+def _format_audit_chat_result(audit_report: dict) -> str:
+    """Format a full audit report into rich markdown for chat display."""
+    def _score_emoji(s):
+        if s >= 80: return "🟢"
+        if s >= 60: return "🟡"
+        return "🔴"
+
+    brand = audit_report.get("brand", {})
+    brand_name = brand.get("name", audit_report.get("url", "Website"))
+    grade = audit_report.get("grade", "?")
+    score = audit_report.get("overall_score", 0)
+    exec_summary = audit_report.get("executive_summary", "")
+    scores = audit_report.get("scores", {})
+    priority_actions = audit_report.get("priority_actions", [])
+    simulation = audit_report.get("improvement_simulation", {}).get("overall", {})
+    sections = audit_report.get("sections", {})
+
+    # Score table rows
+    score_rows = "\n".join(
+        f"| {k.upper()} | {v}/100 | {_score_emoji(v)} |"
+        for k, v in scores.items()
+    )
+
+    # Collect strengths (sections scoring 75+)
+    strengths = []
+    for k, v in scores.items():
+        if v >= 75:
+            section_data = sections.get(f"{k}_audit", sections.get(f"{k}_strategy", sections.get(f"{k}_landscape", sections.get(f"{k}_opportunities", {}))))
+            recs = section_data.get("recommendations", [])
+            if recs:
+                strengths.append(f"**{k.upper()}** ({v}/100): {recs[0]}")
+            else:
+                strengths.append(f"**{k.upper()}** scores {v}/100 — strong foundation")
+    strengths_str = "\n".join(f"- {s}" for s in strengths[:3]) or "- Analysis in progress"
+
+    # Collect weaknesses (sections scoring under 70)
+    weaknesses = []
+    for k, v in sorted(scores.items(), key=lambda x: x[1]):
+        if v < 70:
+            section_key = f"{k}_audit" if f"{k}_audit" in sections else list(sections.keys())[0] if sections else ""
+            section_data = sections.get(section_key, {})
+            qw = section_data.get("quick_wins", [])
+            weaknesses.append(f"**{k.upper()}** ({v}/100): {qw[0] if qw else 'Needs improvement'}")
+    weaknesses_str = "\n".join(f"- {w}" for w in weaknesses[:3]) or "- No critical weaknesses"
+
+    # Priority actions (numbered, with expected impact)
+    actions_lines = []
+    for i, a in enumerate(priority_actions[:5], 1):
+        action = a.get("action", str(a)) if isinstance(a, dict) else str(a)
+        section = a.get("section", "").upper() if isinstance(a, dict) else ""
+        atype = a.get("type", "") if isinstance(a, dict) else ""
+        tag = f"[{section}]" if section else ""
+        type_tag = " ⚡" if atype == "quick_win" else ""
+        actions_lines.append(f"{i}. {tag}{type_tag} {action}")
+    actions_str = "\n".join(actions_lines)
+
+    # Impact section
+    traffic = simulation.get("estimated_traffic_increase", "+15-35%")
+    conversions = simulation.get("estimated_conversion_increase", "+10-20%")
+    revenue = simulation.get("estimated_revenue_opportunity", "Significant upside")
+    timeframe = simulation.get("timeframe", "3-6 months")
+    potential_grade = simulation.get("potential_grade", "")
+
+    report_id = audit_report.get("id", "")
+
+    output = f"""## Marketing Audit: {brand_name}
+**Grade: {grade} ({score}/100)**
+
+### Executive Summary
+{exec_summary}
+
+### Scores
+| Section | Score | Status |
+|---------|-------|--------|
+{score_rows}
+
+### Key Strengths
+{strengths_str}
+
+### Key Weaknesses
+{weaknesses_str}
+
+### Top 5 Priority Actions
+{actions_str}
+
+### Estimated Impact ({timeframe})
+- Traffic: {traffic}
+- Conversions: {conversions}
+- Revenue Opportunity: {revenue}{f' | Potential Grade: {potential_grade}' if potential_grade else ''}
+
+_Full report stored.{f' Download: GET /api/audit/{report_id}/report' if report_id else ''} Ask about any section for deep analysis._"""
+
+    return output
+
+
 # ============================================================================
 # REQUEST MODELS
 # ============================================================================
@@ -1298,7 +1393,6 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             import asyncio as _asyncio
             _audit_url = _is_url(user_msg)
             if not _audit_url:
-                # Try stored brand URL
                 try:
                     from memory_store import get_memory_store
                     _audit_url = get_memory_store().get_profile_key("website_url")
@@ -1310,20 +1404,7 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 audit_report = await _asyncio.get_event_loop().run_in_executor(
                     None, get_marketing_audit().run_full_audit, _audit_url
                 )
-                grade = audit_report.get("grade", "?")
-                score = audit_report.get("overall_score", 0)
-                exec_summary = audit_report.get("executive_summary", "")
-                priority_actions = audit_report.get("priority_actions", [])
-                actions_str = "\n".join(
-                    f"• [{a.get('section','').upper()}] {a.get('action','')}"
-                    for a in priority_actions[:5]
-                )
-                result = (
-                    f"**Marketing Audit Complete: Grade {grade} ({score}/100)**\n\n"
-                    f"{exec_summary}\n\n"
-                    f"**Top Priority Actions:**\n{actions_str}\n\n"
-                    f"_Full report available via GET /api/audit/{audit_report.get('id', '')}_"
-                )
+                result = _format_audit_chat_result(audit_report)
             skip_review = True
             agent_fn = None
 
@@ -1383,26 +1464,7 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 audit_report = await _asyncio.get_event_loop().run_in_executor(
                     None, get_marketing_audit().run_full_audit, _audit_url
                 )
-                grade = audit_report.get("grade", "?")
-                score = audit_report.get("overall_score", 0)
-                exec_summary = audit_report.get("executive_summary", "")
-                priority_actions = audit_report.get("priority_actions", [])
-                scores = audit_report.get("scores", {})
-                scores_str = " | ".join(
-                    f"{k.upper()} {v}" for k, v in scores.items()
-                )
-                actions_str = "\n".join(
-                    f"• [{a.get('section','').upper()}] {a.get('action','')}"
-                    for a in priority_actions[:5]
-                )
-                result = (
-                    f"**Marketing Audit Complete**\n\n"
-                    f"**Grade: {grade}** ({score}/100)\n"
-                    f"_{scores_str}_\n\n"
-                    f"{exec_summary}\n\n"
-                    f"**Top 5 Priority Actions:**\n{actions_str}\n\n"
-                    f"_Full report stored. Ask me about any specific section (SEO, CRO, Content, etc.) for deep analysis._"
-                )
+                result = _format_audit_chat_result(audit_report)
                 skip_review = True
             agent = "nexus"
             agent_fn = None
@@ -2069,6 +2131,30 @@ def get_audit_history(limit: int = 20):
         from marketing_audit import get_marketing_audit
         history = get_marketing_audit().get_audit_history(limit=limit)
         return {"success": True, "audits": history, "count": len(history)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/audit/{audit_id}/report")
+def download_audit_report(audit_id: str):
+    """Download a full marketing audit as a formatted markdown report."""
+    from fastapi.responses import PlainTextResponse
+    try:
+        from marketing_audit import get_marketing_audit
+        from report_generator import get_report_generator
+        report_data = get_marketing_audit().get_audit_by_id(audit_id)
+        if not report_data:
+            raise HTTPException(status_code=404, detail="Audit not found")
+        md = get_report_generator().generate_audit_report(report_data)
+        brand_name = report_data.get("brand", {}).get("name", "report").lower().replace(" ", "-")
+        filename = f"marketing-audit-{brand_name}.md"
+        return PlainTextResponse(
+            content=md,
+            media_type="text/markdown",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

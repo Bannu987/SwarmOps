@@ -210,19 +210,35 @@ class MarketingAudit:
         brand_name = brand_data.get("brand_name", "the website")
         seo_signals = brand_data.get("seo_signals", {})
         industry = brand_data.get("industry", "unknown")
+        products = brand_data.get("products_services", [])
+        products_str = ", ".join(p.get("name", "") for p in products[:3]) if products else "unknown"
 
-        prompt = f"""You are an expert SEO auditor. Audit the SEO of {url}.
+        prompt = f"""You are a senior SEO consultant auditing {url} for a client presentation.
 
-Brand: {brand_name}, Industry: {industry}
-Known SEO signals: {json.dumps(seo_signals)}
+Brand: {brand_name} | Industry: {industry} | Products: {products_str}
+SEO signals found: {json.dumps(seo_signals)}
 
+CRITICAL: Do NOT give generic advice. Every recommendation must be SPECIFIC to {brand_name}
+and {url}. Reference actual pages, features, and keywords by name.
+
+BAD: "Optimize meta descriptions"
+GOOD: "{brand_name}'s /pricing page meta description is missing — add one that mentions
+specific pricing tiers and includes the keyword '{brand_name.lower()} pricing' to capture
+high-intent comparison searches"
+
+BAD: "Add schema markup"
+GOOD: "{brand_name}'s product pages lack FAQ schema — adding it to the top 5 FAQ questions
+on /{products_str.split(',')[0].strip().lower().replace(' ','-') if products_str != 'unknown' else 'product'}
+could earn rich snippets and increase CTR by 15-30%"
+
+Include {brand_name} and specific page references in every recommendation.
 Evaluate on a 0-100 scale across:
-1. Meta tags quality (title, description, OG tags)
-2. Keyword optimization and targeting
-3. Content structure (H1/H2/H3 hierarchy)
-4. Technical SEO (mobile, speed indicators, schema)
-5. Internal linking signals
-6. Backlink potential and authority signals
+1. Meta tags quality (title, description, OG tags) — reference actual detected values
+2. Keyword optimization for {industry} searches
+3. Content structure and H-tag hierarchy
+4. Technical SEO signals
+5. Internal linking opportunities
+6. Backlink potential given {brand_name}'s authority level
 
 Return ONLY valid JSON:
 {{
@@ -231,14 +247,14 @@ Return ONLY valid JSON:
   "keyword_score": 0-100,
   "content_structure_score": 0-100,
   "technical_score": 0-100,
-  "top_keyword_opportunities": ["kw1", "kw2", "kw3", "kw4", "kw5"],
-  "missing_meta_elements": ["element1", "element2"],
-  "quick_wins": ["fix1", "fix2", "fix3"],
-  "recommendations": ["rec1", "rec2", "rec3", "rec4", "rec5"],
+  "top_keyword_opportunities": ["specific kw for {brand_name}", "kw2", "kw3", "kw4", "kw5"],
+  "missing_meta_elements": ["specific missing element on {brand_name} site"],
+  "quick_wins": ["specific fix referencing {brand_name} page/feature", "fix2", "fix3"],
+  "recommendations": ["specific rec for {brand_name}", "rec2", "rec3", "rec4", "rec5"],
   "estimated_traffic_potential": "low/medium/high",
   "priority": "high/medium/low"
 }}"""
-        raw = _llm(prompt, max_tokens=1024)
+        raw = _llm(prompt, max_tokens=1200)
         result = _parse_json(raw)
         if not result:
             result = {"score": 0, "error": "LLM parse failed", "recommendations": []}
@@ -250,21 +266,38 @@ Return ONLY valid JSON:
         content_strategy = brand_data.get("content_strategy", {})
         target_audience = brand_data.get("target_audience", {})
         audience_str = target_audience.get("primary", "general audience") if isinstance(target_audience, dict) else str(target_audience)
+        industry = brand_data.get("industry", "general")
+        pain_points = brand_data.get("customer_pain_points", [])
+        pain_str = "; ".join(pain_points[:3]) if pain_points else "unknown"
 
-        prompt = f"""You are an expert content marketing auditor. Audit the content strategy of {url}.
+        prompt = f"""You are a senior content marketing strategist auditing {url} for a CEO presentation.
 
-Brand: {brand_name}
-Current content strategy: {json.dumps(content_strategy)}
+Brand: {brand_name} | Industry: {industry}
 Target audience: {audience_str}
+Customer pain points: {pain_str}
+Detected content strategy: {json.dumps(content_strategy)}
 
-Evaluate on a 0-100 scale across:
-1. Content quality and depth
-2. Topic coverage and relevance
-3. Content gap opportunities
-4. Readability and engagement potential
-5. Content formats diversity
-6. SEO-content alignment
-7. Conversion content (case studies, social proof)
+CRITICAL: Do NOT give generic advice. Every recommendation must be SPECIFIC to {brand_name}.
+Reference actual content gaps for their industry and audience.
+
+BAD: "Create more blog content"
+GOOD: "{brand_name} has no content addressing '{pain_str.split(';')[0].strip() if pain_str != 'unknown' else 'key pain points'}' —
+this is the #1 objection for {industry} buyers and competitors like [Competitor] own this keyword cluster"
+
+BAD: "Add case studies"
+GOOD: "{brand_name}'s website shows no customer success stories despite serving {audience_str} —
+a 3-part case study series showing ROI metrics would directly address the 'does this actually work?' objection
+in the consideration stage"
+
+Include {brand_name} specifically in every recommendation.
+
+Evaluate on a 0-100 scale:
+1. Content quality and depth relative to {industry} standards
+2. Topic coverage of {audience_str} pain points
+3. Content gap opportunities vs competitors
+4. Readability and engagement for {audience_str}
+5. Format diversity (video, guides, case studies)
+6. SEO-content alignment for {industry} keywords
 
 Return ONLY valid JSON:
 {{
@@ -273,14 +306,14 @@ Return ONLY valid JSON:
   "coverage_score": 0-100,
   "engagement_score": 0-100,
   "blog_exists": true,
-  "content_gaps": ["gap1", "gap2", "gap3"],
-  "top_content_ideas": ["idea1", "idea2", "idea3", "idea4", "idea5"],
-  "missing_formats": ["format1", "format2"],
-  "recommendations": ["rec1", "rec2", "rec3", "rec4", "rec5"],
+  "content_gaps": ["specific gap for {brand_name}", "gap2", "gap3"],
+  "top_content_ideas": ["specific idea for {brand_name} audience", "idea2", "idea3", "idea4", "idea5"],
+  "missing_formats": ["specific missing format for {brand_name}", "format2"],
+  "recommendations": ["specific rec for {brand_name}", "rec2", "rec3", "rec4", "rec5"],
   "content_calendar_suggestion": "weekly/biweekly/monthly",
   "priority": "high/medium/low"
 }}"""
-        raw = _llm(prompt, max_tokens=1024)
+        raw = _llm(prompt, max_tokens=1200)
         result = _parse_json(raw)
         if not result:
             result = {"score": 0, "error": "LLM parse failed", "recommendations": []}
@@ -293,26 +326,42 @@ Return ONLY valid JSON:
         trust_signals = brand_data.get("trust_signals", {})
         marketing_funnel = brand_data.get("marketing_funnel", {})
         biz_objectives = brand_data.get("business_objectives", {})
-        conversion_type = biz_objectives.get("conversion_type", "not_found") if isinstance(biz_objectives, dict) else "not_found"
+        conversion_type = biz_objectives.get("conversion_type", "signup") if isinstance(biz_objectives, dict) else "signup"
+        sales_motion = biz_objectives.get("sales_motion", "self-serve") if isinstance(biz_objectives, dict) else "self-serve"
+        industry = brand_data.get("industry", "general")
+        ctas_str = ", ".join(f'"{c}"' for c in cta_patterns[:5]) if cta_patterns else "none detected"
 
-        prompt = f"""You are an expert CRO (Conversion Rate Optimization) specialist. Audit {url}.
+        prompt = f"""You are a senior CRO consultant auditing {url} for a board presentation.
 
-Brand: {brand_name}
+Brand: {brand_name} | Industry: {industry} | Sales motion: {sales_motion}
 Primary conversion goal: {conversion_type}
-Current CTAs: {json.dumps(cta_patterns[:5])}
-Trust signals: {json.dumps(trust_signals)}
-Funnel: {json.dumps(marketing_funnel)}
+Detected CTAs on site: {ctas_str}
+Trust signals detected: {json.dumps(trust_signals)}
+Funnel data: {json.dumps(marketing_funnel)}
 
-Evaluate on a 0-100 scale across:
-1. CTA effectiveness and clarity
-2. Trust signal presence (testimonials, logos, certifications)
-3. User flow and friction points
-4. Social proof quality
-5. Form optimization
-6. Value proposition clarity at conversion points
-7. Mobile conversion experience
+CRITICAL: Do NOT give generic CRO advice. Every recommendation must name {brand_name}
+and specific pages/elements observed on their actual site.
 
-Compare to industry benchmarks where possible.
+BAD: "Add testimonials to the homepage"
+GOOD: "{brand_name}'s homepage hero section has no social proof — adding 3 customer logos
+from recognizable {industry} brands above the fold would increase trial signups by an estimated 12-18%
+(industry benchmark: social proof near CTA improves conversion 15-30%)"
+
+BAD: "Improve your CTA button"
+GOOD: "{brand_name}'s primary CTA '{cta_patterns[0] if cta_patterns else 'Start now'}' on the
+homepage doesn't communicate the value exchange — changing to 'Start free — no credit card required'
+eliminates the #1 conversion blocker for {industry} {conversion_type} flows"
+
+Reference the actual CTAs ({ctas_str}) in your analysis.
+Compare to {industry} conversion benchmarks.
+
+Evaluate on a 0-100 scale:
+1. CTA effectiveness of {brand_name}'s current CTAs
+2. Trust signals for {industry} buyers
+3. Friction points in {conversion_type} flow
+4. Social proof quality and placement
+5. Value proposition clarity at decision points
+6. Mobile conversion UX
 
 Return ONLY valid JSON:
 {{
@@ -321,15 +370,15 @@ Return ONLY valid JSON:
   "trust_score": 0-100,
   "flow_score": 0-100,
   "social_proof_score": 0-100,
-  "friction_points": ["friction1", "friction2", "friction3"],
-  "missing_trust_elements": ["element1", "element2"],
-  "cta_improvements": ["improvement1", "improvement2", "improvement3"],
-  "quick_wins": ["win1", "win2", "win3"],
-  "recommendations": ["rec1", "rec2", "rec3", "rec4", "rec5"],
+  "friction_points": ["specific friction on {brand_name} site", "friction2", "friction3"],
+  "missing_trust_elements": ["specific element {brand_name} is missing", "element2"],
+  "cta_improvements": ["specific improvement for {brand_name}'s actual CTAs", "improvement2", "improvement3"],
+  "quick_wins": ["specific win for {brand_name}", "win2", "win3"],
+  "recommendations": ["specific rec for {brand_name}", "rec2", "rec3", "rec4", "rec5"],
   "estimated_conversion_lift": "+X-Y%",
   "priority": "high/medium/low"
 }}"""
-        raw = _llm(prompt, max_tokens=1024)
+        raw = _llm(prompt, max_tokens=1200)
         result = _parse_json(raw)
         if not result:
             result = {"score": 0, "error": "LLM parse failed", "recommendations": []}
@@ -340,22 +389,44 @@ Return ONLY valid JSON:
         value_prop = brand_data.get("value_proposition", {})
         brand_positioning = brand_data.get("brand_positioning", {})
         brand_name = brand_data.get("brand_name", "the website")
-        vp_primary = value_prop.get("primary", "not_found") if isinstance(value_prop, dict) else str(value_prop)
+        vp_primary = value_prop.get("primary", "") if isinstance(value_prop, dict) else str(value_prop)
+        differentiator = value_prop.get("unique_differentiator", "") if isinstance(value_prop, dict) else ""
+        industry = brand_data.get("industry", "general")
+        target_audience = brand_data.get("target_audience", {})
+        audience_str = target_audience.get("primary", "businesses") if isinstance(target_audience, dict) else str(target_audience)
+        seo_h1 = brand_data.get("seo_signals", {}).get("h1_text", "not detected")
 
-        prompt = f"""You are an expert brand messaging strategist. Analyze the messaging clarity of {url}.
+        prompt = f"""You are a brand messaging expert and copywriter auditing {url} for a pitch deck.
 
-Brand: {brand_name}
+Brand: {brand_name} | Industry: {industry} | Audience: {audience_str}
+Detected homepage H1: "{seo_h1}"
 Current value proposition: {vp_primary}
-Brand positioning: {json.dumps(brand_positioning)}
-Value proposition data: {json.dumps(value_prop)}
+Unique differentiator claimed: {differentiator}
+Positioning: {json.dumps(brand_positioning)}
+
+CRITICAL: Do NOT give generic messaging advice. Reference {brand_name}'s ACTUAL detected
+messaging, headlines, and positioning in every recommendation.
+
+BAD: "Make your headline clearer"
+GOOD: "{brand_name}'s current H1 '{seo_h1}' is feature-focused rather than benefit-focused —
+'{audience_str} that use {brand_name} achieve [specific outcome]' would speak directly to {audience_str}
+decision-makers rather than just describing the product"
+
+BAD: "Improve differentiation"
+GOOD: "{brand_name}'s current differentiator '{differentiator}' is too broad — in {industry},
+[Competitor A] and [Competitor B] say the same thing. Adding a specific, verifiable claim like
+'[X] {industry} companies saved [Y] hours using {brand_name}' creates a defensible position"
+
+Write 3 alternative headlines that would outperform {brand_name}'s current messaging.
+Make them specific, benefit-led, and audience-targeted.
 
 Evaluate on a 0-100 scale:
-1. Headline clarity — is it immediately clear what they do?
-2. Value proposition strength — is the benefit compelling?
-3. Differentiation — do they stand out from competitors?
-4. Emotional appeal — does it resonate emotionally?
-5. Target audience clarity — is it clear who this is for?
-6. Message consistency across pages
+1. Headline clarity — does {seo_h1} immediately communicate value?
+2. Value proposition strength vs {industry} competitors
+3. Differentiation quality of {differentiator}
+4. Emotional resonance for {audience_str}
+5. Audience specificity — does it speak to {audience_str}?
+6. Message consistency across {url} pages
 
 Return ONLY valid JSON:
 {{
@@ -365,13 +436,13 @@ Return ONLY valid JSON:
   "differentiation": 0-100,
   "emotional_appeal": 0-100,
   "audience_clarity": 0-100,
-  "weaknesses": ["weakness1", "weakness2", "weakness3"],
-  "improved_headlines": ["better headline 1", "better headline 2", "better headline 3"],
-  "improved_taglines": ["tagline 1", "tagline 2"],
-  "recommendations": ["rec1", "rec2", "rec3"],
+  "weaknesses": ["specific weakness in {brand_name}'s messaging", "weakness2", "weakness3"],
+  "improved_headlines": ["specific better headline for {brand_name}", "alternative 2", "alternative 3"],
+  "improved_taglines": ["specific tagline for {brand_name}", "alternative tagline"],
+  "recommendations": ["specific rec referencing {brand_name}'s actual messaging", "rec2", "rec3"],
   "priority": "high/medium/low"
 }}"""
-        raw = _llm(prompt, max_tokens=1024)
+        raw = _llm(prompt, max_tokens=1200)
         result = _parse_json(raw)
         if not result:
             result = {"score": 0, "error": "LLM parse failed", "recommendations": []}
@@ -382,45 +453,50 @@ Return ONLY valid JSON:
         brand_name = brand_data.get("brand_name", "the business")
         industry = brand_data.get("industry", "general")
         target_audience = brand_data.get("target_audience", {})
-        audience = target_audience.get("primary", "general audience") if isinstance(target_audience, dict) else str(target_audience)
+        audience = target_audience.get("primary", "businesses") if isinstance(target_audience, dict) else str(target_audience)
         pricing = brand_data.get("pricing", {})
+        pricing_model = pricing.get("model", "unknown") if isinstance(pricing, dict) else str(pricing)
+        starting_price = pricing.get("starting_price", "unknown") if isinstance(pricing, dict) else "unknown"
+        products = brand_data.get("products_services", [])
+        top_product = products[0].get("name", brand_name) if products else brand_name
 
-        prompt = f"""You are an expert PPC strategist. Create a paid advertising strategy for {url}.
+        prompt = f"""You are a senior PPC strategist building a paid media plan for {url}.
 
-Brand: {brand_name}, Industry: {industry}
-Target audience: {audience}
-Pricing: {json.dumps(pricing)}
+Brand: {brand_name} | Industry: {industry} | Pricing: {pricing_model} (from {starting_price})
+Primary product to advertise: {top_product}
+Target buyer: {audience}
 
-Recommend:
-1. Top 10 keywords to bid on (with estimated CPCs)
-2. Negative keywords to add
-3. Best-performing ad copy headlines (3 options)
-4. Target audiences for social ads
-5. Channel recommendations (Google/Meta/LinkedIn/etc.)
-6. Budget allocation guidance
-7. Estimated ROAS potential
+CRITICAL: Every keyword, ad headline, and recommendation must be SPECIFIC to {brand_name}
+and its actual products/audience. Do not use placeholder text.
+
+Write actual Google Search ad headlines for {brand_name}'s {top_product}.
+Recommend actual keywords a {industry} buyer would search when looking for {top_product}.
+Suggest actual channels based on where {audience} spend time.
+
+Example of GOOD keyword: "{brand_name.lower()} {industry.lower()} solution" — high-intent, brand+category
+Example of GOOD headline: "{top_product} — Try {brand_name} Free | No Credit Card" — benefit + CTA
 
 Return ONLY valid JSON:
 {{
   "score": 0-100,
   "recommended_keywords": [
-    {{"keyword": "string", "estimated_cpc": "$X.XX", "intent": "high/medium/low"}}
+    {{"keyword": "actual keyword for {brand_name}", "estimated_cpc": "$X.XX", "intent": "high/medium/low"}}
   ],
-  "negative_keywords": ["kw1", "kw2", "kw3"],
-  "ad_headlines": ["headline1", "headline2", "headline3"],
-  "ad_descriptions": ["desc1", "desc2"],
+  "negative_keywords": ["actual negative kw for {brand_name}", "kw2", "kw3"],
+  "ad_headlines": ["actual headline for {brand_name}", "headline2", "headline3"],
+  "ad_descriptions": ["actual description for {brand_name}", "desc2"],
   "channel_recommendations": [
-    {{"channel": "Google Search", "budget_pct": 40, "rationale": "string"}}
+    {{"channel": "specific channel for {audience}", "budget_pct": 40, "rationale": "why for {brand_name}"}}
   ],
   "budget_guidance": {{
     "minimum_monthly": "$X,XXX",
     "recommended_monthly": "$X,XXX",
     "expected_roas": "X.X"
   }},
-  "recommendations": ["rec1", "rec2", "rec3"],
+  "recommendations": ["specific rec for {brand_name} PPC", "rec2", "rec3"],
   "priority": "high/medium/low"
 }}"""
-        raw = _llm(prompt, max_tokens=1280)
+        raw = _llm(prompt, max_tokens=1400)
         result = _parse_json(raw)
         if not result:
             result = {"score": 0, "error": "LLM parse failed", "recommendations": []}
@@ -435,42 +511,49 @@ Return ONLY valid JSON:
         implied = comps_data.get("implied_competitors", []) if isinstance(comps_data, dict) else []
         bp = brand_data.get("brand_positioning", {})
         differentiators = bp.get("key_differentiators", []) if isinstance(bp, dict) else []
+        market_pos = bp.get("market_position", "mid-market") if isinstance(bp, dict) else "mid-market"
+        target_audience = brand_data.get("target_audience", {})
+        audience_str = target_audience.get("primary", "businesses") if isinstance(target_audience, dict) else str(target_audience)
 
-        prompt = f"""You are an expert competitive intelligence analyst. Analyze the competitive landscape for {url}.
+        prompt = f"""You are a senior competitive intelligence analyst preparing a competitive brief for {brand_name}.
 
-Brand: {brand_name}, Industry: {industry}
-Known competitors mentioned on site: {mentioned}
-Implied competitors: {implied}
-Brand differentiators: {differentiators}
+Brand: {brand_name} | Industry: {industry} | Market position: {market_pos}
+Target audience: {audience_str}
+Competitors mentioned on {brand_name}'s site: {mentioned}
+Implied competitors from positioning: {implied}
+{brand_name}'s claimed differentiators: {differentiators}
 
-Identify and analyze:
-1. Top 3-5 direct competitors in this space
-2. Competitive strengths vs. each competitor
-3. Competitive weaknesses / gaps
-4. Market opportunities not yet captured
-5. Threat level assessment
+CRITICAL: Name actual real competitors in the {industry} space. Be specific about
+{brand_name}'s relative strengths and weaknesses vs each named competitor.
+
+BAD: "Competitor A has better pricing"
+GOOD: "Brex offers 10x points on rideshares vs Stripe's standard 1x — Stripe should counter with
+developer-first tooling that Brex lacks, specifically the API documentation and webhook ecosystem"
+
+Identify 3-5 REAL named competitors in {industry} that {brand_name} competes with directly.
+For each, name their URL, their #1 strength {brand_name} lacks, and {brand_name}'s specific advantage.
 
 Return ONLY valid JSON:
 {{
   "score": 0-100,
   "top_competitors": [
     {{
-      "name": "string",
-      "url": "string or not_found",
+      "name": "real competitor name",
+      "url": "competitor.com",
       "threat_level": "high/medium/low",
-      "their_strength": "string",
-      "your_advantage": "string"
+      "their_strength": "specific strength vs {brand_name}",
+      "your_advantage": "specific advantage {brand_name} has over them"
     }}
   ],
-  "market_gaps": ["gap1", "gap2", "gap3"],
-  "competitive_strengths": ["strength1", "strength2", "strength3"],
-  "competitive_weaknesses": ["weakness1", "weakness2"],
-  "opportunities": ["opportunity1", "opportunity2", "opportunity3"],
-  "recommendations": ["rec1", "rec2", "rec3"],
+  "market_gaps": ["specific gap {brand_name} can fill", "gap2", "gap3"],
+  "competitive_strengths": ["specific strength {brand_name} has", "strength2", "strength3"],
+  "competitive_weaknesses": ["specific weakness vs named competitor", "weakness2"],
+  "opportunities": ["specific opportunity for {brand_name}", "opportunity2", "opportunity3"],
+  "recommendations": ["specific rec for {brand_name} vs competitors", "rec2", "rec3"],
   "overall_competitive_position": "leading/competitive/lagging",
   "priority": "high/medium/low"
 }}"""
-        raw = _llm(prompt, max_tokens=1280)
+        raw = _llm(prompt, max_tokens=1400)
         result = _parse_json(raw)
         if not result:
             result = {"score": 0, "error": "LLM parse failed", "recommendations": []}
@@ -482,42 +565,63 @@ Return ONLY valid JSON:
         industry = brand_data.get("industry", "general")
         biz_obj = brand_data.get("business_objectives", {})
         goal = biz_obj.get("primary_goal", "growth") if isinstance(biz_obj, dict) else "growth"
+        sales_motion = biz_obj.get("sales_motion", "self-serve") if isinstance(biz_obj, dict) else "self-serve"
         auth_signals = brand_data.get("authority_signals", {})
         marketing_funnel = brand_data.get("marketing_funnel", {})
+        social_presence = brand_data.get("social_presence", {})
+        platforms = social_presence.get("platforms_detected", []) if isinstance(social_presence, dict) else []
+        target_audience = brand_data.get("target_audience", {})
+        audience_str = target_audience.get("primary", "businesses") if isinstance(target_audience, dict) else str(target_audience)
+        content_strategy = brand_data.get("content_strategy", {})
+        blog_exists = content_strategy.get("blog_exists", False) if isinstance(content_strategy, dict) else False
 
-        prompt = f"""You are a growth strategy expert. Identify the top growth opportunities for {url}.
+        prompt = f"""You are a growth strategist who has scaled {industry} companies.
+Identify the top growth opportunities for {brand_name} ({url}).
 
-Brand: {brand_name}, Industry: {industry}
-Primary goal: {goal}
-Authority signals: {json.dumps(auth_signals)}
-Marketing funnel: {json.dumps(marketing_funnel)}
+Brand context:
+- Goal: {goal} | Sales motion: {sales_motion}
+- Target: {audience_str}
+- Social platforms active: {platforms}
+- Blog/content exists: {blog_exists}
+- Authority signals: {json.dumps(auth_signals)}
+- Funnel: {json.dumps(marketing_funnel)}
 
-Identify top 5-7 growth opportunities:
-- Rank by impact (revenue/traffic/conversions) vs effort (time/cost)
-- Provide specific action steps for each
-- Estimate timeline and expected results
+CRITICAL: Every opportunity must be SPECIFIC to {brand_name}'s actual situation.
+Reference their industry ({industry}), audience ({audience_str}), and current gaps.
+
+BAD: "Launch a referral program"
+GOOD: "{brand_name} has no referral mechanism despite serving {audience_str} who heavily trust
+peer recommendations — a 'Give $X, Get $X' referral program targeting their existing {sales_motion}
+customers could drive 20-30% of new signups within 90 days (benchmark: Dropbox grew 3900% via referral)"
+
+BAD: "Create more content"
+GOOD: "{brand_name} has {'a blog' if blog_exists else 'no blog'} but {'social media on' if platforms else 'no detected social presence'} —
+launching a weekly {industry}-focused newsletter targeting {audience_str} decision-makers
+would compound authority over 6 months and capture email leads at $0 CAC"
+
+Name specific channels, metrics, and outcomes for {brand_name}.
 
 Return ONLY valid JSON:
 {{
   "score": 0-100,
   "opportunities": [
     {{
-      "title": "string",
-      "description": "string",
+      "title": "specific opportunity title for {brand_name}",
+      "description": "specific description referencing {brand_name}'s situation",
       "impact": "high/medium/low",
       "effort": "high/medium/low",
       "timeline": "1-2 weeks/1 month/3 months",
-      "expected_result": "string",
-      "action_steps": ["step1", "step2", "step3"]
+      "expected_result": "specific metric outcome for {brand_name}",
+      "action_steps": ["specific step for {brand_name}", "step2", "step3"]
     }}
   ],
-  "quick_wins": ["win1", "win2", "win3"],
-  "long_term_plays": ["play1", "play2"],
-  "untapped_channels": ["channel1", "channel2"],
-  "recommendations": ["rec1", "rec2", "rec3", "rec4", "rec5"],
+  "quick_wins": ["specific quick win for {brand_name}", "win2", "win3"],
+  "long_term_plays": ["specific play for {brand_name}", "play2"],
+  "untapped_channels": ["specific channel for {audience_str}", "channel2"],
+  "recommendations": ["specific rec for {brand_name}", "rec2", "rec3", "rec4", "rec5"],
   "priority": "high/medium/low"
 }}"""
-        raw = _llm(prompt, max_tokens=1280)
+        raw = _llm(prompt, max_tokens=1400)
         result = _parse_json(raw)
         if not result:
             result = {"score": 0, "error": "LLM parse failed", "recommendations": []}
@@ -653,40 +757,57 @@ Return ONLY valid JSON:
     def _generate_executive_summary(
         self, url: str, brand_data: dict, scores: dict, grade: str, results: dict
     ) -> str:
-        """Generate a concise executive summary of the audit findings."""
+        """Generate an LLM-written executive summary like a senior consultant."""
         brand_name = brand_data.get("brand_name", url)
-        industry = brand_data.get("industry", "unknown")
+        industry = brand_data.get("industry", "General Business")
 
-        # Find strongest and weakest sections
+        # Key findings to inform the LLM
         if scores:
             best_section = max(scores, key=scores.get)
             worst_section = min(scores, key=scores.get)
-            best_score = scores[best_section]
-            worst_score = scores[worst_section]
+            best_score = round(scores[best_section], 1)
+            worst_score = round(scores[worst_section], 1)
         else:
-            best_section = worst_section = "N/A"
+            best_section = worst_section = "overall"
             best_score = worst_score = 0
 
-        avg = sum(scores.values()) / max(len(scores), 1) if scores else 0
-
-        # Top priority action
-        top_rec = "Improve overall marketing execution across all channels."
-        for section in ["cro", "messaging", "seo"]:
+        # Top quick win from most impactful section
+        top_finding = ""
+        for section in ["cro", "messaging", "seo", "growth"]:
             s_result = results.get(section, {})
-            recs = s_result.get("quick_wins", []) or s_result.get("recommendations", [])
-            if recs:
-                top_rec = recs[0]
+            qw = s_result.get("quick_wins", [])
+            if qw:
+                top_finding = qw[0]
                 break
 
-        summary = (
-            f"{brand_name} received a marketing grade of {grade} ({round(avg, 1)}/100) "
-            f"in the {industry} industry. "
-            f"Strongest area: {best_section.upper()} ({round(best_score, 1)}/100). "
-            f"Biggest opportunity: {worst_section.upper()} ({round(worst_score, 1)}/100). "
-            f"Top priority action: {top_rec} "
-            f"With consistent execution over 3-6 months, significant improvement in traffic, "
-            f"conversions, and revenue is achievable."
-        )
+        prompt = f"""Write a 3-4 sentence executive summary of this marketing audit for a CEO presentation.
+
+Brand: {brand_name} | URL: {url} | Industry: {industry}
+Overall Grade: {grade}
+Scores: SEO {scores.get('seo', 0)}/100, Content {scores.get('content', 0)}/100, CRO {scores.get('cro', 0)}/100, Messaging {scores.get('messaging', 0)}/100, Competitive {scores.get('competitive', 0)}/100, Growth {scores.get('growth', 0)}/100
+Strongest area: {best_section.upper()} ({best_score}/100)
+Biggest opportunity: {worst_section.upper()} ({worst_score}/100)
+Top finding: {top_finding}
+
+Write like a senior marketing consultant presenting to a CEO.
+Be specific about {brand_name}'s actual strengths and weaknesses.
+Do NOT use bullet points. Write in professional prose.
+Do NOT be generic. Mention {brand_name} by name.
+Return ONLY the summary text, no JSON, no headers."""
+
+        summary = _llm(prompt, system="You are a senior marketing consultant. Write concise, specific executive summaries.", max_tokens=300)
+
+        if not summary or len(summary) < 50:
+            # Fallback: structured string
+            summary = (
+                f"{brand_name} received a marketing grade of {grade} in the {industry} sector, "
+                f"with notable strength in {best_section.upper()} ({best_score}/100) "
+                f"and the greatest opportunity in {worst_section.upper()} ({worst_score}/100). "
+                f"{'Priority action: ' + top_finding + ' ' if top_finding else ''}"
+                f"With focused execution over 3-6 months, {brand_name} can achieve significant improvements "
+                f"in organic traffic, conversion rate, and revenue."
+            )
+
         return summary
 
     # -----------------------------------------------------------------------

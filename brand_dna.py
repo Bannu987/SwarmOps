@@ -380,6 +380,29 @@ def _analyze_with_llm(content: str, url: str) -> Optional[dict]:
         return None
 
 
+def _extract_brand_from_domain(url: str) -> str:
+    """Extract brand name from domain as fallback."""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url if url.startswith("http") else "https://" + url)
+        domain = parsed.netloc or parsed.path
+        name = domain.replace("www.", "").split(".")[0]
+        return name.capitalize() if name else "Website"
+    except Exception:
+        return "Website"
+
+
+def _clean_not_found(data):
+    """Recursively replace 'not_found' with user-friendly alternatives."""
+    if isinstance(data, dict):
+        return {k: _clean_not_found(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_clean_not_found(i) for i in data]
+    if data == "not_found":
+        return "Not detected"
+    return data
+
+
 def _minimal_fallback(url: str) -> dict:
     """Minimal fallback when everything fails."""
     domain_m = re.search(r"https?://(?:www\.)?([^/]+)", url)
@@ -518,12 +541,21 @@ class BrandDNA:
             if not dna:
                 dna = _minimal_fallback(url)
 
-            # 3. Attach metadata
+            # 3. Fix brand_name fallback — never show "not_found" to users
+            if not dna.get("brand_name") or dna.get("brand_name") in ("not_found", "Not detected"):
+                dna["brand_name"] = _extract_brand_from_domain(url)
+            if not dna.get("industry") or dna.get("industry") in ("not_found", "Not detected"):
+                dna["industry"] = "General Business"
+
+            # 4. Attach metadata
             dna["url"] = url
             dna["extracted_at"] = datetime.now(timezone.utc).isoformat()
 
-            # 4. Store
+            # 5. Store raw (with original not_found values for internal use)
             self._store(url, dna)
+
+            # 6. Clean not_found for API response
+            dna = _clean_not_found(dna)
 
             brand = dna.get("brand_name", "unknown")
             industry = dna.get("industry", "unknown")
@@ -590,7 +622,12 @@ class BrandDNA:
             dna = json.loads(row["raw_json"]) if row["raw_json"] else {}
             dna["extracted_at"] = row["extracted_at"]
             dna["url"] = row["url"]
-            return dna
+            # Ensure brand_name is never "not_found" in stored data
+            if not dna.get("brand_name") or dna.get("brand_name") in ("not_found", "Not detected"):
+                dna["brand_name"] = _extract_brand_from_domain(dna.get("url", ""))
+            if not dna.get("industry") or dna.get("industry") in ("not_found", "Not detected"):
+                dna["industry"] = "General Business"
+            return _clean_not_found(dna)
         except Exception as e:
             print(f"[brand_dna] get_stored error: {e}")
             return None

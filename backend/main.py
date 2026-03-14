@@ -1297,90 +1297,6 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                     "latency_ms": result.get("total_latency_ms", 0)
                 }
 
-        # --- Multi-agent orchestration for complex nexus queries ---
-        if agent == "nexus" or agent == "":
-            _multi_agents = _check_multi_agent_trigger(user_msg)
-            if _multi_agents:
-                print(f"\n🔀 MULTI-AGENT TRIGGERED: {_multi_agents} for '{user_msg[:50]}'")
-                import concurrent.futures as _cf
-
-                def _run_agent_safe(ag_name: str) -> tuple:
-                    try:
-                        if ag_name == "seo":
-                            from seo_agent import find_keyword_opportunities, find_keywords
-                            r = find_keyword_opportunities(user_msg)
-                            if not r:
-                                r = find_keywords(user_msg)
-                            return (ag_name, r or "No data available")
-                        elif ag_name == "content":
-                            from content_agent import generate_content
-                            return (ag_name, generate_content(user_msg) or "No data available")
-                        elif ag_name == "ppc":
-                            from ppc_agent import create_campaign_strategy
-                            return (ag_name, create_campaign_strategy(user_msg) or "No data available")
-                        elif ag_name == "crm":
-                            from crm_agent import create_email_sequence
-                            return (ag_name, create_email_sequence(user_msg, num_emails=3) or "No data available")
-                        elif ag_name == "analytics":
-                            from analytics_agent import analyze_performance
-                            return (ag_name, analyze_performance(user_msg, user_msg) or "No data available")
-                        elif ag_name == "smm":
-                            from smm_agent import create_social_calendar
-                            return (ag_name, create_social_calendar(industry="General", brand_voice="Professional", target_audience="General audience") or "No data available")
-                        elif ag_name == "brand":
-                            from brand_strategist_agent import create_brand_strategy
-                            return (ag_name, create_brand_strategy(company_name="Company", industry="General", target_audience="General audience", unique_value=user_msg) or "No data available")
-                        elif ag_name == "cro":
-                            from cro_agent import analyze_funnel
-                            return (ag_name, analyze_funnel(funnel_steps=user_msg, conversion_data="", goal="increase conversions") or "No data available")
-                        elif ag_name == "research":
-                            from research_agent import research_topic
-                            return (ag_name, research_topic(user_msg) or "No data available")
-                        else:
-                            return (ag_name, "Agent not available")
-                    except Exception as _e:
-                        return (ag_name, f"Agent encountered an error: {str(_e)[:100]}")
-
-                _agent_results = {}
-                with _cf.ThreadPoolExecutor(max_workers=5) as _pool:
-                    _futures = {_pool.submit(_run_agent_safe, ag): ag for ag in _multi_agents[:5]}
-                    for _fut in _cf.as_completed(_futures, timeout=30):
-                        try:
-                            _ag_name, _ag_result = _fut.result(timeout=30)
-                            _agent_results[_ag_name] = _ag_result
-                        except Exception:
-                            pass
-
-                if _agent_results:
-                    # Rank results by quality confidence
-                    _ranked = _rank_agent_results(_agent_results)
-
-                    # Build synthesis prompt using ranked order
-                    _agent_findings = ""
-                    for _ag_id, _ag_res, _ag_score in _ranked:
-                        _agent_findings += f"\n{_ag_id.upper()} Agent (confidence: {_ag_score:.1f}):\n{str(_ag_res)[:400]}\n"
-
-                    _synthesis_prompt = f"""The user asked: "{user_msg}"
-
-I ran {len(_agent_results)} specialized agents in parallel. Here are their findings, ranked by response quality (higher confidence = more detailed/data-backed):
-{_agent_findings}
-
-Synthesize this into ONE cohesive strategic response. Weight insights from higher-confidence agents more heavily. Highlight the 3 highest-impact actions. Keep it under 300 words. Be conversational, not a data dump. End with "**What would you like to dive deeper on?**" """
-
-                    nexus = get_nexus()
-                    result = nexus.apply_nexus_persona(user_msg, _synthesis_prompt)
-
-                    return {
-                        "success": True,
-                        "agent": "nexus",
-                        "multi_agent": True,
-                        "agents_used": [{"agent": ag, "confidence": sc} for ag, _, sc in _ranked],
-                        "result": result,
-                        "model": "multi-agent-synthesis",
-                        "provider": "swarmops",
-                        "latency_ms": 0,
-                    }
-
         # --- recall past memories and prepend context ---
         try:
             from memory_store import get_memory_store
@@ -1659,18 +1575,53 @@ Synthesize this into ONE cohesive strategic response. Weight insights from highe
             agent = "nexus"
             agent_fn = None
 
-        else:  # "nexus" or anything else → smart routing
+        else:  # nexus — Plan → Execute → Score → Synthesize
             nexus = get_nexus()
             from nexus import detect_emotional_distress
             _eq_distress = detect_emotional_distress(user_msg)
+
             if _eq_distress:
-                # EQ Override (Directive 1): distress detected — skip heavy agent call,
-                # respond with pure empathy + 1-2 actions from The Nexus persona directly.
+                # EQ Override (Directive 1): distress detected — empathy first, no agent overload
                 result = nexus.apply_nexus_persona(user_msg, "")
             else:
-                raw_result = nexus.execute_task(msg)
-                # Apply The Nexus Master Prompt persona: CMO voice + revenue-first framing
-                result = nexus.apply_nexus_persona(user_msg, _extract_text(raw_result))
+                from swarm_planner import build_execution_plan, run_agents, rank_agent_results, synthesize_results
+
+                # Resolve brand name for synthesis (already in msg context, just need the name)
+                _brand_name = "your brand"
+                try:
+                    from brand_dna import get_brand_dna as _bdna_p
+                    _stored_p = _bdna_p().get_stored()
+                    if _stored_p:
+                        _brand_name = (
+                            _stored_p.get("name")
+                            or (_stored_p.get("brand") or {}).get("name")
+                            or "your brand"
+                        )
+                        if _brand_name in ("Not detected", "not_found", ""):
+                            _brand_name = "your brand"
+                except Exception:
+                    pass
+
+                # Step 1: Plan — decide which agents should run
+                _plan = build_execution_plan(user_msg, _brand_name)
+                print(f"\n🧠 SWARM PLAN: {_plan} for '{user_msg[:60]}'")
+
+                if "nexus" in _plan or not _plan:
+                    # Simple conversational query — direct Nexus response (no specialist agents)
+                    raw_result = nexus.execute_task(msg)
+                    result = nexus.apply_nexus_persona(user_msg, _extract_text(raw_result))
+                else:
+                    # Step 2: Execute — run planned agents in parallel with full context
+                    _agent_results = run_agents(_plan, msg)
+
+                    # Step 3: Score — rank by confidence
+                    _ranked = rank_agent_results(_agent_results)
+                    _score_summary = [(a, round(r.get("confidence", 0), 1)) for a, r in _ranked]
+                    print(f"  Scores: {_score_summary}")
+
+                    # Step 4: Synthesize — Nexus CMO synthesizes into one strategic response
+                    result = synthesize_results(user_msg, _ranked, _brand_name)
+
             agent = "nexus"
             agent_fn = nexus.execute_task
 

@@ -20,8 +20,10 @@ if sys.stdout and hasattr(sys.stdout, 'buffer'):
 if sys.stderr and hasattr(sys.stderr, 'buffer'):
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-# Add parent directory to path
+# Add parent directory to path (project root → nexus, brand_dna, model_router, etc.)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add backend directory explicitly (knowledge_base, web_crawler, competitive_intel)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Load .env before anything else (Railway sets real env vars, this is for local dev)
 from dotenv import load_dotenv

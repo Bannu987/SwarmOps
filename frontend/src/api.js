@@ -250,6 +250,28 @@ export const api = {
       });
       return r.data;
     }
+  },
+
+  knowledgeBase: {
+    stats: async () => {
+      const r = await axios.get(`${API_BASE}/api/knowledge-base/stats`);
+      return r.data;
+    },
+    crawl: async (url, type = 'website') => {
+      const r = await axios.post(`${API_BASE}/api/knowledge-base/crawl`,
+        { url, type }, { timeout: 60000, headers: { 'Content-Type': 'application/json' } });
+      return r.data;
+    },
+    search: async (query, limit = 5) => {
+      const r = await axios.get(`${API_BASE}/api/knowledge-base/search`,
+        { params: { q: query, limit } });
+      return r.data;
+    },
+    deleteSource: async (url) => {
+      const r = await axios.delete(`${API_BASE}/api/knowledge-base/source`,
+        { data: { url }, headers: { 'Content-Type': 'application/json' } });
+      return r.data;
+    }
   }
 };
 

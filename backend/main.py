@@ -27,6 +27,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
+from knowledge_base import get_knowledge_base
+from web_crawler import get_web_crawler
+
 # ---------------------------------------------------------------------------
 # Startup ENV check — prints to Railway logs so you can verify keys are loaded
 # ---------------------------------------------------------------------------
@@ -90,6 +93,10 @@ def get_nexus():
         from nexus import Nexus
         _nexus = Nexus()
     return _nexus
+
+
+_kb = get_knowledge_base()
+_crawler = get_web_crawler()
 
 
 def _extract_text(result):
@@ -1352,6 +1359,18 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         except Exception:
             _learning_engine = None
 
+        # --- inject RAG knowledge base context ---
+        try:
+            _rag_ctx = _kb.get_agent_context(
+                query=user_msg,
+                agent_type=agent,
+                limit=3,
+            )
+            if _rag_ctx:
+                msg = f"{msg}\n\n{_rag_ctx}"
+        except Exception:
+            pass
+
         # --- dispatch to the correct agent and capture a revision callable ---
         result = None
         agent_fn = None  # callable(prompt) -> str for revisions
@@ -1961,9 +1980,20 @@ async def extract_brand_dna(request: BrandDNAExtractRequest):
     """Extract BrandDNA from a website URL — analyzes brand voice, tone, audience, CTAs."""
     try:
         from brand_dna import get_brand_dna
+        url = request.url
         result = await __import__("asyncio").get_event_loop().run_in_executor(
-            None, get_brand_dna().extract, request.url
+            None, get_brand_dna().extract, url
         )
+        # Crawl website into knowledge base in background
+        try:
+            import threading
+            threading.Thread(
+                target=get_web_crawler().crawl_website,
+                args=(url,),
+                daemon=True
+            ).start()
+        except Exception:
+            pass
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2137,16 +2167,28 @@ def add_competitor(request: AddCompetitorRequest):
     try:
         from competitive_intel import get_competitive_intel
         ci = get_competitive_intel()
-        competitor_id = ci.add_competitor(name=request.name, website_url=request.url)
+        name = request.name
+        url = request.url
+        competitor_id = ci.add_competitor(name=name, website_url=url)
         comps = ci.list_competitors()
         comp = next((c for c in comps if c["id"] == competitor_id), None)
+        # Crawl competitor website into knowledge base
+        try:
+            import threading
+            threading.Thread(
+                target=get_web_crawler().crawl_competitor,
+                args=(url, name),
+                daemon=True
+            ).start()
+        except Exception:
+            pass
         return {
             "success": True,
             "competitor_id": competitor_id,
-            "name": request.name,
-            "url": request.url,
+            "name": name,
+            "url": url,
             "competitor": comp,
-            "message": f"Added {request.name} and triggered initial analysis.",
+            "message": f"Added {name} and triggered initial analysis.",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2321,6 +2363,62 @@ def get_audit_report(audit_id: str):
         if not report:
             raise HTTPException(status_code=404, detail="Audit not found")
         return {"success": True, **report}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# KNOWLEDGE BASE ENDPOINTS
+# ============================================================================
+
+@app.get("/api/knowledge-base/stats")
+async def kb_stats():
+    try:
+        return get_knowledge_base().get_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/knowledge-base/crawl")
+async def kb_crawl(request: Request):
+    try:
+        body = await request.json()
+        url = body.get("url", "").strip()
+        crawl_type = body.get("type", "website")
+        if not url:
+            raise HTTPException(status_code=400, detail="url required")
+        results = get_web_crawler().crawl_website(url)
+        return {"status": "ok", "results": results}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/knowledge-base/source")
+async def kb_delete_source(request: Request):
+    try:
+        body = await request.json()
+        url = body.get("url", "").strip()
+        if not url:
+            raise HTTPException(status_code=400, detail="url required")
+        get_knowledge_base().delete_by_source(url)
+        return {"status": "deleted", "url": url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/knowledge-base/search")
+async def kb_search(q: str = "", limit: int = 5):
+    try:
+        if not q:
+            raise HTTPException(status_code=400, detail="q parameter required")
+        results = get_knowledge_base().search(q, limit=min(limit, 20))
+        return {"query": q, "results": results, "count": len(results)}
     except HTTPException:
         raise
     except Exception as e:

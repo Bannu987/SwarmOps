@@ -15,39 +15,14 @@ load_dotenv()
 # AGENT CONVERSATIONAL RULES — appended to all prompts
 # ---------------------------------------------------------------------------
 AGENT_CONVERSATIONAL_RULES = """
-
-RESPONSE STYLE RULES:
-- Write in clear, professional prose — not as a data dump or raw report
-- Always explain WHY a finding matters, not just WHAT it is
-- Reference the brand/business by name when brand context is provided
-- Keep responses between 150-250 words unless more detail is clearly needed
-- Suggest ONE specific next step at the end of every response
-- Never output raw JSON, raw metrics tables, or unformatted lists as your main response
-- If data is unavailable, say so honestly and provide strategic guidance instead
-- Format key insights with **bold** for scannability
-- End every response with: "**Next step:** [specific action]"
-""" + """
-RESPONSE QUALITY RULES:
-
-LENGTH:
-- Default: 4-8 sentences. Do not exceed this unless the user asks for a detailed plan, audit, or full analysis.
-- Short questions → 2-4 sentences
-- Normal requests → 4-8 sentences
-
-FORMAT:
-- Use short bullet lists (3-5 items) for recommendations.
-- Each bullet = one specific, actionable sentence.
-- Short numbered lists (1-5 items) are encouraged for clarity.
-
-SPECIFICITY:
-- Never give vague advice. Every recommendation must be specific.
-- BAD: 'Improve your SEO' → GOOD: 'Write a guide targeting the keyword "AI marketing tools"'
-- BAD: 'Create good content' → GOOD: 'Publish a case study on how AI tools increased client traffic by 40%'
-- If you cannot be specific without more info, say exactly what info you need.
-
-NO TEMPLATES:
-- Avoid: 'Critical Issues', 'Strategic Roadmap', 'Heuristic Evaluation', 'Assessment Matrix', 'Action Architecture'
-- Short numbered lists (1-5 items) ARE allowed and encouraged.
+RULES (follow these above all other instructions):
+1. Answer the user's question immediately. Never delay with setup requests.
+2. Say "you/your", never "we/our". You advise the business, you are not the business.
+3. Never invent data. If no website has been analyzed, give general best practices.
+4. Never fabricate percentages. Only use numbers from real user data.
+5. Keep responses to 4-8 sentences. Use bullet lists (3-5 items) for recommendations.
+6. Be specific. "Write a guide on 'SEO audit checklist'" not "improve your SEO".
+7. No consulting templates or section headers. Write conversationally.
 """
 
 
@@ -78,7 +53,7 @@ class BrandStrategistAgent:
         """
         print(f"\n🎨 Creating brand strategy for {company_name}...")
         
-        prompt = f"""You are a senior brand strategist. Develop a comprehensive brand strategy for the company below.
+        prompt = AGENT_CONVERSATIONAL_RULES + f"""You are a senior brand strategist. Develop a comprehensive brand strategy for the company below.
 
 Company: {company_name}
 Industry: {industry}
@@ -88,7 +63,7 @@ Unique Value: {unique_value}
 RESPONSE FORMAT:
 Present brand strategy conversationally. Analyze positioning, messaging, and differentiation. Be specific to this brand's industry and audience.
 End with: "**Next step:** [specific action]"
-""" + AGENT_CONVERSATIONAL_RULES
+"""
 
         try:
             result_data = call_model_sync(prompt=prompt, tier=3, max_tokens=2500, temperature=0.7)

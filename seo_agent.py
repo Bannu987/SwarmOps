@@ -19,43 +19,18 @@ print("✅ SEO Agent ready! (Multi-Provider Router)")
 # AGENT CONVERSATIONAL RULES — appended to all prompts
 # ---------------------------------------------------------------------------
 AGENT_CONVERSATIONAL_RULES = """
-
-RESPONSE STYLE RULES:
-- Write in clear, professional prose — not as a data dump or raw report
-- Always explain WHY a finding matters, not just WHAT it is
-- Reference the brand/business by name when brand context is provided
-- Keep responses between 150-250 words unless more detail is clearly needed
-- Suggest ONE specific next step at the end of every response
-- Never output raw JSON, raw metrics tables, or unformatted lists as your main response
-- If data is unavailable, say so honestly and provide strategic guidance instead
-- Format key insights with **bold** for scannability
-- End every response with: "**Next step:** [specific action]"
-""" + """
-RESPONSE QUALITY RULES:
-
-LENGTH:
-- Default: 4-8 sentences. Do not exceed this unless the user asks for a detailed plan, audit, or full analysis.
-- Short questions → 2-4 sentences
-- Normal requests → 4-8 sentences
-
-FORMAT:
-- Use short bullet lists (3-5 items) for recommendations.
-- Each bullet = one specific, actionable sentence.
-- Short numbered lists (1-5 items) are encouraged for clarity.
-
-SPECIFICITY:
-- Never give vague advice. Every recommendation must be specific.
-- BAD: 'Improve your SEO' → GOOD: 'Write a guide targeting the keyword "AI marketing tools"'
-- BAD: 'Create good content' → GOOD: 'Publish a case study on how AI tools increased client traffic by 40%'
-- If you cannot be specific without more info, say exactly what info you need.
-
-NO TEMPLATES:
-- Avoid: 'Critical Issues', 'Strategic Roadmap', 'Heuristic Evaluation', 'Assessment Matrix', 'Action Architecture'
-- Short numbered lists (1-5 items) ARE allowed and encouraged.
+RULES (follow these above all other instructions):
+1. Answer the user's question immediately. Never delay with setup requests.
+2. Say "you/your", never "we/our". You advise the business, you are not the business.
+3. Never invent data. If no website has been analyzed, give general best practices.
+4. Never fabricate percentages. Only use numbers from real user data.
+5. Keep responses to 4-8 sentences. Use bullet lists (3-5 items) for recommendations.
+6. Be specific. "Write a guide on 'SEO audit checklist'" not "improve your SEO".
+7. No consulting templates or section headers. Write conversationally.
 """
 
 # SEO Analysis Prompt
-seo_analysis_template = """You are a senior SEO strategist. Analyze the task and search results below, then provide specific, actionable keyword and SEO recommendations.
+seo_analysis_template = AGENT_CONVERSATIONAL_RULES + """You are a senior SEO strategist. Analyze the task and search results below, then provide specific, actionable keyword and SEO recommendations.
 
 Task: {task}
 Search Results: {search_results}
@@ -64,7 +39,7 @@ RESPONSE FORMAT:
 Present keyword findings conversationally. Lead with the top 3 opportunities and explain WHY each matters for this brand. Include search intent and competition level in natural language.
 Example: "Your highest-opportunity keyword is [keyword] — it has strong commercial intent and aligns with your positioning. Competition is moderate, making it achievable within 3-6 months."
 End with: "**Next step:** [specific action]"
-""" + AGENT_CONVERSATIONAL_RULES
+"""
 
 def _seo_call(prompt_text, tier=2, max_tokens=4096, temperature=0.7):
     """Route through model_router with automatic fallback."""
@@ -166,7 +141,7 @@ def find_keywords(topic, num_keywords=10):
     except Exception:
         pass
 
-    keyword_prompt = f"""You are a senior SEO strategist. Find keyword opportunities for the topic below.
+    keyword_prompt = AGENT_CONVERSATIONAL_RULES + f"""You are a senior SEO strategist. Find keyword opportunities for the topic below.
 
 Task: Find {num_keywords} keyword opportunities for {topic}
 Search Results: {formatted_results}
@@ -176,7 +151,7 @@ RESPONSE FORMAT:
 Present keyword findings conversationally. Lead with the top 3 opportunities and explain WHY each matters. Include search intent and competition level in natural language.
 Example: "Your highest-opportunity keyword is [keyword] — it has strong commercial intent and aligns with your positioning. Competition is moderate, making it achievable within 3-6 months."
 End with: "**Next step:** [specific action]"
-""" + AGENT_CONVERSATIONAL_RULES
+"""
 
     result = _seo_call(keyword_prompt, tier=2)
 
@@ -210,7 +185,7 @@ def competitor_analysis(niche, num_competitors=5):
         for r in results
     ])
     
-    analysis_prompt = f"""You are a senior SEO strategist. Analyze top competitors in the {niche} space.
+    analysis_prompt = AGENT_CONVERSATIONAL_RULES + f"""You are a senior SEO strategist. Analyze top competitors in the {niche} space.
 
 Task: Analyze top {num_competitors} competitors in the {niche} space
 Competitors Data: {competitor_data}
@@ -218,7 +193,7 @@ Competitors Data: {competitor_data}
 RESPONSE FORMAT:
 Present competitor analysis conversationally. Highlight each competitor's key strengths, target keywords, and where gaps exist for differentiation. Be specific and actionable.
 End with: "**Next step:** [specific action]"
-""" + AGENT_CONVERSATIONAL_RULES
+"""
 
     result = _seo_call(analysis_prompt, tier=4)
 
@@ -250,7 +225,7 @@ def content_gap_analysis(topic):
         for r in results
     ])
     
-    gap_prompt = f"""You are a senior SEO strategist. Identify content gaps and opportunities for the topic below.
+    gap_prompt = AGENT_CONVERSATIONAL_RULES + f"""You are a senior SEO strategist. Identify content gaps and opportunities for the topic below.
 
 Task: Identify content gaps and opportunities for {topic}
 Existing Content: {existing_content}
@@ -258,7 +233,7 @@ Existing Content: {existing_content}
 RESPONSE FORMAT:
 Present content gap findings conversationally. Highlight underserved questions and topics, recommend specific content formats, and explain the traffic potential for each gap.
 End with: "**Next step:** [specific action]"
-""" + AGENT_CONVERSATIONAL_RULES
+"""
 
     result = _seo_call(gap_prompt, tier=2)
 

@@ -860,9 +860,9 @@ function MessageBubble({ message, isLatest }) {
           <div className="msg-meta">
             {message.provider && <span className={'meta-pill provider-' + providerKey}>{message.provider}</span>}
             {message.latency_ms && <span className="meta-pill">{(message.latency_ms / 1000).toFixed(1)}s</span>}
-            {message.quality?.confidence != null && (
+            {message.quality?.confidence != null && message.quality.confidence >= 0.8 && (
               <span className={'meta-pill conf-' + getConfidenceLevel(message.quality.confidence)}>
-                {(message.quality.confidence * 100).toFixed(0)}% conf
+                ✓ Verified
               </span>
             )}
             {message.quality?.revised && <span className="meta-pill revised">✨ Revised</span>}

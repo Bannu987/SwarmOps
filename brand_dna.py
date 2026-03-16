@@ -374,6 +374,23 @@ def _analyze_with_llm(content: str, url: str) -> Optional[dict]:
             clean = re.sub(r"^```[a-z]*\n?", "", clean)
             clean = re.sub(r"\n?```$", "", clean)
         parsed = json.loads(clean.strip())
+
+        # Fix brand_name if it's a placeholder
+        brand_name = parsed.get("brand_name", "")
+        if not brand_name or brand_name.lower() in ["your brand", "unknown", "not found", "not_found", "n/a", ""]:
+            try:
+                from urllib.parse import urlparse
+                domain = urlparse(url).netloc.replace("www.", "")
+                n = domain.split(".")[0]
+                parsed["brand_name"] = n.upper() if len(n) <= 4 else n.replace("-", " ").title()
+            except:
+                pass
+
+        # Fix industry if it's a placeholder
+        industry = parsed.get("industry", "")
+        if not industry or industry.lower() in ["your industry", "unknown", "not found", "not_found", "n/a", ""]:
+            parsed["industry"] = "Professional Services"
+
         return parsed
     except Exception as e:
         print(f"[brand_dna] LLM analysis failed: {e}")

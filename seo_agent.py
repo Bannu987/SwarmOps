@@ -30,6 +30,28 @@ RESPONSE STYLE RULES:
 - If data is unavailable, say so honestly and provide strategic guidance instead
 - Format key insights with **bold** for scannability
 - End every response with: "**Next step:** [specific action]"
+""" + """
+RESPONSE QUALITY RULES:
+
+LENGTH:
+- Default: 4-8 sentences. Do not exceed this unless the user asks for a detailed plan, audit, or full analysis.
+- Short questions → 2-4 sentences
+- Normal requests → 4-8 sentences
+
+FORMAT:
+- Use short bullet lists (3-5 items) for recommendations.
+- Each bullet = one specific, actionable sentence.
+- Short numbered lists (1-5 items) are encouraged for clarity.
+
+SPECIFICITY:
+- Never give vague advice. Every recommendation must be specific.
+- BAD: 'Improve your SEO' → GOOD: 'Write a guide targeting the keyword "AI marketing tools"'
+- BAD: 'Create good content' → GOOD: 'Publish a case study on how AI tools increased client traffic by 40%'
+- If you cannot be specific without more info, say exactly what info you need.
+
+NO TEMPLATES:
+- Avoid: 'Critical Issues', 'Strategic Roadmap', 'Heuristic Evaluation', 'Assessment Matrix', 'Action Architecture'
+- Short numbered lists (1-5 items) ARE allowed and encouraged.
 """
 
 # SEO Analysis Prompt

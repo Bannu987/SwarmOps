@@ -31,6 +31,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 
 from knowledge_base import get_knowledge_base
 from web_crawler import get_web_crawler
+from conversation_manager import get_conversation_manager
 
 # ---------------------------------------------------------------------------
 # Startup ENV check — prints to Railway logs so you can verify keys are loaded
@@ -99,6 +100,7 @@ def get_nexus():
 
 _kb = get_knowledge_base()
 _crawler = get_web_crawler()
+_cm = get_conversation_manager()
 
 
 def _extract_text(result):
@@ -1244,46 +1246,120 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         msg = request.message.strip()
         user_msg = request.message.strip()  # preserve raw user input before any augmentation
 
-        # ================================================================
-        # SMART ONBOARDING — runs before everything else
-        # Detects first-time users and guides them through 3-step setup:
-        #   Step 1: Ask for website URL
-        #   Step 2: Extract BrandDNA → ask for primary goal
-        #   Step 3: Save goal → complete onboarding, give first recommendation
-        # Skip if: business_profile has website_url OR brand_dna table has rows
-        # ================================================================
-        import re as _re_ob
-        _onboarding_result = await _handle_onboarding(user_msg, agent)
-        if _onboarding_result is not None:
-            return _onboarding_result
+        if not user_msg:
+            return JSONResponse({"response": "Please send a message.", "agent": agent, "provider": "system"})
 
-        # --- Check for Small-Talk / Greetings (Bypass Headless Nodes) ---
+        # ================================================================
+        # CONVERSATIONMANAGER — single gatekeeper for routing/onboarding
+        # ================================================================
         import re as _re
         _msg_lower = user_msg.lower()
-        _greetings = {"hi", "hello", "hey", "how are you", "help", "what can you do", "morning", "good morning", "afternoon", "evening"}
-        _technical_terms = {"seo", "ppc", "roas", "roi", "b2b", "crm", "cac", "cpa", "funnel", "conversion", "ads", "analytics", "data"}
-        
-        # Condition 1: Exact match with a common greeting
-        # Condition 2: Very short (under 4 words) AND lacks marketing terminology
-        _is_greeting = _msg_lower in _greetings or any(greet == _msg_lower for greet in _greetings)
-        _is_short_and_casual = len(user_msg.split()) < 4 and not any(term in _msg_lower for term in _technical_terms)
 
-        if (agent == "nexus" or agent == "") and (_is_greeting or _is_short_and_casual):
-            print(f"\n👋 SMALL TALK INTERCEPTED: Bypassing Headless Nodes for '{user_msg}'")
-            nexus = get_nexus()
-            
-            # Use Nexus master persona to generate a friendly greeting directly
-            _greeting_prompt = "The user just said hello. Introduce yourself as The Nexus, CMO of SwarmOps, and ask them for their business context or what marketing challenge they want to tackle today. Keep it under 50 words, friendly but professional."
-            result = nexus.apply_nexus_persona(user_msg, _greeting_prompt)
-            
-            return {
-                "success": True,
-                "agent": "nexus",
-                "result": result,
-                "model": "nexus_persona",
-                "provider": "direct",
-                "latency_ms": 0,
-            }
+        action, action_data = _cm.decide_action(user_msg, agent)
+
+        # Fast-path: greeting
+        if action == "greeting":
+            return JSONResponse({
+                "response": _cm.handle_greeting(action_data.get("personalized", False)),
+                "agent": "nexus", "provider": "system"
+            })
+
+        # Fast-path: context query ("what do you know about me")
+        if action == "context_response":
+            return JSONResponse({
+                "response": _cm.handle_context_query(),
+                "agent": "nexus", "provider": "system"
+            })
+
+        # Fast-path: vague help with no brand — ask for URL non-blocking
+        if action == "onboarding_start":
+            return JSONResponse({
+                "response": (
+                    "I'd love to give you specific advice for your business. "
+                    "Share your website URL and I'll analyze your brand automatically.\n\n"
+                    "_Or just ask your question — I can help with general marketing strategy too._"
+                ),
+                "agent": "nexus", "provider": "system", "onboarding_step": 1
+            })
+
+        # Fast-path: URL provided with no brand — extract brand DNA
+        if action == "onboarding_url":
+            url_match = _re.search(r"https?://[^\s]+", user_msg)
+            url = url_match.group().rstrip("/") if url_match else None
+            if url:
+                try:
+                    from brand_dna import get_brand_dna
+                    brand_extractor = get_brand_dna()
+                    brand_data = brand_extractor.extract(url)
+                    formatted = _cm.format_brand_for_onboarding(brand_data)
+
+                    # Save to business_profile table
+                    try:
+                        from db import get_connection as _get_conn_ob
+                        _conn_ob = _get_conn_ob()
+                        _conn_ob.execute(
+                            "INSERT OR REPLACE INTO business_profile (website_url, industry) VALUES (?, ?)",
+                            (url, formatted["industry"])
+                        )
+                        _conn_ob.commit()
+                    except Exception:
+                        pass
+
+                    # Crawl website into knowledge base (background)
+                    import threading
+                    threading.Thread(target=_crawler.crawl_website, args=(url,), daemon=True).start()
+
+                    _cm.set_state(_cm.STATE_PROFILED)
+
+                    response_text = (
+                        f"I've analyzed your website. Here's what I found:\n\n"
+                        f"**Brand:** {formatted['name']}\n"
+                        f"**Industry:** {formatted['industry']}\n"
+                        f"**Voice:** {formatted['voice']}\n"
+                        f"**Audience:** {formatted['audience']}\n\n"
+                        f"Every agent will now write in {formatted['name']}'s voice automatically.\n\n"
+                        f"**What's your primary marketing goal?** "
+                        f"(e.g., increase traffic, generate leads, boost sales, build brand awareness)"
+                    )
+                    return JSONResponse({
+                        "response": response_text,
+                        "agent": "nexus", "provider": "system", "onboarding_step": 2
+                    })
+                except Exception:
+                    return JSONResponse({
+                        "response": "I had trouble analyzing that URL. Try again or just ask your marketing question.",
+                        "agent": "nexus", "provider": "system"
+                    })
+            return JSONResponse({
+                "response": "Could you share a full URL? (e.g., https://yoursite.com)",
+                "agent": "nexus", "provider": "system"
+            })
+
+        # ── For route_agent / route_nexus / route_audit: load full context ──
+        ctx = _cm.load_full_context()
+        context_str = _cm.build_context_string(ctx)
+
+        # Override agent for route_agent action
+        if action == "route_agent":
+            agent = action_data.get("agent", agent)
+
+        # Build the augmented message with all context
+        if context_str:
+            msg = f"{context_str}\n\n{msg}"
+
+        # If we just finished onboarding (state=PROFILED) and this is a specific request, save the goal
+        if action == "route_nexus" and _cm.get_state() == _cm.STATE_PROFILED:
+            try:
+                from db import get_connection as _get_conn_goal
+                _conn_goal = _get_conn_goal()
+                _conn_goal.execute(
+                    "UPDATE business_profile SET primary_goal = ? WHERE primary_goal IS NULL",
+                    (user_msg[:200],)
+                )
+                _conn_goal.commit()
+                _cm.set_state(_cm.STATE_ACTIVE)
+            except Exception:
+                pass
 
         # --- Check if this is a nexus request and if it needs a pipeline ---
         if agent == "nexus" or agent == "":

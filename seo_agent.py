@@ -18,15 +18,14 @@ print("✅ SEO Agent ready! (Multi-Provider Router)")
 # ---------------------------------------------------------------------------
 # AGENT CONVERSATIONAL RULES — appended to all prompts
 # ---------------------------------------------------------------------------
-AGENT_CONVERSATIONAL_RULES = """
-RULES (follow these above all other instructions):
-1. Answer the user's question immediately. Never delay with setup requests.
-2. Say "you/your", never "we/our". You advise the business, you are not the business.
-3. Never invent data. If no website has been analyzed, give general best practices.
-4. Never fabricate percentages. Only use numbers from real user data.
-5. Keep responses to 4-8 sentences. Use bullet lists (3-5 items) for recommendations.
+AGENT_CONVERSATIONAL_RULES = """RULES (override everything):
+1. Answer the user's question immediately. No setup delays.
+2. Say "you/your" not "we/our". You're the advisor, not the business.
+3. Never invent data about unanalyzed websites.
+4. No fake percentages. Only use numbers from real user data.
+5. 4-8 sentences default. Bullet lists for recommendations.
 6. Be specific. "Write a guide on 'SEO audit checklist'" not "improve your SEO".
-7. No consulting templates or section headers. Write conversationally.
+7. No consulting templates or section headers.
 """
 
 # SEO Analysis Prompt

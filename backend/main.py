@@ -103,6 +103,20 @@ _crawler = get_web_crawler()
 _cm = get_conversation_manager()
 
 
+def _is_external_url(message: str, stored_url: str) -> bool:
+    """Check if user is asking about a URL different from their own stored URL."""
+    import re
+    urls = re.findall(r'https?://[^\s]+|(?:www\.)?[\w-]+\.(?:com|org|net|io|in|co|me|dev|ai)(?:/\S*)?', message.lower())
+    if not urls or not stored_url:
+        return False
+    stored_domain = stored_url.replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0].lower()
+    for url in urls:
+        url_domain = url.replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0].lower()
+        if url_domain != stored_domain and len(url_domain) > 3:
+            return True
+    return False
+
+
 def _extract_text(result):
     """Extract displayable text from any agent result (str, dict, list, None)."""
     if result is None:
@@ -1406,7 +1420,11 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         # --- inject BrandDNA context (brand voice + identity for all agents) ---
         try:
             from brand_dna import get_brand_dna
-            brand_context = get_brand_dna().get_brand_context()
+            stored_url = ctx.get("website_url", "") if ctx else ""
+            if _is_external_url(user_msg, stored_url):
+                brand_context = "The user is analyzing an external website. Analyze it independently. Do not apply their personal brand profile to this external site."
+            else:
+                brand_context = get_brand_dna().get_brand_context()
             if brand_context:
                 msg = brand_context + "\n\n" + msg
         except Exception:

@@ -409,7 +409,7 @@ function App() {
       result.recommendations.forEach((r, i) => { f += `${i + 1}. ${r}\n`; });
       f += '\n';
     }
-    if (result.confidence !== undefined) f += `\n**Confidence:** ${(result.confidence * 100).toFixed(0)}%\n`;
+    if (result.confidence !== undefined && result.confidence >= 0.8) f += `\n✓ Verified\n`;
     return f;
   };
 
@@ -840,7 +840,7 @@ function MessageBubble({ message, isLatest }) {
       <div className="agent-body">
         <div className="agent-label">
           <span className="agent-label-name">{message.agentName}</span>
-          {message.model && <span className="agent-label-model">{message.model}</span>}
+          {message.model && <span className="agent-label-model">SwarmOps</span>}
         </div>
 
         {isPipeline && message.result?.steps ? (
@@ -891,7 +891,6 @@ function MessageBubble({ message, isLatest }) {
 ───────────────────────────────────────────────────────────── */
 function PipelineViz({ steps, totalLatency, expandedSteps, toggleStep }) {
   if (!steps?.length) return null;
-  const avgConf = steps.reduce((s, x) => s + (x.confidence || 0), 0) / steps.length;
 
   return (
     <div className="pipeline-viz">
@@ -902,7 +901,9 @@ function PipelineViz({ steps, totalLatency, expandedSteps, toggleStep }) {
             <div className="pipeline-node">
               <div className="pipeline-node-name">{step.department?.toUpperCase()}</div>
               <div className="pipeline-node-meta">
-                <span className={'conf-' + getConfidenceLevel(step.confidence)}>{(step.confidence * 100).toFixed(0)}%</span>
+                {step.confidence != null && step.confidence >= 0.8 && (
+                  <span className={'conf-' + getConfidenceLevel(step.confidence)}>✓</span>
+                )}
                 <span>{(step.latency_ms / 1000).toFixed(1)}s</span>
               </div>
             </div>
@@ -912,7 +913,6 @@ function PipelineViz({ steps, totalLatency, expandedSteps, toggleStep }) {
       <div className="pipeline-stats">
         <span><Layers size={12} /> {steps.length} agents</span>
         {totalLatency && <span><Clock size={12} /> {(totalLatency / 1000).toFixed(1)}s</span>}
-        <span><Target size={12} /> {(avgConf * 100).toFixed(0)}% avg</span>
       </div>
       <div className="pipeline-accordion">
         {steps.map((step, i) => (
@@ -921,7 +921,9 @@ function PipelineViz({ steps, totalLatency, expandedSteps, toggleStep }) {
               <div className="pipeline-card-left">
                 <CheckCircle2 size={13} className={'conf-' + getConfidenceLevel(step.confidence)} />
                 <span>{step.department?.toUpperCase()}</span>
-                <span className={'conf-' + getConfidenceLevel(step.confidence)}>{(step.confidence * 100).toFixed(0)}%</span>
+                {step.confidence != null && step.confidence >= 0.8 && (
+                  <span className={'conf-' + getConfidenceLevel(step.confidence)}>✓</span>
+                )}
               </div>
               <div className="pipeline-card-right">
                 <span>{step.latency_ms}ms</span>

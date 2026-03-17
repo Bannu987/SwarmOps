@@ -26,7 +26,11 @@
       "Bash(grep:*)",
       "Bash(npx react-scripts build)",
       "Bash(git rm:*)",
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(git -C /c/Users/shrav/OneDrive/Desktop/MarketingOS2.0 log --oneline -15)",
+      "Bash(export PORT=8002)",
+      "Bash(where gh:*)",
+      "Bash(git remote:*)"
     ]
   }
 }

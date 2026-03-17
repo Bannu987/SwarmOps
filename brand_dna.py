@@ -79,16 +79,78 @@ def _fetch_page(url: str, timeout: int = 5) -> str:
     return ""
 
 
+def _fetch_website_content(url: str) -> str:
+    """Fetch content using Jina Reader (primary) then Brave/Serper (fallback)."""
+    content = ""
+
+    # PRIMARY: Jina Reader — free, no API key, converts URL to clean markdown
+    try:
+        jina_url = f"https://r.jina.ai/{url}"
+        resp = requests.get(jina_url, timeout=15, headers={
+            "Accept": "text/plain",
+            "X-Return-Format": "text"
+        })
+        if resp.status_code == 200 and len(resp.text) > 100:
+            content = resp.text[:8000]
+            return content
+    except Exception:
+        pass
+
+    # FALLBACK 1: Brave Search
+    domain = url.replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0]
+    brave_key = os.getenv("BRAVE_API_KEY", "")
+    if brave_key:
+        try:
+            resp = requests.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                params={"q": domain, "count": 10},
+                headers={"X-Subscription-Token": brave_key},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                results = resp.json().get("web", {}).get("results", [])
+                for r in results:
+                    content += f"{r.get('title', '')}\n{r.get('description', '')}\n\n"
+        except Exception:
+            pass
+
+    # FALLBACK 2: Serper
+    if len(content) < 100:
+        serper_key = os.getenv("SERPER_API_KEY", "")
+        if serper_key:
+            try:
+                resp = requests.post(
+                    "https://google.serper.dev/search",
+                    json={"q": domain},
+                    headers={"X-API-KEY": serper_key},
+                    timeout=10
+                )
+                if resp.status_code == 200:
+                    for r in resp.json().get("organic", []):
+                        content += f"{r.get('title', '')}\n{r.get('snippet', '')}\n\n"
+            except Exception:
+                pass
+
+    return content
+
+
 def _fetch_all_pages(base_url: str) -> str:
     """
     Crawl up to 14 pages in parallel (max 5 concurrent, 5s timeout each).
     Returns combined extracted text from all successful pages.
+    Tries Jina Reader first as primary content source.
     """
     if not base_url.startswith("http"):
         base_url = "https://" + base_url
 
     # Strip trailing slash
     base_url = base_url.rstrip("/")
+
+    # PRIMARY: Try Jina Reader for the main URL first
+    jina_content = _fetch_website_content(base_url)
+    if jina_content and len(jina_content) > 200:
+        print(f"[brand_dna] Jina Reader succeeded for {base_url}")
+        return jina_content
 
     urls = [base_url + path for path in COMMON_PATHS]
 

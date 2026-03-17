@@ -89,13 +89,13 @@ class ConversationManager:
         # Brand DNA
         try:
             row = conn.execute(
-                "SELECT data FROM brand_dna ORDER BY created_at DESC LIMIT 1"
+                "SELECT raw_json, url FROM brand_dna ORDER BY extracted_at DESC LIMIT 1"
             ).fetchone()
             if row:
-                brand = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                brand = json.loads(row[0]) if isinstance(row[0], str) else (row[0] or {})
                 context["brand_name"] = brand.get("brand_name")
                 context["industry"] = brand.get("industry")
-                context["website_url"] = brand.get("website_url") or brand.get("url")
+                context["website_url"] = brand.get("website_url") or brand.get("url") or row[1]
 
                 voice = brand.get("brand_voice", {})
                 if isinstance(voice, dict):

@@ -207,18 +207,20 @@ class ConversationManager:
         if re.search(r"https?://|www\.", msg):
             return "url_provided"
 
-        # Context query
-        if any(
-            p in msg
-            for p in [
-                "what do you know",
-                "what have you learned",
-                "my business",
-                "my brand",
-                "my profile",
-                "what do you remember",
-            ]
-        ):
+        # Capability query — check BEFORE context_query
+        capability_patterns = ["how can you help", "what can you do",
+                               "what do you do", "your capabilities",
+                               "what are your features", "show me what you can do",
+                               "what can swarmops do"]
+        if any(p in msg for p in capability_patterns):
+            return "capabilities"
+
+        # Context query — only exact "tell me what you know about me" phrases
+        context_patterns = ["what do you know about me", "what do you know about my",
+                            "what have you learned about", "what do you remember",
+                            "my profile", "my brand data", "show my data",
+                            "what do you know"]
+        if any(p in msg for p in context_patterns):
             return "context_query"
 
         # Audit
@@ -280,6 +282,9 @@ class ConversationManager:
 
         if intent == "context_query":
             return ("context_response", {})
+
+        if intent == "capabilities":
+            return ("capabilities_response", {})
 
         if intent == "audit":
             url_match = re.search(r"https?://[^\s]+", message)
@@ -359,34 +364,100 @@ class ConversationManager:
         ]
         return "\n".join(parts)
 
-    def format_brand_for_onboarding(self, brand_data):
-        """Format brand extraction result into clean display strings."""
-        name = brand_data.get("brand_name") or "Your Brand"
-        industry = brand_data.get("industry") or "your industry"
+    def handle_capabilities(self):
+        return """I'm SwarmOps — your AI marketing team with 11 specialized agents:
 
+• **SEO** — Keyword research, ranking strategy, technical SEO
+• **Content** — Blog posts, articles, copy in your brand voice
+• **PPC** — Google Ads campaigns, budget optimization
+• **Analytics** — Performance analysis, ROI computation
+• **CRM** — Email sequences, lead nurturing
+• **Social Media** — Post strategy, platform optimization
+• **Brand** — Positioning, messaging, differentiation
+• **Web/UX** — Landing page optimization, conversion design
+• **CRO** — Funnel analysis, A/B test recommendations
+• **Research** — Market research, competitor analysis
+
+I also offer:
+• **Marketing Audit** — Grade any website A+ through F
+• **Brand DNA** — Extract your brand identity from your URL
+• **Competitive Intel** — Track and compare competitors
+
+Share your website URL and I'll personalize everything to your business. Or just ask a question and I'll route it to the right specialist."""
+
+    def format_brand_for_onboarding(self, brand_data):
+        """Format brand data for onboarding display. NEVER show defaults."""
+        import logging
+
+        # Handle string (JSON)
+        if isinstance(brand_data, str):
+            try:
+                brand_data = json.loads(brand_data)
+            except Exception:
+                pass
+
+        # Handle nested wrappers
+        if isinstance(brand_data, dict) and "data" in brand_data:
+            brand_data = brand_data["data"]
+        if isinstance(brand_data, dict) and "raw_json" in brand_data:
+            try:
+                brand_data = json.loads(brand_data["raw_json"])
+            except Exception:
+                pass
+
+        # Handle brand_dna wrapper returned by BrandDNA.extract()
+        if isinstance(brand_data, dict) and "brand_dna" in brand_data:
+            brand_data = brand_data["brand_dna"]
+
+        if not isinstance(brand_data, dict):
+            brand_data = {}
+
+        logging.info(f"format_brand_for_onboarding: brand_name={brand_data.get('brand_name', 'MISSING')}")
+
+        name = brand_data.get("brand_name", "")
+        industry = brand_data.get("industry", "")
+
+        # Never show default placeholders
+        if not name or name.lower() in ["your brand", "unknown", "not found", "not_found", "", "none", "n/a"]:
+            url = brand_data.get("website_url", "") or brand_data.get("url", "")
+            if url:
+                from urllib.parse import urlparse
+                domain = urlparse(url).netloc.replace("www.", "")
+                n = domain.split(".")[0]
+                name = n.upper() if len(n) <= 4 else n.replace("-", " ").title()
+            else:
+                name = "Your Business"
+
+        if not industry or industry.lower() in ["your industry", "unknown", "not found", "not_found", "", "none", "n/a"]:
+            industry = "Technology"
+
+        # Format voice
         voice = brand_data.get("brand_voice", {})
         if isinstance(voice, dict):
             tone = voice.get("tone", "professional")
             traits = voice.get("personality_traits", [])
             voice_str = f"{tone} — {', '.join(traits[:3])}" if traits else tone
+        elif isinstance(voice, str) and voice not in ["not_found", ""]:
+            voice_str = voice
         else:
-            voice_str = str(voice) if voice else "professional"
+            voice_str = "professional"
 
+        # Format audience
         audience = brand_data.get("target_audience", {})
         if isinstance(audience, dict):
             primary = audience.get("primary", "businesses")
             segments = audience.get("segments", [])
-            audience_str = primary + (
-                f" ({', '.join(segments[:3])})" if segments else ""
-            )
+            audience_str = f"{primary}" + (f" ({', '.join(segments[:3])})" if segments else "")
+        elif isinstance(audience, str) and audience not in ["not_found", ""]:
+            audience_str = audience
         else:
-            audience_str = str(audience) if audience else "general audience"
+            audience_str = "businesses"
 
         return {
             "name": name,
             "industry": industry,
             "voice": voice_str,
-            "audience": audience_str,
+            "audience": audience_str
         }
 
 

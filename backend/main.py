@@ -32,6 +32,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 from knowledge_base import get_knowledge_base
 from web_crawler import get_web_crawler
 from conversation_manager import get_conversation_manager
+from response_cleaner import get_response_cleaner
 
 # ---------------------------------------------------------------------------
 # Startup ENV check — prints to Railway logs so you can verify keys are loaded
@@ -101,6 +102,7 @@ def get_nexus():
 _kb = get_knowledge_base()
 _crawler = get_web_crawler()
 _cm = get_conversation_manager()
+_cleaner = get_response_cleaner()
 
 
 def _is_external_url(message: str, stored_url: str) -> bool:
@@ -1147,6 +1149,16 @@ MULTI_AGENT_TRIGGERS = {
     "retain customers": ["crm", "analytics", "cro"],
     "grow revenue": ["cro", "crm", "ppc", "analytics"],
     "increase revenue": ["cro", "crm", "ppc", "analytics"],
+    "3 month plan": ["seo", "content", "ppc", "crm", "analytics"],
+    "three month plan": ["seo", "content", "ppc", "crm", "analytics"],
+    "growth plan": ["seo", "content", "ppc", "analytics"],
+    "marketing plan": ["seo", "content", "ppc", "crm", "smm"],
+    "full strategy": ["seo", "content", "ppc", "cro", "smm"],
+    "complete strategy": ["seo", "content", "ppc", "cro", "smm"],
+    "deep analysis": ["seo", "content", "analytics", "cro", "research"],
+    "budget plan": ["ppc", "analytics", "content"],
+    "organic and paid": ["seo", "content", "ppc"],
+    "organic vs paid": ["seo", "content", "ppc"],
 }
 
 def _check_multi_agent_trigger(user_message: str):
@@ -1284,6 +1296,10 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 "response": _cm.handle_context_query(),
                 "agent": "nexus", "provider": "system"
             })
+
+        # Fast-path: capabilities query ("what can you do")
+        if action == "capabilities_response":
+            return {"response": _cm.handle_capabilities(), "agent": "nexus", "provider": "system"}
 
         # Fast-path: vague help with no brand — ask for URL non-blocking
         if action == "onboarding_start":
@@ -1826,6 +1842,13 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             _update_conversation_memory(user_msg, final_text, _brand_ctx_dict)
         except Exception:
             pass  # never block on conversation memory
+
+        # Post-process: enforce rules the LLM ignores
+        if isinstance(final_text, str) and len(final_text) > 10:
+            _query_type = _cleaner.classify_query_type(user_msg)
+            final_text = _cleaner.clean(final_text)
+            if _query_type != "audit":  # Don't truncate audits
+                final_text = _cleaner.enforce_length(final_text, _query_type)
 
         response = {
             "success": True,

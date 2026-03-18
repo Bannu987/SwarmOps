@@ -19,6 +19,77 @@ class ConversationManager:
     STATE_PROFILED = "profiled"
     STATE_ACTIVE = "active"
 
+    # Intent scoring weights — each intent has keyword signals with weights
+    _INTENT_SIGNALS = {
+        "seo": {
+            "keywords": ["seo", "keyword", "rank", "ranking", "search engine", "organic traffic",
+                         "backlink", "meta tag", "serp", "google search", "search visibility"],
+            "weight": 1.0,
+        },
+        "content": {
+            "keywords": ["blog", "article", "content", "copy", "write", "writing", "post ideas",
+                         "content strategy", "content calendar", "headline", "copywriting"],
+            "weight": 1.0,
+        },
+        "ppc": {
+            "keywords": ["ads", "ppc", "google ads", "facebook ads", "paid", "campaign",
+                         "ad copy", "cpc", "roas", "budget", "ad spend", "retargeting"],
+            "weight": 1.0,
+        },
+        "analytics": {
+            "keywords": ["analytics", "metrics", "data", "roi", "conversion rate", "bounce rate",
+                         "traffic stats", "performance", "kpi", "dashboard", "report"],
+            "weight": 1.0,
+        },
+        "cro": {
+            "keywords": ["conversion", "cro", "funnel", "checkout", "cart", "a/b test",
+                         "landing page", "cta", "button", "form", "checkout flow"],
+            "weight": 1.0,
+        },
+        "leads": {
+            "keywords": ["leads", "lead generation", "lead gen", "pipeline", "prospects",
+                         "sign up", "sign-up", "more customers", "get clients"],
+            "weight": 1.0,
+        },
+        "social": {
+            "keywords": ["social media", "instagram", "linkedin", "twitter", "tiktok",
+                         "facebook", "post", "engagement", "viral", "followers"],
+            "weight": 1.0,
+        },
+        "email": {
+            "keywords": ["email", "newsletter", "sequence", "drip", "nurture",
+                         "open rate", "click rate", "unsubscribe", "crm", "retention"],
+            "weight": 1.0,
+        },
+        "brand": {
+            "keywords": ["brand", "branding", "positioning", "identity", "voice", "tone",
+                         "messaging", "differentiation", "value proposition"],
+            "weight": 1.0,
+        },
+        "research": {
+            "keywords": ["competitor", "competition", "market research", "industry",
+                         "trends", "analysis", "benchmark", "compare"],
+            "weight": 1.0,
+        },
+        "traffic": {
+            "keywords": ["traffic", "visitors", "website traffic", "more traffic",
+                         "increase traffic", "grow traffic", "site traffic",
+                         "grow my business", "grow my website", "grow my brand"],
+            "weight": 1.0,
+        },
+        "sales": {
+            "keywords": ["sales", "revenue", "sell", "selling", "increase sales",
+                         "more sales", "close deals", "customers"],
+            "weight": 1.0,
+        },
+        "general_marketing": {
+            "keywords": ["marketing", "marketing strategy", "marketing strategies",
+                         "marketing plan", "marketing ideas", "digital marketing",
+                         "online marketing", "help me grow", "grow my", "business growth"],
+            "weight": 1.0,
+        },
+    }
+
     def __init__(self):
         self._ensure_tables()
 
@@ -61,11 +132,9 @@ class ConversationManager:
 
     def has_profile(self):
         try:
-            conn = get_connection()
-            row = conn.execute(
-                "SELECT website_url, primary_goal FROM business_profile LIMIT 1"
-            ).fetchone()
-            return row is not None and row[0] is not None
+            from memory_store import get_memory_store as _get_ms_hp
+            url = _get_ms_hp().get_profile_key("website_url")
+            return bool(url and url != "skipped")
         except Exception:
             return False
 
@@ -125,15 +194,37 @@ class ConversationManager:
         except Exception:
             pass
 
-        # Business profile (goal + url override)
+        # Load website_url — check business_profile key/value store FIRST (most reliable)
         try:
-            row = conn.execute(
-                "SELECT website_url, primary_goal FROM business_profile LIMIT 1"
-            ).fetchone()
-            if row:
-                if not context["website_url"] and row[0]:
-                    context["website_url"] = row[0]
-                context["goal"] = row[1]
+            from memory_store import get_memory_store as _get_ms
+            _ms = _get_ms()
+            _stored_url = _ms.get_profile_key("website_url")
+            if _stored_url and _stored_url != "skipped":
+                context["website_url"] = _stored_url
+        except Exception:
+            pass
+
+        # Fallback to brand_dna table if not in business_profile
+        if not context.get("website_url"):
+            try:
+                row = conn.execute(
+                    "SELECT data FROM brand_dna ORDER BY created_at DESC LIMIT 1"
+                ).fetchone()
+                if row:
+                    import json as _json
+                    d = _json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                    if isinstance(d, dict):
+                        context["website_url"] = d.get("website_url") or d.get("url", "")
+            except Exception:
+                pass
+
+        # Business profile goal (from key/value store)
+        try:
+            from memory_store import get_memory_store as _get_ms2
+            _ms2 = _get_ms2()
+            _goal = _ms2.get_profile_key("primary_goal")
+            if _goal:
+                context["goal"] = _goal
         except Exception:
             pass
 
@@ -174,6 +265,9 @@ class ConversationManager:
     def build_context_string(self, context):
         """Convert context dict to a prompt-injection string."""
         parts = []
+        # URL first — so Nexus never asks for it again
+        if context.get("website_url"):
+            parts.append(f"Website (already provided): {context['website_url']}")
         if context.get("brand_name"):
             parts.append(f"Brand: {context['brand_name']}")
         if context.get("industry"):
@@ -184,8 +278,6 @@ class ConversationManager:
             parts.append(f"Audience: {context['audience']}")
         if context.get("value_prop"):
             parts.append(f"Value Proposition: {context['value_prop']}")
-        if context.get("website_url"):
-            parts.append(f"Website: {context['website_url']}")
         if context.get("goal"):
             parts.append(f"Goal: {context['goal']}")
         if context.get("competitors"):
@@ -199,62 +291,72 @@ class ConversationManager:
             return "BRAND CONTEXT:\n" + "\n".join(parts)
         return ""
 
-    def classify_intent(self, message):
-        """Classify user intent to drive routing."""
+    def _score_intent(self, msg: str) -> str:
+        """Score message against intent signals. Returns best-matching intent or 'general'."""
+        msg_lower = msg.lower()
+        scores = {}
+        for intent, cfg in self._INTENT_SIGNALS.items():
+            score = sum(1 for kw in cfg["keywords"] if kw in msg_lower)
+            if score > 0:
+                scores[intent] = score * cfg["weight"]
+        if not scores:
+            return "general"
+        return max(scores, key=scores.get)
+
+    def classify_intent(self, message: str) -> str:
+        """Classify user intent using deterministic bypasses + scoring-based routing."""
         msg = message.lower().strip()
 
-        # URL provided
-        if re.search(r"https?://|www\.", msg):
-            return "url_provided"
+        # ── DETERMINISTIC BYPASSES (checked first, no scoring needed) ──
 
-        # Capability query — check BEFORE context_query
-        capability_patterns = ["how can you help", "what can you do",
-                               "what do you do", "your capabilities",
-                               "what are your features", "show me what you can do",
-                               "what can swarmops do"]
+        # Capability queries — hardcoded response, never touch LLM
+        capability_patterns = [
+            "how can you help", "what can you do", "what do you do",
+            "your capabilities", "what are your features",
+            "show me what you can do", "what can swarmops do",
+            "what features", "what do you offer",
+        ]
         if any(p in msg for p in capability_patterns):
             return "capabilities"
 
-        # Context query — only exact "tell me what you know about me" phrases
-        context_patterns = ["what do you know about me", "what do you know about my",
-                            "what have you learned about", "what do you remember",
-                            "my profile", "my brand data", "show my data",
-                            "what do you know"]
+        # URL provided
+        if re.search(r'https?://|www\.|\.\w{2,3}/', msg):
+            return "url_provided"
+
+        # Context/memory queries — ONLY exact recall phrases
+        context_patterns = [
+            "what do you know about me", "what do you know about my",
+            "what have you learned", "what do you remember",
+            "my profile", "my brand data", "show my data",
+            "what do you know",
+        ]
         if any(p in msg for p in context_patterns):
             return "context_query"
 
-        # Audit
-        if any(
-            w in msg
-            for w in [
-                "audit",
-                "analyze my site",
-                "review my website",
-                "grade my site",
-                "website analysis",
-            ]
-        ):
+        # Audit request
+        audit_patterns = ["audit", "analyze my site", "review my website",
+                          "grade my site", "website analysis", "grade my website"]
+        if any(w in msg for w in audit_patterns):
             return "audit"
 
-        # Greeting
-        if msg in {"hello", "hi", "hey", "hii", "sup", "yo", "hiya", "howdy"}:
+        # Greetings
+        if msg in ["hello", "hi", "hey", "hii", "sup", "yo", "hiya", "howdy"]:
             return "greeting"
 
-        # Vague help (with no specific question)
-        if any(
-            p in msg
-            for p in [
-                "help me with marketing",
-                "help me with my marketing",
-                "i need marketing help",
-                "get started",
-                "set up my profile",
-                "help me get started",
-            ]
-        ):
+        # Vague help — exact phrases that indicate no specific intent
+        # These always return vague_help regardless of keyword scoring
+        vague_patterns = ["help me with marketing", "help me with my marketing",
+                          "i need marketing help", "get started", "set up my profile"]
+        if any(p in msg for p in vague_patterns):
             return "vague_help"
 
-        return "specific_request"
+        # ── SCORING-BASED ROUTING ──
+        scored_intent = self._score_intent(msg)
+        if scored_intent != "general":
+            return "specific_request"
+
+        # Fallback: general questions → nexus
+        return "general_question"
 
     def decide_action(self, message, agent):
         """

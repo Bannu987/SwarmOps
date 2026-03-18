@@ -758,13 +758,11 @@ User Message: "{user_message}"
             response = call_model_sync(prompt, tier=3, max_tokens=150, temperature=0.1)
             content = response.get("content", "{}") if isinstance(response, dict) else str(response)
             
-            import re
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                updates = json.loads(json_match.group(0))
-                if updates:
-                    get_memory_store().update_brand_context(updates)
-                    print(f"🔄 Silently updated Brand Context: {list(updates.keys())}")
+            from model_router import extract_json_safe
+            updates = extract_json_safe(content, fallback={})
+            if updates:
+                get_memory_store().update_brand_context(updates)
+                print(f"🔄 Silently updated Brand Context: {list(updates.keys())}")
         except Exception:
             pass
 

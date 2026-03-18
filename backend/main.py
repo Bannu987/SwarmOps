@@ -1072,6 +1072,12 @@ async def _onboarding_extract_brand(url: str, mem) -> dict:
 
     mem.set_profile_key("onboarding_step", "2")
 
+    # Explicitly persist the URL so load_full_context always finds it
+    try:
+        mem.set_profile_key("website_url", url)
+    except Exception:
+        pass
+
     if dna_result.get("success") and dna_result.get("brand_dna"):
         dna = dna_result["brand_dna"]
         brand_name = dna.get("brand_name", "your brand")

@@ -28,6 +28,49 @@ from rate_limiter import get_rate_limiter
 
 load_dotenv()
 
+
+def extract_json_safe(text: str, fallback: dict = None) -> dict:
+    """
+    Robustly extract JSON from LLM output.
+    Handles: raw JSON, markdown fences (```json...```), inline objects.
+    Never raises — returns fallback on failure.
+    """
+    import json, re
+    if not text:
+        return fallback or {}
+
+    # 1. Try direct parse first (cleanest case)
+    try:
+        return json.loads(text.strip())
+    except Exception:
+        pass
+
+    # 2. Strip markdown fences
+    fence_match = re.search(r'```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```', text, re.DOTALL)
+    if fence_match:
+        try:
+            return json.loads(fence_match.group(1))
+        except Exception:
+            pass
+
+    # 3. Find first {...} or [...] block
+    obj_match = re.search(r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\})', text, re.DOTALL)
+    if obj_match:
+        try:
+            return json.loads(obj_match.group(1))
+        except Exception:
+            pass
+
+    # 4. Find any JSON array
+    arr_match = re.search(r'(\[[^\[\]]*\])', text, re.DOTALL)
+    if arr_match:
+        try:
+            return json.loads(arr_match.group(1))
+        except Exception:
+            pass
+
+    return fallback or {}
+
 # ---------------------------------------------------------------------------
 # Call tracking — thread-local so concurrent requests don't collide
 # ---------------------------------------------------------------------------
@@ -549,12 +592,19 @@ def call_model_sync(
     tier: int = 2,
     max_tokens: int = 4096,
     temperature: float = 0.7,
+    json_mode: bool = False,
 ) -> dict:
     """
     Synchronous version of call_model for use in non-async contexts + rate limiting.
     Same interface and return format.
     """
     rate_limiter = get_rate_limiter()
+
+    # json_mode: append JSON instruction to system prompt if not already there
+    if json_mode and system_prompt and "json" not in system_prompt.lower():
+        system_prompt = system_prompt + "\n\nIMPORTANT: Respond with valid JSON only. No markdown, no explanation."
+    elif json_mode and not system_prompt:
+        system_prompt = "Respond with valid JSON only. No markdown, no explanation."
 
     actual_prompt = prompt
     if tier == 4:

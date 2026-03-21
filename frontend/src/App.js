@@ -317,12 +317,10 @@ function App() {
   const [rightPanelTab, setRightPanelTab] = useState('insights');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [conversations, setConversations] = useState(loadConvos);
   const [currentConvoId, setCurrentConvoId] = useState(() => `convo-${Date.now()}`);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [smartMode, setSmartMode] = useState(false);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -383,7 +381,7 @@ function App() {
     const h = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') { e.preventDefault(); setSidebarCollapsed(v => !v); }
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); textareaRef.current?.focus(); }
-      if (e.key === 'Escape') { setAgentDropdownOpen(false); setNotifOpen(false); setSettingsOpen(false); setRightPanelOpen(false); }
+      if (e.key === 'Escape') { setNotifOpen(false); setSettingsOpen(false); setRightPanelOpen(false); }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
@@ -422,7 +420,7 @@ function App() {
     setLoading(true);
     setStreaming(true);
 
-    const agentId = smartMode ? 'nexus' : selectedAgentId;
+    const agentId = 'nexus';  // All messages go to Nexus (workflow engine routes internally)
     const agentCfg = AGENT_MAP[agentId] || AGENTS[0];
 
     try {
@@ -487,10 +485,10 @@ function App() {
   };
 
   const suggestedPrompts = [
-    { emoji: '✍️', text: 'Create a content strategy for Q1 2026', agent: 'content' },
-    { emoji: '📊', text: 'Find SEO keyword opportunities for my site', agent: 'seo' },
-    { emoji: '💰', text: 'Analyze and optimize my PPC campaigns', agent: 'ppc' },
-    { emoji: '🔥', text: 'Identify conversion funnel leaks', agent: 'cro' }
+    { emoji: '📊', text: 'Create a content strategy for Q1 2026' },
+    { emoji: '🔍', text: 'Find keyword opportunities for my business' },
+    { emoji: '💡', text: 'Help me generate more leads' },
+    { emoji: '📈', text: 'Create a 3-month growth plan' },
   ];
 
   if (showLanding) {
@@ -542,28 +540,28 @@ function App() {
           </div>
 
           <div className="sidebar-section">
-            {!sidebarCollapsed && <div className="sidebar-section-label">Agents</div>}
-            <div className="agent-list">
-              {AGENTS.map(agent => (
-                <button
-                  key={agent.id}
-                  className={'agent-item' + (selectedAgentId === agent.id ? ' active' : '')}
-                  onClick={() => setSelectedAgent(agent.id)}
-                  title={agent.name}
-                >
-                  <span className="agent-item-emoji">{agent.emoji}</span>
-                  {!sidebarCollapsed && (
-                    <div className="agent-item-info">
-                      <span className="agent-item-name">{agent.shortName}</span>
-                      <span className="agent-item-model">{agent.model}</span>
-                    </div>
-                  )}
-                  {!sidebarCollapsed && selectedAgentId === agent.id && (
-                    <div className="agent-item-dot" style={{ background: agent.color }} />
-                  )}
-                </button>
-              ))}
-            </div>
+            {!sidebarCollapsed && <div className="sidebar-section-label">Tools</div>}
+            {[
+              { label: 'Brand DNA', icon: '🧬', action: 'brand' },
+              { label: 'Competitors', icon: '🔍', action: 'competitors' },
+              { label: 'Marketing Audit', icon: '📊', action: 'audit' },
+            ].map(tool => (
+              <button key={tool.action} className="agent-item"
+                onClick={() => {
+                  if (tool.action === 'audit') addMessage({ id: Date.now(), role: 'user', content: 'run a marketing audit on my website', timestamp: new Date().toISOString() });
+                  if (tool.action === 'brand') addMessage({ id: Date.now(), role: 'user', content: 'what do you know about my brand', timestamp: new Date().toISOString() });
+                  if (tool.action === 'competitors') addMessage({ id: Date.now(), role: 'user', content: 'analyze my competitors', timestamp: new Date().toISOString() });
+                }}
+                title={tool.label}
+              >
+                <span className="agent-item-emoji">{tool.icon}</span>
+                {!sidebarCollapsed && (
+                  <div className="agent-item-info">
+                    <span className="agent-item-name">{tool.label}</span>
+                  </div>
+                )}
+              </button>
+            ))}
           </div>
 
           {!sidebarCollapsed && conversations.length > 0 && (
@@ -604,7 +602,6 @@ function App() {
                 setSelectedAgent={setSelectedAgent}
                 agentEmoji={selectedAgent.emoji}
                 agentColor={selectedAgent.color}
-                smartMode={smartMode}
               />
             ) : (
               <div className="messages-list">
@@ -620,53 +617,15 @@ function App() {
           {/* INPUT BAR */}
           <div className="input-bar">
             <div className="input-bar-inner">
-              {agentDropdownOpen && (
-                <>
-                  <div className="dropdown-backdrop" onClick={() => setAgentDropdownOpen(false)} />
-                  <div className="agent-dropdown">
-                    <div className="agent-dropdown-header">Select Agent</div>
-                    {AGENTS.map(agent => (
-                      <button
-                        key={agent.id}
-                        className={'agent-dropdown-item' + (selectedAgentId === agent.id ? ' selected' : '')}
-                        onClick={() => { setSelectedAgent(agent.id); setAgentDropdownOpen(false); setSmartMode(false); }}
-                      >
-                        <span className="dropdown-emoji">{agent.emoji}</span>
-                        <div className="dropdown-info">
-                          <span className="dropdown-name">{agent.name}</span>
-                          <span className="dropdown-model">{agent.model}</span>
-                        </div>
-                        {selectedAgentId === agent.id && !smartMode && <Check size={13} />}
-                      </button>
-                    ))}
-                    <button
-                      className={'agent-dropdown-item smart-mode-item' + (smartMode ? ' selected' : '')}
-                      onClick={() => { setSmartMode(true); setAgentDropdownOpen(false); }}
-                    >
-                      <span className="dropdown-emoji">⚡</span>
-                      <div className="dropdown-info">
-                        <span className="dropdown-name">Auto Route</span>
-                        <span className="dropdown-model">Nexus picks best agent</span>
-                      </div>
-                      {smartMode && <Check size={13} />}
-                    </button>
-                  </div>
-                </>
-              )}
 
               <div className="input-box">
-                <button className="agent-pill" onClick={() => setAgentDropdownOpen(v => !v)}>
-                  <span>{smartMode ? '⚡' : selectedAgent.emoji}</span>
-                  <span>{smartMode ? 'Auto' : selectedAgent.shortName}</span>
-                  <ChevronDown size={11} />
-                </button>
                 <textarea
                   ref={textareaRef}
                   className="input-textarea"
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKey}
-                  placeholder={smartMode ? 'Ask anything — Nexus routes automatically…' : 'Ask ' + selectedAgent.name + ' anything…'}
+                  placeholder="Ask SwarmOps anything about your marketing…"
                   rows={1}
                   disabled={loading}
                 />
@@ -738,12 +697,12 @@ function App() {
 /* ─────────────────────────────────────────────────────────────
    EMPTY STATE
 ───────────────────────────────────────────────────────────── */
-function EmptyState({ suggestedPrompts, setInput, setSelectedAgent, agentEmoji, agentColor, smartMode }) {
+function EmptyState({ suggestedPrompts, setInput, setSelectedAgent, agentEmoji, agentColor }) {
   return (
     <div className="empty-state">
       <div className="empty-hero">
         <div className="empty-logo" style={{ borderColor: agentColor + '40' }}>
-          <span className="empty-logo-emoji">{smartMode ? '⚡' : agentEmoji}</span>
+          <span className="empty-logo-emoji">{agentEmoji}</span>
         </div>
         <h1 className="empty-title">SwarmOps</h1>
         <p className="empty-subtitle">Multi-Agent AI Marketing Intelligence</p>
@@ -753,7 +712,7 @@ function EmptyState({ suggestedPrompts, setInput, setSelectedAgent, agentEmoji, 
           <button
             key={i}
             className="suggestion-card"
-            onClick={() => { setSelectedAgent(p.agent); setInput(p.text); }}
+            onClick={() => { setInput(p.text); }}
           >
             <span className="suggestion-emoji">{p.emoji}</span>
             <span className="suggestion-text">{p.text}</span>
@@ -761,7 +720,7 @@ function EmptyState({ suggestedPrompts, setInput, setSelectedAgent, agentEmoji, 
           </button>
         ))}
       </div>
-      <p className="empty-hint">Select an agent from the sidebar · Type a message · Press Enter</p>
+      <p className="empty-hint">Ask SwarmOps anything about your marketing · Press Enter to send</p>
     </div>
   );
 }
@@ -839,8 +798,10 @@ function MessageBubble({ message, isLatest }) {
       </div>
       <div className="agent-body">
         <div className="agent-label">
-          <span className="agent-label-name">{message.agentName}</span>
-          {message.model && <span className="agent-label-model">SwarmOps</span>}
+          <span className="agent-label-name">SwarmOps</span>
+          {message.multi_agent && message.agents_used?.length > 1
+            ? <span className="agent-label-model">via {message.agents_used.length} specialists</span>
+            : message.model ? <span className="agent-label-model">{message.model}</span> : null}
         </div>
 
         {isPipeline && message.result?.steps ? (
@@ -853,6 +814,19 @@ function MessageBubble({ message, isLatest }) {
         ) : (
           <div className="agent-content">
             {parseMarkdown(message.content)}
+          </div>
+        )}
+
+        {message.agents_used && message.agents_used.length > 1 && (
+          <div className="specialists-bar">
+            <span className="specialists-label">SwarmOps consulted {message.agents_used.length} specialists:</span>
+            {message.agents_used.map(agentId => (
+              <span key={agentId} className="specialist-tag">
+                ✓ {agentId.toUpperCase()}
+                {message.agent_timings && message.agent_timings[agentId] &&
+                  <span className="specialist-time"> ({message.agent_timings[agentId]}s)</span>}
+              </span>
+            ))}
           </div>
         )}
 

@@ -34,6 +34,9 @@ from web_crawler import get_web_crawler
 from conversation_manager import get_conversation_manager
 from response_cleaner import get_response_cleaner
 from sanitize import sanitize_response
+from workflow_engine import match_workflow, execute_workflow
+import logging
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Startup ENV check — prints to Railway logs so you can verify keys are loaded
@@ -1132,6 +1135,78 @@ async def _onboarding_extract_brand(url: str, mem) -> dict:
 
 
 # ============================================================================
+# WORKFLOW ENGINE HELPERS — agent dispatch + synthesis for DAG workflows
+# ============================================================================
+
+def _workflow_call_agent(agent_id: str, full_prompt: str) -> str:
+    """Dispatch to a single agent for workflow execution. Returns response text."""
+    from model_router import call_model_sync
+    try:
+        if agent_id == "seo":
+            from seo_agent import find_keyword_opportunities
+            result = find_keyword_opportunities(full_prompt)
+            return result if isinstance(result, str) else str(result)
+        elif agent_id == "content":
+            from content_agent import generate_content
+            result = generate_content(full_prompt)
+            return result if isinstance(result, str) else str(result)
+        elif agent_id == "ppc":
+            from ppc_agent import create_campaign_strategy
+            result = create_campaign_strategy(full_prompt)
+            return result if isinstance(result, str) else str(result)
+        elif agent_id == "analytics":
+            from analytics_agent import analyze_performance
+            result = analyze_performance(full_prompt, full_prompt)
+            return result if isinstance(result, str) else str(result)
+        elif agent_id == "cro":
+            from cro_agent import analyze_funnel
+            result = analyze_funnel(funnel_steps=full_prompt, conversion_data="", goal="improve conversions")
+            return result if isinstance(result, str) else str(result)
+        elif agent_id == "research":
+            from research_agent import research_topic
+            result = research_topic(full_prompt)
+            if isinstance(result, dict):
+                return result.get("analysis", str(result))
+            return str(result)
+        elif agent_id == "smm":
+            from smm_agent import write_platform_post
+            result = write_platform_post("linkedin", full_prompt, brand_voice="professional")
+            return result if isinstance(result, str) else str(result)
+        elif agent_id == "crm":
+            from crm_agent import create_email_sequence
+            result = create_email_sequence(full_prompt, num_emails=3)
+            return result if isinstance(result, str) else str(result)
+        elif agent_id == "brand":
+            from brand_strategist_agent import create_brand_strategy
+            result = create_brand_strategy(company_name="Company", industry="General", target_audience="General", unique_value=full_prompt)
+            return result if isinstance(result, str) else str(result)
+        elif agent_id == "web_ux":
+            from web_ux_agent import design_landing_page
+            result = design_landing_page(product=full_prompt, target_audience="General audience", goal="conversions")
+            return result if isinstance(result, str) else str(result)
+        else:
+            # Fallback: direct LLM call
+            from nexus import NEXUS_MASTER_PROMPT
+            r = call_model_sync(prompt=full_prompt, system_prompt=NEXUS_MASTER_PROMPT, tier=2, max_tokens=600)
+            return r.get("content", "") if isinstance(r, dict) else str(r)
+    except Exception as e:
+        logger.error(f"_workflow_call_agent({agent_id}) failed: {e}")
+        return ""
+
+
+def _workflow_synthesis(synthesis_prompt: str) -> str:
+    """Call the Nexus LLM for workflow synthesis."""
+    from model_router import call_model_sync
+    try:
+        from nexus import NEXUS_MASTER_PROMPT
+        r = call_model_sync(prompt=synthesis_prompt, system_prompt=NEXUS_MASTER_PROMPT, tier=2, max_tokens=700)
+        return r.get("content", "") if isinstance(r, dict) else str(r)
+    except Exception as e:
+        logger.error(f"_workflow_synthesis failed: {e}")
+        return ""
+
+
+# ============================================================================
 # MULTI-AGENT ORCHESTRATION — parallel agent dispatch for complex queries
 # ============================================================================
 
@@ -1495,6 +1570,55 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 msg = f"{msg}\n\n{_rag_ctx}"
         except Exception:
             pass
+
+        # ── SLASH COMMAND: /agent direct routing ──
+        if user_msg.startswith("/"):
+            parts = user_msg.split(" ", 1)
+            slash_cmd = parts[0].lower().lstrip("/")
+            slash_rest = parts[1].strip() if len(parts) > 1 else user_msg
+            valid_slash_agents = {"seo", "content", "ppc", "analytics", "crm", "smm",
+                                   "brand", "web_ux", "cro", "research", "deep_research"}
+            if slash_cmd in valid_slash_agents:
+                agent = slash_cmd
+                user_msg = slash_rest
+                msg = msg.replace(parts[0], "").strip()
+
+        # ── WORKFLOW ENGINE: code-controlled agent routing ──
+        _workflow_result = None
+        if (agent == "nexus" or agent == "") and not user_msg.startswith("/"):
+            _wf_name = match_workflow(user_msg)
+            if _wf_name:
+                try:
+                    _brand_ctx_str = locals().get("brand_context", "") or ""
+                    _workflow_result = execute_workflow(
+                        workflow_name=_wf_name,
+                        user_message=user_msg,
+                        brand_context=_brand_ctx_str,
+                        call_agent_fn=_workflow_call_agent,
+                        call_synthesis_fn=_workflow_synthesis,
+                    )
+                except Exception as _wf_err:
+                    logger.error(f"Workflow {_wf_name} failed: {_wf_err}")
+                    _workflow_result = None
+
+        if _workflow_result is not None:
+            _wf_text = _workflow_result.get("response", "")
+            _wf_text = _cleaner.clean(_wf_text)
+            _wf_text = sanitize_response(_wf_text)
+            _update_conversation_memory(user_msg, _wf_text, {})
+            return {
+                "success": True,
+                "result": _wf_text,
+                "agent": "nexus",
+                "model": "multi-agent",
+                "provider": "orchestrated",
+                "workflow": _workflow_result.get("workflow"),
+                "agents_used": _workflow_result.get("agents_used", []),
+                "agent_timings": _workflow_result.get("agent_timings", {}),
+                "multi_agent": _workflow_result.get("multi_agent", False),
+                "latency_ms": int(_workflow_result.get("latency_seconds", 0) * 1000),
+                "confidence": 0.8,
+            }
 
         # --- dispatch to the correct agent and capture a revision callable ---
         result = None

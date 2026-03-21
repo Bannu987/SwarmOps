@@ -301,20 +301,21 @@ Rules:
 
     try:
         from nexus import NEXUS_MASTER_PROMPT
-        return call_model_sync(
+        synthesized_text = call_model_sync(
             prompt=synthesis_prompt,
             system_prompt=NEXUS_MASTER_PROMPT,
             tier=2,
             max_tokens=600,
         )
     except Exception:
-        # Fallback: surface the top insight cleanly
-        top_insight = str(ranked_results[0][1].get("insight", ""))[:400]
-        return (
-            f"**Strategic Recommendation for {brand_name}**\n\n"
-            f"{top_insight}\n\n"
-            "**What would you like to explore next?**\n"
-            "1. Dive deeper into this strategy\n"
-            "2. Run a full marketing audit\n"
-            "3. Compare against competitors"
-        )
+        synthesized_text = ""
+
+    # If synthesis returned empty or too short, fall back to top agent insight
+    if not synthesized_text or len(str(synthesized_text).strip()) < 30:
+        if ranked_results:
+            top_agent, top_result = ranked_results[0]
+            insight = top_result.get("insight", "") if isinstance(top_result, dict) else str(top_result)
+            return insight[:1000] if insight else f"I analyzed your request but need more details. What specifically would you like to focus on for {brand_name}?"
+        return f"I need a bit more context to give you specific advice for {brand_name}. What's the main marketing challenge you're facing?"
+
+    return synthesized_text

@@ -488,78 +488,80 @@ I also offer:
 Share your website URL and I'll personalize everything to your business. Or just ask a question and I'll route it to the right specialist."""
 
     def format_brand_for_onboarding(self, brand_data):
-        """Format brand data for onboarding display. NEVER show defaults."""
-        import logging
+        """Format brand data for display. NEVER show 'Your Brand' to user."""
+        import json as _json
+        from urllib.parse import urlparse
 
-        # Handle string (JSON)
+        INVALID_NAMES = {"your brand", "unknown", "not found", "not_found", "", "none", "n/a", "brand"}
+        INVALID_INDUSTRIES = {"your industry", "unknown", "not found", "not_found", "", "none", "n/a"}
+
+        # Unwrap string JSON
         if isinstance(brand_data, str):
             try:
-                brand_data = json.loads(brand_data)
+                brand_data = _json.loads(brand_data)
             except Exception:
-                pass
-
-        # Handle nested wrappers
-        if isinstance(brand_data, dict) and "data" in brand_data:
-            brand_data = brand_data["data"]
-        if isinstance(brand_data, dict) and "raw_json" in brand_data:
-            try:
-                brand_data = json.loads(brand_data["raw_json"])
-            except Exception:
-                pass
-
-        # Handle brand_dna wrapper returned by BrandDNA.extract()
-        if isinstance(brand_data, dict) and "brand_dna" in brand_data:
-            brand_data = brand_data["brand_dna"]
+                brand_data = {}
 
         if not isinstance(brand_data, dict):
             brand_data = {}
 
-        logging.info(f"format_brand_for_onboarding: brand_name={brand_data.get('brand_name', 'MISSING')}")
+        # Unwrap nested wrappers
+        if "raw_json" in brand_data:
+            try:
+                inner = _json.loads(brand_data["raw_json"]) if isinstance(brand_data["raw_json"], str) else brand_data["raw_json"]
+                if isinstance(inner, dict):
+                    brand_data = {**brand_data, **inner}
+            except Exception:
+                pass
+        if "data" in brand_data and isinstance(brand_data["data"], dict):
+            brand_data = {**brand_data, **brand_data["data"]}
 
-        name = brand_data.get("brand_name", "")
-        industry = brand_data.get("industry", "")
-
-        # Never show default placeholders
-        if not name or name.lower() in ["your brand", "unknown", "not found", "not_found", "", "none", "n/a"]:
+        # Brand name — never return defaults
+        name = str(brand_data.get("brand_name", "")).strip()
+        if name.lower() in INVALID_NAMES:
             url = brand_data.get("website_url", "") or brand_data.get("url", "")
             if url:
-                from urllib.parse import urlparse
-                domain = urlparse(url).netloc.replace("www.", "")
+                domain = urlparse(url if url.startswith("http") else f"https://{url}").netloc.replace("www.", "")
                 n = domain.split(".")[0]
                 name = n.upper() if len(n) <= 4 else n.replace("-", " ").title()
             else:
                 name = "Your Business"
 
-        if not industry or industry.lower() in ["your industry", "unknown", "not found", "not_found", "", "none", "n/a"]:
+        # Industry — never return defaults
+        industry = str(brand_data.get("industry", "")).strip()
+        if industry.lower() in INVALID_INDUSTRIES:
             industry = "Technology"
 
-        # Format voice
+        # Voice — handle dict, string, or missing
         voice = brand_data.get("brand_voice", {})
         if isinstance(voice, dict):
             tone = voice.get("tone", "professional")
             traits = voice.get("personality_traits", [])
-            voice_str = f"{tone} — {', '.join(traits[:3])}" if traits else tone
-        elif isinstance(voice, str) and voice not in ["not_found", ""]:
+            voice_str = f"{tone} — {', '.join(str(t) for t in traits[:3])}" if isinstance(traits, list) and traits else str(tone)
+        elif isinstance(voice, str) and voice.lower() not in INVALID_NAMES:
             voice_str = voice
         else:
             voice_str = "professional"
 
-        # Format audience
+        # Audience — handle dict, string, or missing
         audience = brand_data.get("target_audience", {})
         if isinstance(audience, dict):
             primary = audience.get("primary", "businesses")
             segments = audience.get("segments", [])
-            audience_str = f"{primary}" + (f" ({', '.join(segments[:3])})" if segments else "")
-        elif isinstance(audience, str) and audience not in ["not_found", ""]:
+            audience_str = f"{primary} ({', '.join(str(s) for s in segments[:3])})" if isinstance(segments, list) and segments else str(primary)
+        elif isinstance(audience, str) and audience.lower() not in INVALID_NAMES:
             audience_str = audience
         else:
             audience_str = "businesses"
+
+        import logging
+        logging.info(f"format_brand_for_onboarding result: name={name}, industry={industry}")
 
         return {
             "name": name,
             "industry": industry,
             "voice": voice_str,
-            "audience": audience_str
+            "audience": audience_str,
         }
 
 

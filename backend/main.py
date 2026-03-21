@@ -33,6 +33,7 @@ from knowledge_base import get_knowledge_base
 from web_crawler import get_web_crawler
 from conversation_manager import get_conversation_manager
 from response_cleaner import get_response_cleaner
+from sanitize import sanitize_response
 
 # ---------------------------------------------------------------------------
 # Startup ENV check — prints to Railway logs so you can verify keys are loaded
@@ -1407,6 +1408,12 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 print(f"\n🔗 PIPELINE DETECTED: {pipeline_detection['reasoning']}")
                 result = await nexus.run_pipeline(pipeline_detection["pipeline"], msg)
 
+                # SECURITY: sanitize any string result fields in pipeline steps
+                if isinstance(result, dict) and "steps" in result:
+                    for _step in result["steps"]:
+                        if isinstance(_step.get("result"), str):
+                            _step["result"] = sanitize_response(_step["result"])
+
                 # Return pipeline result
                 return {
                     "success": True,
@@ -1546,15 +1553,20 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 if _p in _smm_lower:
                     _platform = _p
                     break
+            # Extract brand name and voice from context
+            _smm_brand = (ctx.get("brand_name") or "your company") if ctx else "your company"
+            if not _smm_brand or _smm_brand.lower() in ("your brand", "unknown", "not found", ""):
+                _smm_brand = "your company"
+            _smm_voice = (ctx.get("voice") or "Professional and engaging") if ctx else "Professional and engaging"
             result = write_platform_post(
                 platform=_platform, topic=user_msg,
-                brand_voice="Professional and engaging",
-                goal="engagement", brand_name="Brand"
+                brand_voice=_smm_voice,
+                goal="engagement", brand_name=_smm_brand
             )
             agent_fn = lambda p: write_platform_post(
                 platform=_platform, topic=p,
-                brand_voice="Professional and engaging",
-                goal="engagement", brand_name="Brand"
+                brand_voice=_smm_voice,
+                goal="engagement", brand_name=_smm_brand
             )
 
         elif agent == "brand":
@@ -1759,6 +1771,15 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                     # Step 4: Synthesize — Nexus CMO synthesizes into one strategic response
                     result = synthesize_results(user_msg, _ranked, _brand_name)
 
+                    # Fallback: if synthesis is empty, use best individual agent result
+                    if not result or (isinstance(result, str) and len(result.strip()) < 20):
+                        _best = ""
+                        for _agent_id, _agent_result in _agent_results.items():
+                            _r = _agent_result.get("insight", "") if isinstance(_agent_result, dict) else str(_agent_result)
+                            if len(_r) > len(_best):
+                                _best = _r
+                        result = _best or "I analyzed your request. Could you be more specific about what you'd like help with?"
+
             agent = "nexus"
             agent_fn = nexus.execute_task
 
@@ -1855,6 +1876,9 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             final_text = _cleaner.clean(final_text)
             if _query_type != "audit":  # Don't truncate audits
                 final_text = _cleaner.enforce_length(final_text, _query_type)
+
+        # SECURITY: strip any leaked internal context (must be last step)
+        final_text = sanitize_response(final_text)
 
         response = {
             "success": True,

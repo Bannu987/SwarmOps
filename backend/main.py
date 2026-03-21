@@ -35,6 +35,8 @@ from conversation_manager import get_conversation_manager
 from response_cleaner import get_response_cleaner
 from sanitize import sanitize_response
 from workflow_engine import match_workflow, execute_workflow
+from difficulty_scorer import score_difficulty, get_tier_number
+from quality_gate import get_quality_gate
 import logging
 logger = logging.getLogger(__name__)
 
@@ -1570,6 +1572,11 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 msg = f"{msg}\n\n{_rag_ctx}"
         except Exception:
             pass
+
+        # ── DIFFICULTY SCORING: select model tier based on query complexity ──
+        _difficulty_score, _difficulty_category = score_difficulty(user_msg)
+        _model_tier = get_tier_number(_difficulty_score)
+        logger.info(f"Query difficulty: {_difficulty_score}/10 ({_difficulty_category}) → tier {_model_tier}")
 
         # ── SLASH COMMAND: /agent direct routing ──
         if user_msg.startswith("/"):

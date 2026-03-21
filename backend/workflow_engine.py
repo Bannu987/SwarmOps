@@ -5,7 +5,12 @@ Code controls which agents run. LLM only generates text.
 import re
 import time
 import logging
+import sys
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Make sure backend dir is on path so quality_gate is importable
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 logger = logging.getLogger(__name__)
 
@@ -160,14 +165,31 @@ def execute_workflow(workflow_name, user_message, brand_context, call_agent_fn, 
     agent_results = {}
     agent_timings = {}
 
+    # Lazy-load quality gate (avoids circular import at module load time)
+    try:
+        from quality_gate import get_quality_gate
+        _qg = get_quality_gate()
+    except Exception:
+        _qg = None
+
     def run_agent(agent_id):
         agent_start = time.time()
         sub_prompt = sub_prompts.get(agent_id, user_message)
         full_prompt = f"{brand_context}\n\nUser request: {user_message}\n\nYour specific task: {sub_prompt}"
         try:
-            result = call_agent_fn(agent_id, full_prompt)
+            if _qg:
+                gate_result = _qg.gate_with_retry(
+                    generator_fn=lambda: str(call_agent_fn(agent_id, full_prompt) or ""),
+                    agent_id=agent_id,
+                    min_words=25,
+                )
+                result = gate_result["response"]
+                if not gate_result["passed"]:
+                    logger.warning(f"QualityGate: {agent_id} did not pass after {gate_result['attempts']} attempt(s). Warnings: {gate_result['quality'].get('warnings', [])}")
+            else:
+                result = str(call_agent_fn(agent_id, full_prompt) or "")
             elapsed = round(time.time() - agent_start, 1)
-            return agent_id, str(result or ""), elapsed
+            return agent_id, result, elapsed
         except Exception as e:
             logger.error(f"Workflow agent {agent_id} failed: {e}")
             return agent_id, "", round(time.time() - agent_start, 1)

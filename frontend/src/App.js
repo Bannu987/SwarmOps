@@ -299,6 +299,26 @@ function getConfidenceLevel(c) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   SLASH COMMANDS
+───────────────────────────────────────────────────────────── */
+const SLASH_COMMANDS = [
+  { cmd: '/seo',      desc: 'Direct SEO analysis' },
+  { cmd: '/content',  desc: 'Content strategy' },
+  { cmd: '/ppc',      desc: 'Paid advertising' },
+  { cmd: '/analytics',desc: 'Data & metrics' },
+  { cmd: '/crm',      desc: 'Email & lifecycle' },
+  { cmd: '/smm',      desc: 'Social media' },
+  { cmd: '/aeo',      desc: 'AI search optimization' },
+  { cmd: '/cro',      desc: 'Conversion optimization' },
+  { cmd: '/publish',  desc: 'Create & publish blog post' },
+  { cmd: '/campaign', desc: 'Create ad campaign brief' },
+  { cmd: '/schema',   desc: 'Generate JSON-LD markup' },
+  { cmd: '/tools',    desc: 'View data integrations' },
+  { cmd: '/approve',  desc: 'Approve pending artifact' },
+  { cmd: '/queue',    desc: 'View approval queue' },
+];
+
+/* ─────────────────────────────────────────────────────────────
    MAIN APP
 ───────────────────────────────────────────────────────────── */
 function App() {
@@ -321,6 +341,11 @@ function App() {
   const [conversations, setConversations] = useState(loadConvos);
   const [currentConvoId, setCurrentConvoId] = useState(() => `convo-${Date.now()}`);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [showSlashPopup, setShowSlashPopup] = useState(false);
+  const [slashFilter, setSlashFilter] = useState('');
+  const [selectedSlashIndex, setSelectedSlashIndex] = useState(0);
+  const [showApprovalPanel, setShowApprovalPanel] = useState(false);
+  const [approvalQueue, setApprovalQueue] = useState([]);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -453,8 +478,20 @@ function App() {
         quality: data?.quality,
         pipeline: data?.pipeline,
         result: data?.result,
+        agents_used: data?.agents_used,
+        agent_timings: data?.agent_timings,
+        multi_agent: data?.multi_agent,
         timestamp: new Date().toISOString()
       });
+      if (data?.artifact_id) {
+        setApprovalQueue(prev => [...prev, {
+          id: data.artifact_id,
+          type: data.workflow || 'content',
+          title: txt.slice(0, 60),
+          created: new Date().toLocaleTimeString(),
+          status: 'pending',
+        }]);
+      }
     } catch (err) {
       const detail = err.response?.data?.detail;
       const msg = typeof detail === 'string' ? detail : err.message || 'Service unavailable.';
@@ -469,8 +506,34 @@ function App() {
     setStreaming(false);
   };
 
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setInput(value);
+    if (value.startsWith('/')) {
+      setSlashFilter(value.slice(1).toLowerCase());
+      setShowSlashPopup(true);
+      setSelectedSlashIndex(0);
+    } else {
+      setShowSlashPopup(false);
+    }
+  };
+
   const handleKey = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+    if (showSlashPopup) {
+      const filtered = SLASH_COMMANDS.filter(c =>
+        c.cmd.slice(1).startsWith(slashFilter) || c.desc.toLowerCase().includes(slashFilter)
+      );
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedSlashIndex(p => Math.min(p + 1, filtered.length - 1)); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setSelectedSlashIndex(p => Math.max(p - 1, 0)); return; }
+      if ((e.key === 'Tab' || e.key === 'Enter') && filtered.length > 0) {
+        e.preventDefault();
+        setInput(filtered[selectedSlashIndex].cmd + ' ');
+        setShowSlashPopup(false);
+        return;
+      }
+      if (e.key === 'Escape') { setShowSlashPopup(false); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !showSlashPopup) { e.preventDefault(); handleSubmit(); }
   };
 
   const newChat = () => {
@@ -545,12 +608,14 @@ function App() {
               { label: 'Brand DNA', icon: '🧬', action: 'brand' },
               { label: 'Competitors', icon: '🔍', action: 'competitors' },
               { label: 'Marketing Audit', icon: '📊', action: 'audit' },
+              { label: 'Integrations', icon: '🔌', action: 'integrations' },
             ].map(tool => (
               <button key={tool.action} className="agent-item"
                 onClick={() => {
-                  if (tool.action === 'audit') addMessage({ id: Date.now(), role: 'user', content: 'run a marketing audit on my website', timestamp: new Date().toISOString() });
-                  if (tool.action === 'brand') addMessage({ id: Date.now(), role: 'user', content: 'what do you know about my brand', timestamp: new Date().toISOString() });
-                  if (tool.action === 'competitors') addMessage({ id: Date.now(), role: 'user', content: 'analyze my competitors', timestamp: new Date().toISOString() });
+                  if (tool.action === 'audit') { setInput('run a marketing audit on my website'); }
+                  if (tool.action === 'brand') { setInput('what do you know about my brand'); }
+                  if (tool.action === 'competitors') { setInput('analyze my competitors'); }
+                  if (tool.action === 'integrations') { setInput('/tools'); }
                 }}
                 title={tool.label}
               >
@@ -562,6 +627,24 @@ function App() {
                 )}
               </button>
             ))}
+            <button
+              className="agent-item"
+              onClick={() => setShowApprovalPanel(v => !v)}
+              title="Approval Queue"
+              style={{ position: 'relative' }}
+            >
+              <span className="agent-item-emoji">📋</span>
+              {!sidebarCollapsed && (
+                <div className="agent-item-info">
+                  <span className="agent-item-name">Approval Queue</span>
+                </div>
+              )}
+              {approvalQueue.filter(a => a.status === 'pending').length > 0 && (
+                <span className="queue-badge">
+                  {approvalQueue.filter(a => a.status === 'pending').length}
+                </span>
+              )}
+            </button>
           </div>
 
           {!sidebarCollapsed && conversations.length > 0 && (
@@ -618,14 +701,40 @@ function App() {
           <div className="input-bar">
             <div className="input-bar-inner">
 
-              <div className="input-box">
+              <div className="input-box" style={{ position: 'relative' }}>
+                {/* Slash command autocomplete popup */}
+                {showSlashPopup && (() => {
+                  const filtered = SLASH_COMMANDS.filter(c =>
+                    c.cmd.slice(1).startsWith(slashFilter) || c.desc.toLowerCase().includes(slashFilter)
+                  );
+                  return filtered.length > 0 ? (
+                    <div className="slash-popup">
+                      <div className="slash-popup-header">Commands</div>
+                      {filtered.map((cmd, i) => (
+                        <div
+                          key={cmd.cmd}
+                          className={'slash-item' + (i === selectedSlashIndex ? ' selected' : '')}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setInput(cmd.cmd + ' ');
+                            setShowSlashPopup(false);
+                            textareaRef.current?.focus();
+                          }}
+                        >
+                          <span className="slash-cmd">{cmd.cmd}</span>
+                          <span className="slash-desc">{cmd.desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
                 <textarea
                   ref={textareaRef}
                   className="input-textarea"
                   value={input}
-                  onChange={e => setInput(e.target.value)}
+                  onChange={handleInputChange}
                   onKeyDown={handleKey}
-                  placeholder="Ask SwarmOps anything about your marketing…"
+                  placeholder="Ask SwarmOps anything… (type / for commands)"
                   rows={1}
                   disabled={loading}
                 />
@@ -638,7 +747,7 @@ function App() {
                   {loading ? <Loader2 size={15} className="spin" /> : <Send size={15} />}
                 </button>
               </div>
-              <p className="input-hint">Enter to send · Shift+Enter new line · Ctrl+B toggle sidebar · Ctrl+K focus</p>
+              <p className="input-hint">Enter to send · Shift+Enter new line · / for commands · Ctrl+B sidebar</p>
             </div>
           </div>
         </main>
@@ -679,6 +788,41 @@ function App() {
             </div>
           </aside>
         )}
+      </div>
+
+      {/* APPROVAL QUEUE PANEL */}
+      <div className={'approval-panel' + (showApprovalPanel ? ' open' : '')}>
+        <div className="approval-panel-header">
+          <h3>Approval Queue</h3>
+          <button className="approval-panel-close" onClick={() => setShowApprovalPanel(false)}>✕</button>
+        </div>
+        <div className="approval-list">
+          {approvalQueue.filter(a => a.status === 'pending').length === 0 ? (
+            <div className="approval-empty">
+              No pending approvals.<br />
+              Create content with /publish or /campaign
+            </div>
+          ) : (
+            approvalQueue.filter(a => a.status === 'pending').map(artifact => (
+              <div key={artifact.id} className="approval-card">
+                <div className="approval-card-type">{artifact.type.replace(/_/g, ' ')}</div>
+                <div className="approval-card-title">{artifact.title}</div>
+                <div className="approval-card-meta">ID: {artifact.id} · {artifact.created}</div>
+                <div className="approval-actions">
+                  <button className="btn-approve" onClick={() => {
+                    setInput(`/approve ${artifact.id}`);
+                    setApprovalQueue(prev => prev.map(a => a.id === artifact.id ? { ...a, status: 'approved' } : a));
+                    setShowApprovalPanel(false);
+                    setTimeout(() => handleSubmit(), 50);
+                  }}>Approve</button>
+                  <button className="btn-reject" onClick={() => {
+                    setApprovalQueue(prev => prev.map(a => a.id === artifact.id ? { ...a, status: 'rejected' } : a));
+                  }}>Reject</button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {/* SETTINGS MODAL */}
@@ -789,7 +933,6 @@ function MessageBubble({ message, isLatest }) {
 
   const isPipeline = message.pipeline || (message.result && typeof message.result === 'object' && message.result.pipeline);
   const agentColor = message.agentColor || '#818CF8';
-  const providerKey = message.provider?.toLowerCase().split(' ')[0] || '';
 
   return (
     <div className="msg msg-agent">
@@ -799,10 +942,6 @@ function MessageBubble({ message, isLatest }) {
       <div className="agent-body">
         <div className="agent-label">
           <span className="agent-label-name">SwarmOps</span>
-          {message.multi_agent && message.agents_used?.length > 1
-            ? <span className="agent-label-model">via {message.agents_used.length} specialists</span>
-            : (message.model && !['multi-agent','pipeline','orchestrated','direct'].includes(message.model))
-              ? <span className="agent-label-model">{message.model}</span> : null}
         </div>
 
         {isPipeline && message.result?.steps ? (
@@ -819,28 +958,19 @@ function MessageBubble({ message, isLatest }) {
         )}
 
         {message.agents_used && message.agents_used.length > 1 && (
-          <div className="specialists-bar">
-            <span className="specialists-label">SwarmOps consulted {message.agents_used.length} specialists:</span>
-            {message.agents_used.map(agentId => (
-              <span key={agentId} className="specialist-tag">
-                ✓ {agentId.toUpperCase()}
-                {message.agent_timings && message.agent_timings[agentId] &&
-                  <span className="specialist-time"> ({message.agent_timings[agentId]}s)</span>}
+          <div className="agent-status-bar">
+            <span className="status-label">
+              Consulted {message.agents_used.length} specialists
+            </span>
+            {message.agents_used.map(agId => (
+              <span key={agId} className="agent-chip">
+                <span className="checkmark">✓</span>
+                {agId.charAt(0).toUpperCase() + agId.slice(1).replace('_', ' ')}
               </span>
             ))}
-          </div>
-        )}
-
-        {message.provider && message.provider !== 'system' && (
-          <div className="msg-meta">
-            {message.provider && <span className={'meta-pill provider-' + providerKey}>{message.provider}</span>}
-            {message.latency_ms && <span className="meta-pill">{(message.latency_ms / 1000).toFixed(1)}s</span>}
-            {message.quality?.confidence != null && message.quality.confidence >= 0.8 && (
-              <span className={'meta-pill conf-' + getConfidenceLevel(message.quality.confidence)}>
-                ✓ Verified
-              </span>
+            {message.latency_ms && (
+              <span className="timing">{(message.latency_ms / 1000).toFixed(1)}s</span>
             )}
-            {message.quality?.revised && <span className="meta-pill revised">✨ Revised</span>}
           </div>
         )}
 

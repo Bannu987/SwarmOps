@@ -177,17 +177,58 @@ def execute_workflow(workflow_name, user_message, brand_context, call_agent_fn, 
         sub_prompt = sub_prompts.get(agent_id, user_message)
         full_prompt = f"{brand_context}\n\nUser request: {user_message}\n\nYour specific task: {sub_prompt}"
         try:
-            if _qg:
-                gate_result = _qg.gate_with_retry(
-                    generator_fn=lambda: str(call_agent_fn(agent_id, full_prompt) or ""),
-                    agent_id=agent_id,
-                    min_words=25,
-                )
-                result = gate_result["response"]
-                if not gate_result["passed"]:
-                    logger.warning(f"QualityGate: {agent_id} did not pass after {gate_result['attempts']} attempt(s). Warnings: {gate_result['quality'].get('warnings', [])}")
+            # Determine query complexity — simple queries skip two-step overhead
+            try:
+                from difficulty_scorer import score_difficulty
+                difficulty, _ = score_difficulty(user_message)
+            except Exception:
+                difficulty = 5  # default to complex path
+
+            if difficulty <= 3:
+                # Fast path: simple query, single LLM call
+                if _qg:
+                    gate_result = _qg.gate_with_retry(
+                        generator_fn=lambda: str(call_agent_fn(agent_id, full_prompt) or ""),
+                        agent_id=agent_id,
+                        min_words=25,
+                    )
+                    result = gate_result["response"]
+                    if not gate_result["passed"]:
+                        logger.warning(f"QualityGate: {agent_id} did not pass after {gate_result['attempts']} attempt(s). Warnings: {gate_result['quality'].get('warnings', [])}")
+                else:
+                    result = str(call_agent_fn(agent_id, full_prompt) or "")
             else:
-                result = str(call_agent_fn(agent_id, full_prompt) or "")
+                # Complex path: two-step generation (reason freely → extract structure)
+                try:
+                    from two_step_generator import two_step_generate, get_schema_template
+                    from response_schemas import format_structured_response
+                    schema_template = get_schema_template(agent_id)
+                    structured = two_step_generate(
+                        reasoning_fn=lambda p: str(call_agent_fn(agent_id, p) or ""),
+                        formatting_fn=lambda p: str(call_agent_fn("nexus", p) or ""),
+                        reasoning_prompt=full_prompt,
+                        schema_template=schema_template,
+                        brand_context=brand_context,
+                    )
+                    formatted = format_structured_response(structured)
+                    result = (
+                        formatted if formatted and len(formatted.strip()) > 50
+                        else structured.get("_raw_analysis", structured.get("summary", ""))
+                    )
+                    if not result or len(str(result).strip()) < 20:
+                        raise ValueError("two-step produced empty result")
+                except Exception as ts_err:
+                    logger.warning(f"Two-step failed for {agent_id}: {ts_err} — falling back to single-pass")
+                    if _qg:
+                        gate_result = _qg.gate_with_retry(
+                            generator_fn=lambda: str(call_agent_fn(agent_id, full_prompt) or ""),
+                            agent_id=agent_id,
+                            min_words=25,
+                        )
+                        result = gate_result["response"]
+                    else:
+                        result = str(call_agent_fn(agent_id, full_prompt) or "")
+
             elapsed = round(time.time() - agent_start, 1)
             return agent_id, result, elapsed
         except Exception as e:
@@ -241,11 +282,18 @@ Specialist findings:{agent_findings}
 
 {synthesis_instruction}
 
+PRIORITIZE BY IMPACT (RICE thinking):
+Rank ALL recommendations by: Reach × Impact × Confidence / Effort.
+Lead with QUICK WINS — high impact, low effort actions first.
+For each recommendation include: what to do, expected outcome, and timeline.
+Put the 2-3 highest-RICE actions at the top. Save complex long-term items for last.
+
 RULES:
 - Combine ALL specialist findings into ONE unified response
 - Do NOT list each agent's output separately
 - Write as one voice — you are the strategist presenting a complete plan
 - Be specific to the brand — reference their name and industry
+- Every recommendation must have a concrete expected outcome and timeline
 - Keep under 400 words unless the user asked for detailed/comprehensive
 - End with "Would you like me to..." and 2-3 specific next steps
 """

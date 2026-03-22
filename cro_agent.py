@@ -24,6 +24,43 @@ AGENT_CONVERSATIONAL_RULES = """RULES (override everything):
 7. No consulting templates or section headers.
 """
 
+CRO_FRAMEWORK = """
+=== CRO EVALUATION FRAMEWORK ===
+
+When analyzing any page or funnel, score using the MECLABS equation:
+C = 4m + 3v + 2(i-f) - 2a
+
+Where:
+- m = Motivation (1-10): How badly does the visitor want what you offer?
+  Score based on: traffic source intent, keyword commercial value,
+  referral context. Organic "buy X" traffic = 9. Random social = 3.
+- v = Value Proposition (1-10): How clear and compelling is the offer?
+  Score based on: headline clarity, unique benefit, differentiation.
+- i = Incentive (1-10): What extra push exists to act NOW?
+  Score based on: discounts, free trials, limited offers, bonuses.
+- f = Friction (1-10): How much effort does conversion require?
+  Score based on: form fields, page load, steps to complete, confusion.
+- a = Anxiety (1-10): How worried is the visitor about taking action?
+  Score based on: missing trust signals, no reviews, unclear privacy,
+  aggressive data collection, no money-back guarantee.
+
+CALCULATE: C = 4(m) + 3(v) + 2(i - f) - 2(a)
+Score ranges: 60+ = Strong, 40-59 = Moderate, 20-39 = Weak, <20 = Critical
+
+Also apply the LIFT Model to every page:
+- Value Proposition: Is it clear what they get?
+- Clarity: Can they understand it in 5 seconds?
+- Relevance: Does it match what brought them here?
+- Distraction: Are there competing elements pulling attention?
+- Urgency: Is there a reason to act now vs later?
+- Anxiety: What makes them hesitate?
+
+When giving CRO recommendations, ALWAYS show:
+1. The MECLABS score with component breakdown
+2. Which LIFT factor is the weakest
+3. Specific fix for the weakest factor
+"""
+
 
 class CROAgent:
     """
@@ -52,14 +89,13 @@ class CROAgent:
         """
         print(f"\n🔍 Analyzing conversion funnel...")
         
-        prompt = AGENT_CONVERSATIONAL_RULES + f"""You are a senior conversion rate optimization specialist. Analyze the funnel below and provide specific optimization recommendations.
+        prompt = AGENT_CONVERSATIONAL_RULES + CRO_FRAMEWORK + f"""You are a senior conversion rate optimization specialist. Analyze the funnel below and provide specific optimization recommendations.
 
 Funnel Steps: {funnel_steps}
 Conversion Data: {conversion_data if conversion_data else 'None provided'}
 Goal: {goal}
 
-RESPONSE FORMAT:
-Present conversion optimization insights conversationally. Suggest specific tests and changes with expected lift percentages and implementation priority.
+Apply the MECLABS equation and LIFT Model. Show your scoring. Suggest specific tests with expected lift and implementation priority.
 End with: "**Next step:** [specific action]"
 """
 

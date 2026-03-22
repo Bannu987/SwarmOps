@@ -138,10 +138,34 @@ def parse_agent_response(agent_id: str, text: str):
         return None
 
 
+def _rice_sort_key(rec) -> float:
+    """Sort recommendations by RICE proxy (high impact + low effort first)."""
+    if not isinstance(rec, dict):
+        return 0.0
+    effort_map = {"trivial": 5, "low": 4, "medium": 3, "high": 2, "massive": 1}
+    impact_keywords = {
+        "significant": 3, "major": 3, "substantial": 3,
+        "increase": 2, "improve": 2, "boost": 2, "drive": 2,
+        "optimize": 1, "enhance": 1, "reduce": 1, "minor": 0,
+    }
+    effort_score = effort_map.get(str(rec.get("effort", "medium")).lower(), 3)
+    impact_text = str(rec.get("impact", "")).lower()
+    impact_score = max((v for k, v in impact_keywords.items() if k in impact_text), default=1)
+    return float(effort_score * impact_score)
+
+
 def format_structured_response(model_instance) -> str:
-    """Convert a structured response model to a readable markdown string."""
+    """
+    Convert a structured response (Pydantic model OR plain dict) to readable markdown.
+    Recommendations are sorted by RICE proxy (quick wins first).
+    """
     if model_instance is None:
         return ""
+
+    # Handle plain dict (from two_step_generator)
+    if isinstance(model_instance, dict):
+        return _format_dict_response(model_instance)
+
 
     cls_name = type(model_instance).__name__
     lines = []
@@ -218,5 +242,84 @@ def format_structured_response(model_instance) -> str:
             lines.append("\n**Next Steps:**")
             for step in model_instance.next_steps:
                 lines.append(f"- {step}")
+
+    return "\n".join(lines)
+
+
+def _format_dict_response(data: dict) -> str:
+    """Format a plain dict response (from two_step_generator) to markdown."""
+    lines = []
+
+    if data.get("summary"):
+        lines.append(data["summary"])
+
+    # Keywords (SEO)
+    if data.get("keywords"):
+        lines.append("\n**Top Keywords:**")
+        for kw in data["keywords"][:5]:
+            if isinstance(kw, dict):
+                lines.append(f"- **{kw.get('keyword', kw)}** — {kw.get('reasoning', kw.get('intent', ''))}")
+            else:
+                lines.append(f"- {kw}")
+
+    # Content ideas
+    if data.get("ideas"):
+        lines.append("\n**Content Ideas:**")
+        for idea in data["ideas"][:5]:
+            if isinstance(idea, dict):
+                kw_str = f" | `{idea['target_keyword']}`" if idea.get("target_keyword") else ""
+                lines.append(f"- **{idea.get('title', idea)}** ({idea.get('format', '')}){kw_str}")
+            else:
+                lines.append(f"- {idea}")
+
+    # Email sequence (CRM)
+    if data.get("email_sequence"):
+        lines.append("\n**Email Sequence:**")
+        for email in data["email_sequence"][:5]:
+            if isinstance(email, dict):
+                lines.append(f"- **{email.get('timing', '')}** — {email.get('subject', email.get('purpose', ''))}")
+            else:
+                lines.append(f"- {email}")
+
+    # MECLABS score (CRO)
+    if data.get("meclabs_score"):
+        ms = data["meclabs_score"]
+        lines.append(f"\n**MECLABS Score:** {ms.get('total', '?')}/86 ({ms.get('grade', '?')})")
+
+    # Post ideas (SMM)
+    if data.get("post_ideas"):
+        lines.append("\n**Post Ideas:**")
+        for post in data["post_ideas"][:4]:
+            if isinstance(post, dict):
+                lines.append(f"- **{post.get('platform', '')}** ({post.get('format', '')}): {post.get('content', '')}")
+            else:
+                lines.append(f"- {post}")
+
+    # Recommendations — RICE sorted (quick wins first)
+    recs = data.get("recommendations", [])
+    if recs:
+        if isinstance(recs[0], dict):
+            recs = sorted(recs, key=_rice_sort_key, reverse=True)
+        lines.append("\n**Recommendations:**")
+        for rec in recs[:5]:
+            if isinstance(rec, dict):
+                action = rec.get("action", str(rec))
+                impact = rec.get("impact", "")
+                effort = rec.get("effort", "")
+                timeline = rec.get("timeline", "")
+                meta = " | ".join(filter(None, [effort and f"{effort} effort", timeline]))
+                lines.append(f"- {action}" + (f" → {impact}" if impact else "") + (f" _{meta}_" if meta else ""))
+            else:
+                lines.append(f"- {rec}")
+
+    # Next steps
+    if data.get("next_steps"):
+        lines.append("\n**Would you like me to:**")
+        for step in data["next_steps"][:3]:
+            lines.append(f"- {step}")
+
+    # Raw fallback
+    if not lines and data.get("_raw_analysis"):
+        return data["_raw_analysis"]
 
     return "\n".join(lines)

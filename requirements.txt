@@ -25,3 +25,6 @@ google-auth-httplib2>=0.2.0
 # HTTP clients
 requests>=2.31.0
 httpx>=0.25.0
+
+# ML / clustering (optional — graceful fallback if unavailable)
+scikit-learn>=1.3.0

@@ -21,15 +21,15 @@ body.dark,
   --bg-2: #1C2333;
   --bg-3: #2A2F3C;
   --bg-hover: rgba(255,255,255,0.05);
-  --bg-active: rgba(79,140,255,0.12);
+  --bg-active: rgba(99,102,241,0.12);
   --border: rgba(255,255,255,0.08);
   --border-strong: rgba(255,255,255,0.15);
   --text: #F0F2F7;
   --text-2: #9BA3B4;
   --text-3: #5C6478;
-  --accent: #4F8CFF;
-  --accent-hover: #3D7BEE;
-  --accent-glow: rgba(79,140,255,0.2);
+  --accent: #6366f1;
+  --accent-hover: #4F46E5;
+  --accent-glow: rgba(99,102,241,0.2);
   --success: #22C55E;
   --warning: #F59E0B;
   --error: #EF4444;
@@ -54,7 +54,7 @@ body.light,
   --bg-2: #F0F2F7;
   --bg-3: #E4E7EF;
   --bg-hover: rgba(0,0,0,0.04);
-  --bg-active: rgba(79,140,255,0.08);
+  --bg-active: rgba(99,102,241,0.08);
   --border: rgba(0,0,0,0.08);
   --border-strong: rgba(0,0,0,0.15);
   --text: #0F1117;
@@ -130,7 +130,7 @@ body {
 .nav-logo-text {
   font-size: 17px;
   font-weight: 700;
-  background: linear-gradient(135deg, #4F8CFF, #A78BFA);
+  background: linear-gradient(135deg, #6366f1, #A78BFA);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -140,7 +140,7 @@ body {
 .nav-logo-badge {
   font-size: 9px;
   font-weight: 700;
-  background: linear-gradient(135deg, #4F8CFF, #A78BFA);
+  background: linear-gradient(135deg, #6366f1, #A78BFA);
   color: #fff;
   padding: 1px 6px;
   border-radius: 4px;
@@ -427,7 +427,7 @@ body {
 .empty-title {
   font-size: 32px;
   font-weight: 700;
-  background: linear-gradient(135deg, #4F8CFF, #A78BFA);
+  background: linear-gradient(135deg, #6366f1, #A78BFA);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

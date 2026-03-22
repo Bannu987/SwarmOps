@@ -231,26 +231,6 @@ function parseMarkdown(text) {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   AGENTS
-───────────────────────────────────────────────────────────── */
-const AGENTS = [
-  { id: 'nexus',        emoji: '🧠', name: 'Nexus',          shortName: 'Nexus',     desc: 'AI orchestrator — routes to best agent', model: 'Smart Routing',  color: '#818CF8' },
-  { id: 'seo',          emoji: '📊', name: 'SEO Agent',       shortName: 'SEO',       desc: 'Rankings, keywords & SERP analysis',      model: 'Gemini 1.5 Pro', color: '#2DD4BF' },
-  { id: 'content',      emoji: '✍️', name: 'Content Agent',   shortName: 'Content',   desc: 'Blog posts, copy & WordPress publish',    model: 'Llama 3.3 70B', color: '#818CF8' },
-  { id: 'ppc',          emoji: '💰', name: 'PPC Agent',        shortName: 'PPC',       desc: 'Google Ads campaigns & budget',           model: 'Gemini Flash',   color: '#FBBF24' },
-  { id: 'analytics',    emoji: '📈', name: 'Analytics',        shortName: 'Analytics', desc: 'GA4 dashboard & anomaly detection',       model: 'Gemini 1.5 Pro', color: '#FB923C' },
-  { id: 'crm',          emoji: '📧', name: 'CRM Agent',        shortName: 'CRM',       desc: 'HubSpot contacts & email sequences',      model: 'Llama 3.3 70B', color: '#34D399' },
-  { id: 'smm',          emoji: '📱', name: 'SMM Agent',        shortName: 'Social',    desc: 'Social calendar, trends & viral hooks',   model: 'Llama 3.3 70B', color: '#E879F9' },
-  { id: 'brand',        emoji: '🎨', name: 'Brand Agent',      shortName: 'Brand',     desc: 'Brand voice, positioning & guidelines',   model: 'Qwen 3 32B',    color: '#C084FC' },
-  { id: 'webux',        emoji: '🌐', name: 'Web/UX Agent',    shortName: 'Web/UX',    desc: 'Landing pages, UX flows & wireframes',    model: 'Qwen 3 32B',    color: '#F472B6' },
-  { id: 'cro',          emoji: '🔥', name: 'CRO Agent',        shortName: 'CRO',       desc: 'Conversion funnels & A/B testing',        model: 'Qwen 3 32B',    color: '#A78BFA' },
-  { id: 'research',     emoji: '🔍', name: 'Research Agent',   shortName: 'Research',  desc: 'Web research with Brave Search',          model: 'Gemini 1.5 Pro', color: '#22D3EE' },
-  { id: 'deep_research',emoji: '🔬', name: 'Deep Research',    shortName: 'Deep',      desc: 'Multi-step research with Kimi K2.5',      model: 'Kimi K2.5',     color: '#A78BFA' },
-];
-
-const AGENT_MAP = Object.fromEntries(AGENTS.map(a => [a.id, a]));
-
-/* ─────────────────────────────────────────────────────────────
    CHART DATA
 ───────────────────────────────────────────────────────────── */
 const trafficData = [
@@ -323,7 +303,7 @@ const SLASH_COMMANDS = [
 ───────────────────────────────────────────────────────────── */
 function App() {
   const {
-    messages, selectedAgentId, addMessage, setSelectedAgent,
+    messages, addMessage,
     setStreaming, clearMessages
   } = useChatStore();
 
@@ -349,8 +329,6 @@ function App() {
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
-
-  const selectedAgent = AGENT_MAP[selectedAgentId] || AGENTS[0];
 
   // Apply theme to body
   useEffect(() => {
@@ -413,29 +391,6 @@ function App() {
   }, []);
 
 
-  const formatDeepResearchResult = (result) => {
-    if (!result || typeof result !== 'object') return String(result);
-    let f = '';
-    if (result.summary) f += `## Summary\n\n${result.summary}\n\n`;
-    if (result.key_findings?.length) {
-      f += `## Key Findings\n\n`;
-      result.key_findings.forEach((x, i) => { f += `${i + 1}. ${x}\n`; });
-      f += '\n';
-    }
-    if (result.sources?.length) {
-      f += `## Sources\n\n`;
-      result.sources.slice(0, 8).forEach((s, i) => { f += `${i + 1}. [${s.title}](${s.url})\n`; });
-      f += '\n';
-    }
-    if (result.recommendations?.length) {
-      f += `## Recommendations\n\n`;
-      result.recommendations.forEach((r, i) => { f += `${i + 1}. ${r}\n`; });
-      f += '\n';
-    }
-    if (result.confidence !== undefined && result.confidence >= 0.8) f += `\n✓ Verified\n`;
-    return f;
-  };
-
   const handleSubmit = async (e) => {
     e?.preventDefault();
     const txt = input.trim();
@@ -446,33 +401,21 @@ function App() {
     setStreaming(true);
 
     const agentId = 'nexus';  // All messages go to Nexus (workflow engine routes internally)
-    const agentCfg = AGENT_MAP[agentId] || AGENTS[0];
 
     try {
-      let data;
-      if (agentId === 'deep_research') {
-        data = await api.deepResearch(txt);
-      } else {
-        data = await api.chat(txt, agentId);
-      }
+      const data = await api.chat(txt, agentId);
 
-      let content;
-      if (agentId === 'deep_research' && data?.result && typeof data.result === 'object') {
-        content = formatDeepResearchResult(data.result);
-      } else {
-        content = data?.result || data?.response || 'Response received.';
-        if (typeof content === 'object') content = JSON.stringify(content, null, 2);
-      }
+      let content = data?.result || data?.response || 'Response received.';
+      if (typeof content === 'object') content = JSON.stringify(content, null, 2);
 
       addMessage({
         id: Date.now() + Math.random(),
         role: 'agent',
         content,
         agentId: data?.agent || agentId,
-        agentName: agentCfg.name,
-        agentEmoji: agentCfg.emoji,
-        agentColor: agentCfg.color,
-        model: data?.model || agentCfg.model,
+        agentEmoji: '🧠',
+        agentColor: '#818CF8',
+        model: data?.model,
         provider: data?.provider,
         latency_ms: data?.latency_ms,
         quality: data?.quality,
@@ -498,7 +441,7 @@ function App() {
       addMessage({
         id: Date.now() + Math.random(),
         role: 'system',
-        content: `⚠️ ${agentCfg.name}: ${msg}`,
+        content: `⚠️ SwarmOps: ${msg}`,
         timestamp: new Date().toISOString()
       });
     }
@@ -682,16 +625,13 @@ function App() {
               <EmptyState
                 suggestedPrompts={suggestedPrompts}
                 setInput={setInput}
-                setSelectedAgent={setSelectedAgent}
-                agentEmoji={selectedAgent.emoji}
-                agentColor={selectedAgent.color}
               />
             ) : (
               <div className="messages-list">
                 {messages.map((msg, idx) => (
                   <MessageBubble key={msg.id || idx} message={msg} isLatest={idx === messages.length - 1} />
                 ))}
-                {loading && <LoadingDots agent={selectedAgent} />}
+                {loading && <LoadingDots />}
                 <div ref={messagesEndRef} />
               </div>
             )}
@@ -841,12 +781,12 @@ function App() {
 /* ─────────────────────────────────────────────────────────────
    EMPTY STATE
 ───────────────────────────────────────────────────────────── */
-function EmptyState({ suggestedPrompts, setInput, setSelectedAgent, agentEmoji, agentColor }) {
+function EmptyState({ suggestedPrompts, setInput }) {
   return (
     <div className="empty-state">
       <div className="empty-hero">
-        <div className="empty-logo" style={{ borderColor: agentColor + '40' }}>
-          <span className="empty-logo-emoji">{agentEmoji}</span>
+        <div className="empty-logo" style={{ borderColor: '#818CF840' }}>
+          <span className="empty-logo-emoji">🧠</span>
         </div>
         <h1 className="empty-title">SwarmOps</h1>
         <p className="empty-subtitle">Multi-Agent AI Marketing Intelligence</p>
@@ -1050,15 +990,15 @@ function PipelineViz({ steps, totalLatency, expandedSteps, toggleStep }) {
 /* ─────────────────────────────────────────────────────────────
    LOADING DOTS
 ───────────────────────────────────────────────────────────── */
-function LoadingDots({ agent }) {
+function LoadingDots() {
   return (
     <div className="msg msg-agent">
-      <div className="agent-avatar" style={{ background: (agent.color || '#818CF8') + '20' }}>
-        <span>{agent.emoji}</span>
+      <div className="agent-avatar" style={{ background: '#818CF820' }}>
+        <span>🧠</span>
       </div>
       <div className="agent-body">
         <div className="agent-label">
-          <span className="agent-label-name">{agent.name}</span>
+          <span className="agent-label-name">SwarmOps</span>
         </div>
         <div className="loading-dots">
           <div className="loading-dot" />

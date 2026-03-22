@@ -1208,50 +1208,7 @@ def _workflow_synthesis(synthesis_prompt: str) -> str:
         return ""
 
 
-# ============================================================================
-# MULTI-AGENT ORCHESTRATION — parallel agent dispatch for complex queries
-# ============================================================================
-
-MULTI_AGENT_TRIGGERS = {
-    "more traffic": ["seo", "content", "research"],
-    "get traffic": ["seo", "content", "research"],
-    "increase traffic": ["seo", "content", "research"],
-    "grow traffic": ["seo", "content", "research"],
-    "more leads": ["cro", "ppc", "crm"],
-    "generate leads": ["cro", "ppc", "crm"],
-    "lead generation": ["cro", "ppc", "crm"],
-    "more sales": ["cro", "crm", "analytics"],
-    "increase conversions": ["cro", "analytics", "content"],
-    "improve conversions": ["cro", "analytics", "content"],
-    "brand awareness": ["smm", "content", "brand"],
-    "social media strategy": ["smm", "content", "research"],
-    "full marketing strategy": ["seo", "content", "ppc", "cro", "smm"],
-    "marketing plan": ["seo", "content", "ppc", "cro", "smm"],
-    "launch": ["seo", "ppc", "content", "smm"],
-    "product launch": ["seo", "ppc", "content", "smm"],
-    "reduce churn": ["crm", "analytics", "cro"],
-    "retain customers": ["crm", "analytics", "cro"],
-    "grow revenue": ["cro", "crm", "ppc", "analytics"],
-    "increase revenue": ["cro", "crm", "ppc", "analytics"],
-    "3 month plan": ["seo", "content", "ppc", "crm", "analytics"],
-    "three month plan": ["seo", "content", "ppc", "crm", "analytics"],
-    "growth plan": ["seo", "content", "ppc", "analytics"],
-    "marketing plan": ["seo", "content", "ppc", "crm", "smm"],
-    "full strategy": ["seo", "content", "ppc", "cro", "smm"],
-    "complete strategy": ["seo", "content", "ppc", "cro", "smm"],
-    "deep analysis": ["seo", "content", "analytics", "cro", "research"],
-    "budget plan": ["ppc", "analytics", "content"],
-    "organic and paid": ["seo", "content", "ppc"],
-    "organic vs paid": ["seo", "content", "ppc"],
-}
-
-def _check_multi_agent_trigger(user_message: str):
-    """Returns list of agents to run in parallel, or None if single-agent."""
-    msg_lower = user_message.lower()
-    for trigger, agents in MULTI_AGENT_TRIGGERS.items():
-        if trigger in msg_lower:
-            return agents
-    return None
+# Legacy MULTI_AGENT_TRIGGERS removed — workflow_engine.py handles all multi-agent routing
 
 
 def _rank_agent_results(agent_results: dict) -> list:
@@ -1359,12 +1316,51 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         if not user_msg:
             return JSONResponse({"response": "Please send a message.", "agent": agent, "provider": "system"})
 
-        # ================================================================
-        # CONVERSATIONMANAGER — single gatekeeper for routing/onboarding
-        # ================================================================
         import re as _re
         _msg_lower = user_msg.lower()
 
+        # ================================================================
+        # STEP A: SLASH COMMANDS — highest priority, deterministic, return immediately
+        # Must run BEFORE ConversationManager so /seo etc. are never misclassified.
+        # ================================================================
+        _VALID_SLASH_AGENTS = {
+            "seo": "seo", "content": "content", "ppc": "ppc",
+            "analytics": "analytics", "crm": "crm", "smm": "smm",
+            "brand": "brand", "web_ux": "web_ux", "webux": "web_ux",
+            "cro": "cro", "research": "research",
+            "deep_research": "deep_research", "deep": "deep_research",
+        }
+        if user_msg.startswith("/"):
+            _slash_parts = user_msg.split(" ", 1)
+            _slash_cmd = _slash_parts[0].lower().lstrip("/")
+            _slash_text = _slash_parts[1].strip() if len(_slash_parts) > 1 else ""
+            if _slash_cmd in _VALID_SLASH_AGENTS:
+                _slash_agent = _VALID_SLASH_AGENTS[_slash_cmd]
+                _slash_prompt = _slash_text or user_msg
+                # Build brand context for the slash agent
+                _slash_brand_ctx = ""
+                try:
+                    from brand_dna import get_brand_dna as _sbdna
+                    _slash_brand_ctx = _sbdna().get_brand_context() or ""
+                except Exception:
+                    pass
+                _slash_full_prompt = f"{_slash_brand_ctx}\n\n{_slash_prompt}".strip() if _slash_brand_ctx else _slash_prompt
+                _slash_result = _workflow_call_agent(_slash_agent, _slash_full_prompt)
+                _slash_result = _cleaner.clean(_slash_result or "")
+                _slash_result = sanitize_response(_slash_result)
+                return {
+                    "success": True,
+                    "result": _slash_result,
+                    "agent": _slash_agent,
+                    "model": "direct",
+                    "provider": "slash-command",
+                    "multi_agent": False,
+                    "confidence": 0.8,
+                }
+
+        # ================================================================
+        # STEP B: CONVERSATIONMANAGER — single gatekeeper for routing/onboarding
+        # ================================================================
         action, action_data = _cm.decide_action(user_msg, agent)
 
         # Fast-path: greeting
@@ -1406,6 +1402,20 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                     brand_extractor = get_brand_dna()
                     brand_data = brand_extractor.extract(url)
                     formatted = _cm.format_brand_for_onboarding(brand_data)
+
+                    # Double-check: if name is still a placeholder, fall back to domain
+                    _INVALID_BRAND_NAMES = {"your brand", "unknown", "not found", "not_found",
+                                            "", "none", "n/a", "brand", "your business", "website",
+                                            "your company", "company", "your name"}
+                    if not formatted.get("name") or formatted["name"].lower().strip() in _INVALID_BRAND_NAMES:
+                        from urllib.parse import urlparse as _urlparse
+                        _domain = _urlparse(url).netloc.replace("www.", "")
+                        _name_part = _domain.split(".")[0]
+                        formatted["name"] = (
+                            _name_part.upper() if len(_name_part) <= 4
+                            else _name_part.replace("-", " ").title()
+                        )
+                        logger.info(f"Brand name fallback → domain: {formatted['name']}")
 
                     # Save to business_profile table
                     try:
@@ -1474,6 +1484,53 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 _cm.set_state(_cm.STATE_ACTIVE)
             except Exception:
                 pass
+
+        # ── DIFFICULTY SCORING: select model tier based on query complexity ──
+        _difficulty_score, _difficulty_category = score_difficulty(user_msg)
+        _model_tier = get_tier_number(_difficulty_score)
+        logger.info(f"Query difficulty: {_difficulty_score}/10 ({_difficulty_category}) → tier {_model_tier}")
+
+        # ================================================================
+        # STEP E: WORKFLOW ENGINE — runs BEFORE legacy pipeline detection
+        # Code controls which agents run. LLM only generates text.
+        # ================================================================
+        if agent in ("nexus", ""):
+            _wf_name = match_workflow(user_msg)
+            if _wf_name:
+                try:
+                    _brand_ctx_str = ""
+                    try:
+                        from brand_dna import get_brand_dna as _bdna_wf
+                        _brand_ctx_str = _bdna_wf().get_brand_context() or ""
+                    except Exception:
+                        pass
+                    _workflow_result = execute_workflow(
+                        workflow_name=_wf_name,
+                        user_message=user_msg,
+                        brand_context=_brand_ctx_str,
+                        call_agent_fn=_workflow_call_agent,
+                        call_synthesis_fn=_workflow_synthesis,
+                    )
+                    if _workflow_result and _workflow_result.get("response"):
+                        _wf_text = _cleaner.clean(_workflow_result["response"])
+                        _wf_text = sanitize_response(_wf_text)
+                        _update_conversation_memory(user_msg, _wf_text, {})
+                        return {
+                            "success": True,
+                            "result": _wf_text,
+                            "agent": "nexus",
+                            "model": "multi-agent",
+                            "provider": "orchestrated",
+                            "workflow": _workflow_result.get("workflow"),
+                            "agents_used": _workflow_result.get("agents_used", []),
+                            "agent_timings": _workflow_result.get("agent_timings", {}),
+                            "multi_agent": _workflow_result.get("multi_agent", False),
+                            "latency_ms": int(_workflow_result.get("latency_seconds", 0) * 1000),
+                            "confidence": 0.8,
+                            "difficulty": _difficulty_category,
+                        }
+                except Exception as _wf_err:
+                    logger.error(f"Workflow {_wf_name} failed: {_wf_err}")
 
         # --- Check if this is a nexus request and if it needs a pipeline ---
         if agent == "nexus" or agent == "":
@@ -1572,60 +1629,6 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 msg = f"{msg}\n\n{_rag_ctx}"
         except Exception:
             pass
-
-        # ── DIFFICULTY SCORING: select model tier based on query complexity ──
-        _difficulty_score, _difficulty_category = score_difficulty(user_msg)
-        _model_tier = get_tier_number(_difficulty_score)
-        logger.info(f"Query difficulty: {_difficulty_score}/10 ({_difficulty_category}) → tier {_model_tier}")
-
-        # ── SLASH COMMAND: /agent direct routing ──
-        if user_msg.startswith("/"):
-            parts = user_msg.split(" ", 1)
-            slash_cmd = parts[0].lower().lstrip("/")
-            slash_rest = parts[1].strip() if len(parts) > 1 else user_msg
-            valid_slash_agents = {"seo", "content", "ppc", "analytics", "crm", "smm",
-                                   "brand", "web_ux", "cro", "research", "deep_research"}
-            if slash_cmd in valid_slash_agents:
-                agent = slash_cmd
-                user_msg = slash_rest
-                msg = msg.replace(parts[0], "").strip()
-
-        # ── WORKFLOW ENGINE: code-controlled agent routing ──
-        _workflow_result = None
-        if (agent == "nexus" or agent == "") and not user_msg.startswith("/"):
-            _wf_name = match_workflow(user_msg)
-            if _wf_name:
-                try:
-                    _brand_ctx_str = locals().get("brand_context", "") or ""
-                    _workflow_result = execute_workflow(
-                        workflow_name=_wf_name,
-                        user_message=user_msg,
-                        brand_context=_brand_ctx_str,
-                        call_agent_fn=_workflow_call_agent,
-                        call_synthesis_fn=_workflow_synthesis,
-                    )
-                except Exception as _wf_err:
-                    logger.error(f"Workflow {_wf_name} failed: {_wf_err}")
-                    _workflow_result = None
-
-        if _workflow_result is not None:
-            _wf_text = _workflow_result.get("response", "")
-            _wf_text = _cleaner.clean(_wf_text)
-            _wf_text = sanitize_response(_wf_text)
-            _update_conversation_memory(user_msg, _wf_text, {})
-            return {
-                "success": True,
-                "result": _wf_text,
-                "agent": "nexus",
-                "model": "multi-agent",
-                "provider": "orchestrated",
-                "workflow": _workflow_result.get("workflow"),
-                "agents_used": _workflow_result.get("agents_used", []),
-                "agent_timings": _workflow_result.get("agent_timings", {}),
-                "multi_agent": _workflow_result.get("multi_agent", False),
-                "latency_ms": int(_workflow_result.get("latency_seconds", 0) * 1000),
-                "confidence": 0.8,
-            }
 
         # --- dispatch to the correct agent and capture a revision callable ---
         result = None

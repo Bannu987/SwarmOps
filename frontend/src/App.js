@@ -801,7 +801,8 @@ function MessageBubble({ message, isLatest }) {
           <span className="agent-label-name">SwarmOps</span>
           {message.multi_agent && message.agents_used?.length > 1
             ? <span className="agent-label-model">via {message.agents_used.length} specialists</span>
-            : message.model ? <span className="agent-label-model">{message.model}</span> : null}
+            : (message.model && !['multi-agent','pipeline','orchestrated','direct'].includes(message.model))
+              ? <span className="agent-label-model">{message.model}</span> : null}
         </div>
 
         {isPipeline && message.result?.steps ? (

@@ -114,6 +114,46 @@ WORKFLOWS = {
         },
         "synthesis_instruction": "Create an AEO optimization plan: 1) AEO readiness score, 2) Top 5 changes to get cited by AI search engines, 3) Content to create, 4) Schema markup to add. Include the actual JSON-LD code for FAQ schema. Keep under 500 words.",
     },
+    "publish_content": {
+        "agents": ["content", "seo", "aeo"],
+        "parallel": True,
+        "sub_prompts": {
+            "content": "Write a complete blog post based on the user's request. Include title, intro (inverted pyramid — answer first), body with H2 sections, and conclusion with CTA. Keep under 400 words.",
+            "seo": "For this blog post topic, provide: target keyword, meta description (under 155 chars), 3 internal link suggestions, and Schema.org Article markup. Keep under 100 words.",
+            "aeo": "Optimize this blog post for AI search: rewrite the intro as inverted pyramid (answer first), suggest 3 FAQ pairs for JSON-LD, and inject one citable statistic. Keep under 150 words.",
+        },
+        "synthesis_instruction": "Combine into a complete, ready-to-publish blog post. Include the SEO-optimized title, inverted pyramid intro, body content, and end with an FAQ section. Add the JSON-LD schema as a code block at the end. Keep under 600 words.",
+    },
+    "create_campaign": {
+        "agents": ["ppc", "content", "cro"],
+        "parallel": True,
+        "sub_prompts": {
+            "ppc": "Design a Google Ads search campaign: recommend keywords (10 max), daily budget, bidding strategy, targeting. Keep under 150 words.",
+            "content": "Write 3 responsive search ad variants. Each must have 3 headlines (30 chars max each) and 2 descriptions (90 chars max each). Keep under 200 words.",
+            "cro": "Recommend landing page structure for this campaign: headline, subheadline, 3 bullet points, CTA text, trust signals. Score with MECLABS. Keep under 150 words.",
+        },
+        "synthesis_instruction": "Create a complete Google Ads campaign plan: keywords, budget, 3 ad variants with headlines/descriptions, and landing page recommendations. Include MECLABS score for the landing page. Format as a deployable campaign brief.",
+    },
+    "create_email_sequence": {
+        "agents": ["crm", "content", "cro"],
+        "parallel": True,
+        "sub_prompts": {
+            "crm": "Design a 3-email nurture sequence: timing (day 1, day 4, day 7), subject lines, purpose of each email, and segment targeting. Keep under 150 words.",
+            "content": "Write the body copy for each of the 3 nurture emails. Each under 100 words. Include personalization tokens and clear CTAs. Keep total under 350 words.",
+            "cro": "For each email's CTA: recommend button text, placement, and urgency element. Score the sequence's overall conversion probability. Keep under 100 words.",
+        },
+        "synthesis_instruction": "Create a complete 3-email nurture sequence ready to deploy. For each email include: subject line, send day, full body copy, CTA button text. End with conversion optimization notes.",
+    },
+    "create_social_posts": {
+        "agents": ["smm", "content", "brand"],
+        "parallel": True,
+        "sub_prompts": {
+            "smm": "Recommend which platform to post on and when. Suggest content format (carousel, video, text) and engagement strategy. Keep under 100 words.",
+            "content": "Write 3 social media posts for the recommended platform. Each must have a hook in the first line, value in the body, and a CTA. Include hashtags. Keep under 250 words total.",
+            "brand": "Review the posts for brand voice consistency and messaging alignment. Flag any issues. Keep under 80 words.",
+        },
+        "synthesis_instruction": "Present 3 ready-to-post social media posts. For each: platform, content, hashtags, best time to post, and expected engagement. Format so the user can copy-paste directly.",
+    },
 }
 
 
@@ -145,6 +185,15 @@ def _get_concise_schema_hint(agent_id: str) -> str:
 # ============================================================
 
 INTENT_WORKFLOW_MAP = [
+    (["write a blog", "write an article", "create a blog post", "publish content",
+      "write content", "draft a post", "create an article", "write a post"], "publish_content"),
+    (["create a campaign", "launch ads", "set up google ads", "create google ads",
+      "build a campaign", "ad campaign setup", "launch a campaign", "google ads campaign"], "create_campaign"),
+    (["create email sequence", "email nurture", "drip campaign", "email campaign",
+      "create emails", "write emails", "email automation", "email drip"], "create_email_sequence"),
+    (["create social posts", "write social media", "create linkedin post",
+      "write a tweet", "instagram post", "social media posts",
+      "draft social posts", "write social posts"], "create_social_posts"),
     (["aeo", "answer engine", "ai search", "ai overviews", "get cited",
       "optimize for ai", "optimize for chatgpt", "perplexity optimization",
       "ai citation", "zero click", "ai answer", "generative engine",

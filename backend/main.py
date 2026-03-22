@@ -1404,6 +1404,151 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                 except Exception as _se:
                     logger.error(f"/schema failed: {_se}")
 
+            # /publish — generate and prepare blog post artifact
+            if _slash_cmd == "publish":
+                try:
+                    _pub_brand_ctx = ""
+                    try:
+                        from brand_dna import get_brand_dna as _pbdna
+                        _pub_brand_ctx = _pbdna().get_brand_context() or ""
+                    except Exception:
+                        pass
+                    _pub_result = execute_workflow(
+                        workflow_name="publish_content",
+                        user_message=_slash_text or "Write a blog post about my business",
+                        brand_context=_pub_brand_ctx,
+                        call_agent_fn=_workflow_call_agent,
+                        call_synthesis_fn=_workflow_synthesis,
+                    )
+                    if _pub_result and _pub_result.get("response"):
+                        from execution_engine import get_execution_engine
+                        _eng = get_execution_engine()
+                        _art = _eng.prepare_blog_post(
+                            title=_slash_text[:60] if _slash_text else "Blog Post",
+                            content=_pub_result["response"],
+                            brand_context=_pub_brand_ctx,
+                        )
+                        _preview = _eng.format_artifact_preview(_art)
+                        _pub_text = sanitize_response(_cleaner.clean(
+                            f"{_preview}\n\n---\n**Artifact ID:** `{_art['id']}`\n"
+                            f"**Status:** Pending approval\n\n"
+                            f"Use `/approve {_art['id']}` to approve for publishing, or ask me to revise."
+                        ))
+                        return JSONResponse({
+                            "response": _pub_text, "agent": "nexus", "model": "execution",
+                            "provider": "slash-command", "multi_agent": True,
+                            "agents_used": _pub_result.get("agents_used", []),
+                            "artifact_id": _art["id"],
+                        })
+                except Exception as _pe:
+                    logger.error(f"/publish failed: {_pe}")
+
+            # /campaign — generate ad campaign brief
+            if _slash_cmd == "campaign":
+                try:
+                    _cmp_brand_ctx = ""
+                    try:
+                        from brand_dna import get_brand_dna as _cbdna
+                        _cmp_brand_ctx = _cbdna().get_brand_context() or ""
+                    except Exception:
+                        pass
+                    _cmp_result = execute_workflow(
+                        workflow_name="create_campaign",
+                        user_message=_slash_text or "Create a Google Ads campaign for my business",
+                        brand_context=_cmp_brand_ctx,
+                        call_agent_fn=_workflow_call_agent,
+                        call_synthesis_fn=_workflow_synthesis,
+                    )
+                    if _cmp_result and _cmp_result.get("response"):
+                        from execution_engine import get_execution_engine
+                        _eng = get_execution_engine()
+                        _art = _eng.prepare_ad_campaign(
+                            campaign_name=(_slash_text[:50] if _slash_text else "SwarmOps Campaign"),
+                            keywords=[], budget_daily=50,
+                            brand_context=_cmp_brand_ctx,
+                        )
+                        _preview = _eng.format_artifact_preview(_art)
+                        _cmp_text = sanitize_response(_cleaner.clean(
+                            f"{_cmp_result['response']}\n\n---\n{_preview}\n\n"
+                            f"**Artifact ID:** `{_art['id']}`\n"
+                            f"Use `/approve {_art['id']}` to approve."
+                        ))
+                        return JSONResponse({
+                            "response": _cmp_text, "agent": "nexus", "model": "execution",
+                            "provider": "slash-command", "multi_agent": True,
+                            "agents_used": _cmp_result.get("agents_used", []),
+                        })
+                except Exception as _ce:
+                    logger.error(f"/campaign failed: {_ce}")
+
+            # /approve <artifact_id> — approve and deploy artifact
+            if _slash_cmd == "approve":
+                try:
+                    from execution_engine import get_execution_engine
+                    _eng = get_execution_engine()
+                    _art_id = _slash_text.strip()
+                    if not _art_id:
+                        _pending = _eng.get_pending_approvals()
+                        if _pending:
+                            _alines = ["**Pending approvals:**\n"]
+                            for _a in _pending:
+                                _alines.append(f"- `{_a['id']}` — {_a['type'].replace('_', ' ').title()}")
+                            _alines.append("\nUse `/approve <artifact_id>` to approve.")
+                        else:
+                            _alines = ["No artifacts pending approval. Create something with `/publish` or `/campaign`."]
+                        return JSONResponse({
+                            "response": "\n".join(_alines), "agent": "nexus",
+                            "model": "system", "provider": "slash-command", "multi_agent": False,
+                        })
+                    _apr_result = _eng.approve_artifact(_art_id)
+                    if _apr_result["success"]:
+                        _found_art = _eng._find_artifact(_art_id)
+                        _deploy = None
+                        if _found_art and _found_art["type"] == "blog_post":
+                            _deploy = _eng.deploy_blog_post(_art_id)
+                        elif _found_art and _found_art["type"] == "google_ads_campaign":
+                            _deploy = _eng.deploy_ad_campaign(_art_id)
+                        if _deploy and _deploy.get("preview_mode"):
+                            _apr_msg = f"Artifact approved!\n\n{_deploy['message']}\n\n{_deploy.get('note', '')}"
+                        elif _deploy and _deploy.get("success") and not _deploy.get("preview_mode"):
+                            _apr_msg = f"Deployed! URL: {_deploy.get('url', 'N/A')}"
+                        else:
+                            _apr_msg = f"Artifact `{_art_id}` approved. Connect platform API to deploy live."
+                        return JSONResponse({
+                            "response": _apr_msg, "agent": "nexus",
+                            "model": "system", "provider": "slash-command", "multi_agent": False,
+                        })
+                    else:
+                        return JSONResponse({
+                            "response": f"Could not approve: {_apr_result.get('error', 'Unknown error')}",
+                            "agent": "nexus", "model": "system", "provider": "slash-command", "multi_agent": False,
+                        })
+                except Exception as _ape:
+                    logger.error(f"/approve failed: {_ape}")
+
+            # /queue — view all pending approvals
+            if _slash_cmd == "queue":
+                try:
+                    from execution_engine import get_execution_engine
+                    _eng = get_execution_engine()
+                    _pending = _eng.get_pending_approvals()
+                    if not _pending:
+                        _q_msg = "No artifacts in the queue. Create something with `/publish`, `/campaign`, or ask me to write content."
+                    else:
+                        _qlines = [f"**Approval Queue ({len(_pending)} pending)**\n"]
+                        for _a in _pending:
+                            _a_type = _a.get("type", "unknown").replace("_", " ").title()
+                            _created = _a.get("created_at", "")[:16]
+                            _qlines.append(f"- `{_a['id']}` — **{_a_type}** (created {_created})")
+                        _qlines.append("\nUse `/approve <id>` to approve.")
+                        _q_msg = "\n".join(_qlines)
+                    return JSONResponse({
+                        "response": _q_msg, "agent": "nexus",
+                        "model": "system", "provider": "slash-command", "multi_agent": False,
+                    })
+                except Exception as _qe:
+                    logger.error(f"/queue failed: {_qe}")
+
             if _slash_cmd in _VALID_SLASH_AGENTS:
                 _slash_agent = _VALID_SLASH_AGENTS[_slash_cmd]
                 _slash_prompt = _slash_text or user_msg
@@ -1584,6 +1729,45 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
                     if _workflow_result and _workflow_result.get("response"):
                         _wf_text = _cleaner.clean(_workflow_result["response"])
                         _wf_text = sanitize_response(_wf_text)
+
+                        # Execution workflows: auto-create artifact for approval
+                        _EXECUTION_WORKFLOWS = {"publish_content", "create_campaign",
+                                                 "create_email_sequence", "create_social_posts"}
+                        if _wf_name in _EXECUTION_WORKFLOWS:
+                            try:
+                                from execution_engine import get_execution_engine as _get_eng
+                                _exe_eng = _get_eng()
+                                if _wf_name == "publish_content":
+                                    _exe_art = _exe_eng.prepare_blog_post(
+                                        title=user_msg[:60], content=_wf_text)
+                                    _wf_text += (
+                                        f"\n\n---\n**Ready to publish.** Artifact ID: `{_exe_art['id']}`\n"
+                                        f"Use `/approve {_exe_art['id']}` to publish as draft, or ask me to revise."
+                                    )
+                                elif _wf_name == "create_campaign":
+                                    _exe_art = _exe_eng.prepare_ad_campaign(
+                                        campaign_name=user_msg[:50], keywords=[], budget_daily=50)
+                                    _wf_text += (
+                                        f"\n\n---\n**Campaign brief ready.** Artifact ID: `{_exe_art['id']}`\n"
+                                        f"Use `/approve {_exe_art['id']}` to deploy, or ask me to revise."
+                                    )
+                                elif _wf_name == "create_email_sequence":
+                                    _exe_art = _exe_eng.prepare_email_sequence(
+                                        sequence_name=user_msg[:50], emails=[])
+                                    _wf_text += (
+                                        f"\n\n---\n**Email sequence ready.** Artifact ID: `{_exe_art['id']}`\n"
+                                        f"Use `/approve {_exe_art['id']}` to deploy, or ask me to revise."
+                                    )
+                                elif _wf_name == "create_social_posts":
+                                    _exe_art = _exe_eng.prepare_social_post(
+                                        platform="linkedin", content=_wf_text[:500])
+                                    _wf_text += (
+                                        f"\n\n---\n**Post ready.** Artifact ID: `{_exe_art['id']}`\n"
+                                        f"Use `/approve {_exe_art['id']}` to schedule, or ask me to revise."
+                                    )
+                            except Exception as _exe_err:
+                                logger.warning(f"Execution artifact creation failed: {_exe_err}")
+
                         _update_conversation_memory(user_msg, _wf_text, {})
                         return {
                             "success": True,

@@ -42,25 +42,25 @@ WORKFLOWS = {
         "agents": ["cro", "ppc", "content", "crm"],
         "parallel": True,
         "sub_prompts": {
-            "cro": "Analyze the conversion funnel. Where are the friction points? What would improve lead capture rate?",
-            "ppc": "Recommend a paid advertising strategy for lead generation. Include channel, budget, and targeting approach.",
-            "content": "Suggest lead magnet ideas and landing page copy that would attract qualified leads.",
-            "crm": "Design an email nurture sequence for new leads. Include subject lines and send timing.",
+            "cro": "Identify top 3 conversion friction points. Recommend fixes. Keep under 150 words.",
+            "ppc": "Recommend paid lead gen strategy: channels, budget, targeting. Keep under 150 words.",
+            "content": "Suggest 3 lead magnet ideas with landing page copy hooks. Keep under 150 words.",
+            "crm": "Design 3-email nurture sequence for new leads. Include subjects. Keep under 150 words.",
         },
-        "synthesis_instruction": "Create a unified lead generation plan. Combine funnel optimization, paid ads, content, and email nurture. Prioritize the 5 highest-impact actions with implementation order.",
+        "synthesis_instruction": "Create a lead generation plan combining funnel optimization, paid ads, content, and email nurture. Top 5 actions ranked by impact. Keep under 400 words.",
     },
     "marketing_audit": {
         "agents": ["seo", "content", "cro", "analytics", "research", "brand"],
         "parallel": True,
         "sub_prompts": {
-            "seo": "Audit SEO: meta tags, keyword optimization, technical issues, backlink profile.",
-            "content": "Audit content strategy: quality, gaps, frequency, formats, readability.",
-            "cro": "Audit conversion optimization: CTAs, forms, trust signals, user flow, friction.",
-            "analytics": "Analyze performance data. Compute key metrics and identify trends.",
-            "research": "Research competitive landscape. How does this brand compare to top competitors?",
-            "brand": "Evaluate brand positioning, messaging clarity, and differentiation.",
+            "seo": "Audit SEO: meta tags, keyword optimization, technical issues. Score 0-100. List top 3 issues. Keep under 150 words.",
+            "content": "Audit content: quality, gaps, frequency. Score 0-100. List top 3 issues. Keep under 150 words.",
+            "cro": "Audit conversions: CTAs, forms, trust signals, friction. Score 0-100. Use MECLABS equation. Keep under 150 words.",
+            "analytics": "Audit analytics setup and data quality. Score 0-100. List top 3 issues. Keep under 150 words.",
+            "research": "Identify top 3 competitors and key market gaps. Keep under 150 words.",
+            "brand": "Audit brand positioning, messaging clarity, differentiation. Score 0-100. Keep under 150 words.",
         },
-        "synthesis_instruction": "Create a comprehensive marketing audit: 1) Overall grade (A+ through F), 2) Score for each section (0-100), 3) Top 3 strengths, 4) Top 3 weaknesses, 5) Top 5 priority actions with expected impact and timeline.",
+        "synthesis_instruction": "Create a marketing audit with: 1) Overall grade (A+ through F), 2) Score for each section (0-100), 3) Top 3 strengths, 4) Top 3 weaknesses, 5) Top 5 priority actions ranked by impact. Keep total response under 500 words.",
     },
     "competitor_analysis": {
         "agents": ["research", "seo", "content"],
@@ -76,13 +76,13 @@ WORKFLOWS = {
         "agents": ["seo", "content", "ppc", "crm", "analytics"],
         "parallel": True,
         "sub_prompts": {
-            "seo": "Recommend organic growth strategies: keywords to target, technical fixes, link building.",
-            "content": "Recommend content initiatives: pillar pages, blog strategy, content calendar.",
-            "ppc": "Recommend paid strategies: channels, budget allocation, targeting, expected ROI.",
-            "crm": "Recommend lifecycle marketing: email sequences, lead nurturing, retention.",
-            "analytics": "Identify the highest-impact growth levers based on available data.",
+            "seo": "Recommend top 3 organic growth actions for the next 3 months. Include keywords. Keep under 150 words.",
+            "content": "Recommend 3 content initiatives: pillar pages, blog posts. Include titles. Keep under 150 words.",
+            "ppc": "Recommend paid strategy: channels, budget split, targeting. Keep under 150 words.",
+            "crm": "Design email nurture sequence for new leads. 3 emails with subjects. Keep under 150 words.",
+            "analytics": "Identify the 3 highest-impact growth levers from available data. Keep under 150 words.",
         },
-        "synthesis_instruction": "Create a 3-month growth plan: Month 1 (quick wins), Month 2 (building momentum), Month 3 (scaling). Separate organic vs paid. Include budget estimates.",
+        "synthesis_instruction": "Create a 3-month growth plan: Month 1 (quick wins), Month 2 (building), Month 3 (scaling). Separate organic vs paid. Include budget estimates. Keep total under 500 words.",
     },
     "social_strategy": {
         "agents": ["smm", "content", "brand"],
@@ -105,6 +105,28 @@ WORKFLOWS = {
         "synthesis_instruction": "Create a complete paid campaign plan: ad strategy, landing page recommendations, budget breakdown, and expected performance.",
     },
 }
+
+
+# ============================================================
+# SCHEMA HINTS — concise format guidance for single-pass agents
+# ============================================================
+
+_SCHEMA_HINTS = {
+    "seo": "Format: Start with top 3 keyword opportunities (keyword, intent, competition). Then 3 specific recommendations with expected impact.",
+    "content": "Format: Start with content gap analysis. Then suggest 3 specific articles with titles, target keywords, and angles.",
+    "ppc": "Format: Recommend channels and budget split. Include 3 specific campaign ideas with targeting and expected ROI.",
+    "analytics": "Format: List key metrics to track. Identify 3 data-driven insights. Recommend measurement framework.",
+    "cro": "Format: Score using MECLABS (C=4m+3v+2(i-f)-2a). Identify weakest LIFT factor. Give 3 specific conversion fixes.",
+    "crm": "Format: Design 3-email nurture sequence with subjects and timing. Recommend lifecycle optimization.",
+    "smm": "Format: Recommend top 2 platforms with posting frequency. Give 3 specific post ideas with hooks.",
+    "brand": "Format: Evaluate positioning clarity, differentiation, and voice consistency. Give 3 specific improvements.",
+    "research": "Format: Identify 3-5 competitors. Compare strengths/weaknesses. Identify 3 market opportunities.",
+    "web_ux": "Format: Evaluate load speed, mobile UX, navigation. Identify 3 friction points with fixes.",
+}
+
+
+def _get_concise_schema_hint(agent_id: str) -> str:
+    return _SCHEMA_HINTS.get(agent_id, "Format: Summary, 3 recommendations with impact, 2 next steps.")
 
 
 # ============================================================
@@ -160,10 +182,13 @@ def execute_workflow(workflow_name, user_message, brand_context, call_agent_fn, 
     sub_prompts = workflow["sub_prompts"]
     parallel = workflow.get("parallel", True)
     synthesis_instruction = workflow.get("synthesis_instruction")
+    agent_count = len(agents)
 
     start_time = time.time()
     agent_results = {}
     agent_timings = {}
+
+    logger.info(f"[WORKFLOW] Starting '{workflow_name}' with {agent_count} agents (parallel={parallel})")
 
     # Lazy-load quality gate (avoids circular import at module load time)
     try:
@@ -176,29 +201,25 @@ def execute_workflow(workflow_name, user_message, brand_context, call_agent_fn, 
         agent_start = time.time()
         sub_prompt = sub_prompts.get(agent_id, user_message)
         full_prompt = f"{brand_context}\n\nUser request: {user_message}\n\nYour specific task: {sub_prompt}"
-        try:
-            # Determine query complexity — simple queries skip two-step overhead
+
+        # Determine if two-step is worth the extra API call:
+        # Skip for: large parallel workflows (4+ agents) OR simple queries
+        use_two_step = True
+        if agent_count >= 4:
+            use_two_step = False  # Large workflows: single-pass to save API calls
+
+        if use_two_step:
             try:
                 from difficulty_scorer import score_difficulty
                 difficulty, _ = score_difficulty(user_message)
+                if difficulty <= 3:
+                    use_two_step = False
             except Exception:
-                difficulty = 5  # default to complex path
+                pass
 
-            if difficulty <= 3:
-                # Fast path: simple query, single LLM call
-                if _qg:
-                    gate_result = _qg.gate_with_retry(
-                        generator_fn=lambda: str(call_agent_fn(agent_id, full_prompt) or ""),
-                        agent_id=agent_id,
-                        min_words=25,
-                    )
-                    result = gate_result["response"]
-                    if not gate_result["passed"]:
-                        logger.warning(f"QualityGate: {agent_id} did not pass after {gate_result['attempts']} attempt(s). Warnings: {gate_result['quality'].get('warnings', [])}")
-                else:
-                    result = str(call_agent_fn(agent_id, full_prompt) or "")
-            else:
-                # Complex path: two-step generation (reason freely → extract structure)
+        try:
+            if use_two_step:
+                # Complex, small workflow (2-3 agents): two-step for better quality
                 try:
                     from two_step_generator import two_step_generate, get_schema_template
                     from response_schemas import format_structured_response
@@ -219,15 +240,27 @@ def execute_workflow(workflow_name, user_message, brand_context, call_agent_fn, 
                         raise ValueError("two-step produced empty result")
                 except Exception as ts_err:
                     logger.warning(f"Two-step failed for {agent_id}: {ts_err} — falling back to single-pass")
-                    if _qg:
-                        gate_result = _qg.gate_with_retry(
-                            generator_fn=lambda: str(call_agent_fn(agent_id, full_prompt) or ""),
-                            agent_id=agent_id,
-                            min_words=25,
-                        )
-                        result = gate_result["response"]
-                    else:
-                        result = str(call_agent_fn(agent_id, full_prompt) or "")
+                    use_two_step = False  # fall through to single-pass below
+
+            if not use_two_step:
+                # Single-pass with concise schema hint (fast path for large workflows)
+                schema_hint = _get_concise_schema_hint(agent_id)
+                augmented_prompt = (
+                    f"{full_prompt}\n\n{schema_hint}\n\n"
+                    "Keep your response under 200 words. Be specific and actionable. "
+                    "Reference the brand by name. Include metrics where possible."
+                )
+                if _qg:
+                    gate_result = _qg.gate_with_retry(
+                        generator_fn=lambda: str(call_agent_fn(agent_id, augmented_prompt) or ""),
+                        agent_id=agent_id,
+                        min_words=25,
+                    )
+                    result = gate_result["response"]
+                    if not gate_result["passed"]:
+                        logger.warning(f"QualityGate: {agent_id} did not pass after {gate_result['attempts']} attempt(s). Warnings: {gate_result['quality'].get('warnings', [])}")
+                else:
+                    result = str(call_agent_fn(agent_id, augmented_prompt) or "")
 
             elapsed = round(time.time() - agent_start, 1)
             return agent_id, result, elapsed
@@ -236,7 +269,7 @@ def execute_workflow(workflow_name, user_message, brand_context, call_agent_fn, 
             return agent_id, "", round(time.time() - agent_start, 1)
 
     if parallel and len(agents) > 1:
-        with ThreadPoolExecutor(max_workers=min(len(agents), 5)) as executor:
+        with ThreadPoolExecutor(max_workers=min(len(agents), 6)) as executor:
             futures = {executor.submit(run_agent, aid): aid for aid in agents}
             for future in as_completed(futures, timeout=55):
                 try:
@@ -254,6 +287,8 @@ def execute_workflow(workflow_name, user_message, brand_context, call_agent_fn, 
     total_time = round(time.time() - start_time, 1)
     valid_results = {k: v for k, v in agent_results.items() if v and len(v.strip()) > 20}
 
+    logger.info(f"[WORKFLOW] Completed '{workflow_name}' in {total_time}s. Agent timings: {agent_timings}")
+
     # Single agent or no synthesis needed — return best result directly
     if not synthesis_instruction or len(valid_results) <= 1:
         best = max(valid_results.values(), key=len) if valid_results else (
@@ -268,10 +303,13 @@ def execute_workflow(workflow_name, user_message, brand_context, call_agent_fn, 
             "latency_seconds": total_time,
         }
 
-    # Multi-agent — synthesize
+    # Multi-agent — synthesize (400-char truncation per agent to save tokens)
     agent_findings = ""
     for agent_id, result in valid_results.items():
-        agent_findings += f"\n--- {agent_id.upper()} SPECIALIST ---\n{result[:600]}\n"
+        truncated = result[:400].strip()
+        if len(result) > 400:
+            truncated += "..."
+        agent_findings += f"\n--- {agent_id.upper()} ---\n{truncated}\n"
 
     synthesis_prompt = f"""You are SwarmOps, synthesizing findings from multiple specialist agents.
 
@@ -291,10 +329,11 @@ Put the 2-3 highest-RICE actions at the top. Save complex long-term items for la
 RULES:
 - Combine ALL specialist findings into ONE unified response
 - Do NOT list each agent's output separately
+- Do NOT repeat agent findings verbatim — synthesize and prioritize
 - Write as one voice — you are the strategist presenting a complete plan
 - Be specific to the brand — reference their name and industry
 - Every recommendation must have a concrete expected outcome and timeline
-- Keep under 400 words unless the user asked for detailed/comprehensive
+- Keep under 500 words
 - End with "Would you like me to..." and 2-3 specific next steps
 """
 

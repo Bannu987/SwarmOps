@@ -318,6 +318,43 @@ def _format_dict_response(data: dict) -> str:
         for step in data["next_steps"][:3]:
             lines.append(f"- {step}")
 
+    # AEO score
+    aeo_score = data.get("aeo_score")
+    if aeo_score is not None:
+        emoji = "🟢" if aeo_score >= 70 else "🟡" if aeo_score >= 40 else "🔴"
+        lines.append(f"\n**AEO Readiness Score: {aeo_score}/100** {emoji}")
+        citation = data.get("citation_probability", "unknown")
+        lines.append(f"**Citation Probability:** {citation}")
+
+    # AEO improvements
+    improvements = data.get("improvements", [])
+    if improvements:
+        lines.append("\n**Top AEO improvements:**")
+        for i, imp in enumerate(improvements[:5], 1):
+            if isinstance(imp, dict):
+                lines.append(f"{i}. **{imp.get('action', '')}** — {imp.get('impact', '')}")
+            else:
+                lines.append(f"{i}. {imp}")
+
+    # Rewritten intro
+    rewritten = data.get("rewritten_intro", "")
+    if rewritten:
+        lines.append(f"\n**Optimized intro paragraph:**\n> {rewritten}")
+
+    # FAQ pairs
+    faqs = data.get("faq_pairs", [])
+    if faqs:
+        lines.append("\n**FAQ schema pairs:**")
+        for faq in faqs[:5]:
+            if isinstance(faq, dict):
+                lines.append(f"- **Q:** {faq.get('question', '')}")
+                lines.append(f"  **A:** {faq.get('answer', '')}")
+
+    # JSON-LD schema
+    json_ld = data.get("json_ld_schema", "")
+    if json_ld and len(str(json_ld)) > 10:
+        lines.append(f"\n**JSON-LD Schema to add:**\n```json\n{json_ld}\n```")
+
     # Raw fallback
     if not lines and data.get("_raw_analysis"):
         return data["_raw_analysis"]

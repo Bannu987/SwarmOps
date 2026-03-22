@@ -1186,6 +1186,10 @@ def _workflow_call_agent(agent_id: str, full_prompt: str) -> str:
             from web_ux_agent import design_landing_page
             result = design_landing_page(product=full_prompt, target_audience="General audience", goal="conversions")
             return result if isinstance(result, str) else str(result)
+        elif agent_id == "aeo":
+            from aeo_agent import analyze_aeo
+            result = analyze_aeo(full_prompt)
+            return result if isinstance(result, str) else str(result)
         else:
             # Fallback: direct LLM call
             from nexus import NEXUS_MASTER_PROMPT
@@ -1329,11 +1333,77 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
             "brand": "brand", "web_ux": "web_ux", "webux": "web_ux",
             "cro": "cro", "research": "research",
             "deep_research": "deep_research", "deep": "deep_research",
+            "aeo": "aeo",
         }
         if user_msg.startswith("/"):
             _slash_parts = user_msg.split(" ", 1)
             _slash_cmd = _slash_parts[0].lower().lstrip("/")
             _slash_text = _slash_parts[1].strip() if len(_slash_parts) > 1 else ""
+
+            # /tools — list MCP integrations
+            if _slash_cmd == "tools":
+                try:
+                    from mcp_server import get_available_tools
+                    _mcp_tools = get_available_tools()
+                    _tool_lines = ["**Available data integrations:**\n"]
+                    for _tn, _ti in _mcp_tools.items():
+                        _status = "Connected" if _ti["available"] else "Not connected"
+                        _tool_lines.append(f"- **{_ti['name']}** — {_ti['description']} ({_status})")
+                    _tool_lines.append("\n*Connect APIs in Settings to unlock real-time data.*")
+                    return JSONResponse({
+                        "response": "\n".join(_tool_lines),
+                        "agent": "nexus", "model": "system",
+                        "provider": "slash-command", "multi_agent": False,
+                    })
+                except Exception as _te:
+                    logger.error(f"/tools failed: {_te}")
+
+            # /schema — generate JSON-LD markup
+            if _slash_cmd == "schema":
+                try:
+                    from mcp_server import call_mcp_tool as _mcp_call
+                    _schema_type = "organization"
+                    _remaining = _slash_text.lower()
+                    if "faq" in _remaining:
+                        _schema_type = "faq"
+                    elif "article" in _remaining:
+                        _schema_type = "article"
+                    elif "howto" in _remaining or "how to" in _remaining:
+                        _schema_type = "howto"
+                    _s_brand = "Your Brand"
+                    _s_url = ""
+                    _s_industry = "Technology"
+                    try:
+                        from brand_dna import get_brand_dna as _sbdna2
+                        _bctx = _sbdna2().get_brand_context() or ""
+                        import re as _re2
+                        _nm = _re2.search(r'Brand[:\s]+([^\n,]+)', _bctx)
+                        if _nm:
+                            _s_brand = _nm.group(1).strip()
+                        _um = _re2.search(r'https?://[^\s,\n]+', _bctx)
+                        if _um:
+                            _s_url = _um.group(0)
+                    except Exception:
+                        pass
+                    _schema_result = _mcp_call("generate_schema",
+                                               schema_type=_schema_type,
+                                               brand_name=_s_brand,
+                                               url=_s_url,
+                                               industry=_s_industry)
+                    _schema_json = _schema_result.get("schema", "{}")
+                    return JSONResponse({
+                        "response": (
+                            f"**{_schema_type.title()} Schema (JSON-LD)**\n\n"
+                            f"Add this to your page's `<head>` tag:\n\n"
+                            f"```json\n{_schema_json}\n```\n\n"
+                            "This helps AI search engines understand your content and increases citation probability."
+                        ),
+                        "agent": "aeo", "model": "system",
+                        "provider": "slash-command", "multi_agent": False,
+                    })
+                except Exception as _se:
+                    logger.error(f"/schema failed: {_se}")
+
             if _slash_cmd in _VALID_SLASH_AGENTS:
                 _slash_agent = _VALID_SLASH_AGENTS[_slash_cmd]
                 _slash_prompt = _slash_text or user_msg

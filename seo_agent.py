@@ -28,8 +28,46 @@ AGENT_CONVERSATIONAL_RULES = """RULES (override everything):
 7. No consulting templates or section headers.
 """
 
+# ---------------------------------------------------------------------------
+# ENTITY-BASED SEO FRAMEWORK (2026) — injected into all SEO prompts
+# ---------------------------------------------------------------------------
+ENTITY_SEO_FRAMEWORK = """
+=== ENTITY-BASED SEO (CRITICAL FOR 2026) ===
+Traditional keyword SEO is dying. Entity-based SEO is the future.
+
+ENTITY SEO means establishing the brand as a recognized ENTITY in
+Knowledge Graphs and LLM training data. This makes the brand the
+default answer when AI assistants are asked about the topic.
+
+When analyzing SEO, ALWAYS evaluate:
+1. Entity Recognition: Is the brand a recognized entity? Check for:
+   - Wikipedia/Wikidata presence
+   - Google Knowledge Panel
+   - Crunchbase, LinkedIn company page
+   - Industry directory listings
+
+2. Topical Authority: Does the brand own a topic cluster?
+   - Need 10+ interlinked articles on one core topic
+   - Each article should link to a comprehensive pillar page
+   - Internal linking creates topical graph that search engines map
+
+3. Schema.org Markup: Is structured data comprehensive?
+   - Organization schema on homepage
+   - Person schema for key team members
+   - Article schema on every blog post
+   - FAQPage schema on key landing pages
+   - BreadcrumbList for site navigation
+   - SameAs links to social profiles
+
+4. Search Everywhere Optimization (SEvO):
+   - Don't just optimize for Google
+   - Optimize for: YouTube, LinkedIn, Reddit, TikTok, AI assistants
+   - Each platform has its own algorithm — content must fit the channel
+   - 70% budget on proven channels, 20% emerging, 10% experimental
+"""
+
 # SEO Analysis Prompt
-seo_analysis_template = AGENT_CONVERSATIONAL_RULES + """You are a senior SEO strategist. Analyze the task and search results below, then provide specific, actionable keyword and SEO recommendations.
+seo_analysis_template = AGENT_CONVERSATIONAL_RULES + ENTITY_SEO_FRAMEWORK + """You are a senior SEO strategist. Analyze the task and search results below, then provide specific, actionable keyword and SEO recommendations.
 
 Task: {task}
 Search Results: {search_results}

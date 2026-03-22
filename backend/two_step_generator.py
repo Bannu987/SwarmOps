@@ -196,6 +196,21 @@ AGENT_SCHEMA_TEMPLATES = {
         "next_steps": ["suggested follow-up 1"],
     },
 
+    "aeo": {
+        "summary": "AEO readiness assessment overview",
+        "aeo_score": 65,
+        "citation_probability": "medium",
+        "improvements": [
+            {"action": "specific improvement", "impact": "expected effect", "priority": "high"}
+        ],
+        "json_ld_schema": "FAQPage JSON-LD code here",
+        "rewritten_intro": "Inverted pyramid intro paragraph",
+        "faq_pairs": [
+            {"question": "What is X?", "answer": "X is..."}
+        ],
+        "next_steps": ["suggested follow-up"],
+    },
+
     "generic": {
         "summary": "2-3 sentence overview",
         "recommendations": [

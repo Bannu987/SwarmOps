@@ -36,7 +36,7 @@ WORKFLOWS = {
             "seo": "Identify top keywords and content opportunities based on search volume and competition.",
             "content": "Suggest specific blog post titles, formats, and angles that would resonate with this audience.",
         },
-        "synthesis_instruction": "Combine competitive research, keyword data, and content ideas into ONE unified content strategy. Give 5 specific article recommendations with titles and target keywords.",
+        "synthesis_instruction": "Combine competitive research, keyword data, and content ideas into ONE unified content strategy. For each recommended article: include title, target keyword, and a 40-word inverted pyramid intro (answer first, context second). Suggest 3 FAQ pairs that should be added as JSON-LD schema. Prioritize by impact. Give 5 specific article recommendations.",
     },
     "lead_generation": {
         "agents": ["cro", "ppc", "content", "crm"],
@@ -104,6 +104,16 @@ WORKFLOWS = {
         },
         "synthesis_instruction": "Create a complete paid campaign plan: ad strategy, landing page recommendations, budget breakdown, and expected performance.",
     },
+    "aeo_optimization": {
+        "agents": ["aeo", "seo", "content"],
+        "parallel": True,
+        "sub_prompts": {
+            "aeo": "Analyze the content/website for AI search optimization. Score AEO readiness 0-100. Identify top 3 improvements. Generate FAQ schema pairs. Keep under 200 words.",
+            "seo": "Identify the top entity-building opportunities. What topics need topical authority clusters? What Schema.org markup is missing? Keep under 150 words.",
+            "content": "Suggest 3 content pieces optimized for AI citation. Each must use inverted pyramid structure, include citable stats, and target a specific AI query. Keep under 150 words.",
+        },
+        "synthesis_instruction": "Create an AEO optimization plan: 1) AEO readiness score, 2) Top 5 changes to get cited by AI search engines, 3) Content to create, 4) Schema markup to add. Include the actual JSON-LD code for FAQ schema. Keep under 500 words.",
+    },
 }
 
 
@@ -122,6 +132,7 @@ _SCHEMA_HINTS = {
     "brand": "Format: Evaluate positioning clarity, differentiation, and voice consistency. Give 3 specific improvements.",
     "research": "Format: Identify 3-5 competitors. Compare strengths/weaknesses. Identify 3 market opportunities.",
     "web_ux": "Format: Evaluate load speed, mobile UX, navigation. Identify 3 friction points with fixes.",
+    "aeo": "Format: AEO readiness score (0-100), citation probability, top 3 improvements, inverted pyramid intro rewrite, 5 FAQ pairs for JSON-LD schema.",
 }
 
 
@@ -134,6 +145,10 @@ def _get_concise_schema_hint(agent_id: str) -> str:
 # ============================================================
 
 INTENT_WORKFLOW_MAP = [
+    (["aeo", "answer engine", "ai search", "ai overviews", "get cited",
+      "optimize for ai", "optimize for chatgpt", "perplexity optimization",
+      "ai citation", "zero click", "ai answer", "generative engine",
+      "geo optimization"], "aeo_optimization"),
     (["audit", "grade my", "review my site", "analyze my site", "full analysis", "website analysis", "site audit"], "marketing_audit"),
     (["3 month plan", "three month plan", "growth plan", "marketing plan", "full strategy", "complete strategy", "quarterly plan", "budget plan"], "growth_plan"),
     (["generate leads", "get leads", "more leads", "lead generation", "lead gen", "capture leads", "get more leads"], "lead_generation"),

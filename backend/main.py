@@ -37,6 +37,10 @@ from sanitize import sanitize_response
 from workflow_engine import match_workflow, execute_workflow
 from difficulty_scorer import score_difficulty, get_tier_number
 from quality_gate import get_quality_gate
+from context_awareness import (
+    classify_message_type, get_meta_response,
+    build_agent_context_header, get_audit_url_redirect,
+)
 import logging
 logger = logging.getLogger(__name__)
 
@@ -1142,6 +1146,7 @@ async def _onboarding_extract_brand(url: str, mem) -> dict:
 
 def _workflow_call_agent(agent_id: str, full_prompt: str) -> str:
     """Dispatch to a single agent for workflow execution. Returns response text."""
+    full_prompt = build_agent_context_header() + "\n" + full_prompt
     from model_router import call_model_sync
     try:
         if agent_id == "seo":
@@ -1704,6 +1709,36 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         _difficulty_score, _difficulty_category = score_difficulty(user_msg)
         _model_tier = get_tier_number(_difficulty_score)
         logger.info(f"Query difficulty: {_difficulty_score}/10 ({_difficulty_category}) → tier {_model_tier}")
+
+        # ================================================================
+        # STEP E-PRE: CONTEXT AWARENESS — intercept meta-questions + audit guard
+        # ================================================================
+        _ctx_msg_type = classify_message_type(user_msg)
+
+        # Meta-questions: "how did you do that", "where did those numbers come from"
+        if _ctx_msg_type == "meta_question":
+            _meta_resp = get_meta_response(user_msg)
+            if _meta_resp:
+                return JSONResponse({
+                    "success": True, "result": _meta_resp,
+                    "agent": "nexus", "model": "context-aware",
+                    "provider": "context-aware", "multi_agent": False,
+                })
+
+        # Audit without URL — don't run 6 agents on empty data
+        if _ctx_msg_type == "requires_url_for_audit" or (
+            action == "route_audit" and not action_data.get("url")
+        ):
+            _stored_url = ctx.get("website_url", "") if ctx else ""
+            if not _stored_url:
+                return JSONResponse({
+                    "success": True, "result": get_audit_url_redirect(),
+                    "agent": "nexus", "model": "context-aware",
+                    "provider": "context-aware", "multi_agent": False,
+                })
+            # Stored URL exists — append it so workflow engine picks it up
+            user_msg = f"{user_msg} {_stored_url}"
+            msg = f"{msg} {_stored_url}"
 
         # ================================================================
         # STEP E: WORKFLOW ENGINE — runs BEFORE legacy pipeline detection

@@ -46,10 +46,14 @@ const QUICK_ACTIONS = [
 ];
 
 const DATA_SOURCES = [
-  { id: 'ga4',     name: 'Google Analytics 4',    icon: '◉', desc: 'Traffic, conversions, user behavior',  status: 'disconnected', freshness: null },
-  { id: 'gsc',     name: 'Search Console',         icon: '◎', desc: 'Keyword rankings, impressions, CTR',  status: 'disconnected', freshness: null },
-  { id: 'hubspot', name: 'HubSpot CRM',            icon: '◫', desc: 'Contacts, leads, deal pipeline',      status: 'disconnected', freshness: null },
-  { id: 'gads',    name: 'Google Ads',             icon: '◈', desc: 'Campaign spend, ROAS, conversions',   status: 'disconnected', freshness: null },
+  { id: 'ga4',     name: 'Google Analytics 4',    icon: '◉', desc: 'Traffic, conversions, user behavior',  status: 'disconnected', freshness: null,
+    envVars: ['GA4_PROPERTY_ID', 'GOOGLE_APPLICATION_CREDENTIALS'] },
+  { id: 'gsc',     name: 'Search Console',         icon: '◎', desc: 'Keyword rankings, impressions, CTR',  status: 'disconnected', freshness: null,
+    envVars: ['GSC_SITE_URL', 'GOOGLE_APPLICATION_CREDENTIALS'] },
+  { id: 'hubspot', name: 'HubSpot CRM',            icon: '◫', desc: 'Contacts, leads, deal pipeline',      status: 'disconnected', freshness: null,
+    envVars: ['HUBSPOT_API_KEY'] },
+  { id: 'gads',    name: 'Google Ads',             icon: '◈', desc: 'Campaign spend, ROAS, conversions',   status: 'disconnected', freshness: null,
+    envVars: ['GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_CUSTOMER_ID'] },
 ];
 
 const MEMORY_LAYERS = [
@@ -293,13 +297,15 @@ function CommandCenter({ messages, loading, input, setInput, sendMessage, onAppr
   };
 
   const handleKey = (e) => {
-    if (showSlash) {
-      if (e.key === 'ArrowDown')  { e.preventDefault(); setSlashIdx(p => Math.min(p + 1, filteredCmds.length - 1)); return; }
-      if (e.key === 'ArrowUp')    { e.preventDefault(); setSlashIdx(p => Math.max(p - 1, 0)); return; }
-      if ((e.key === 'Tab' || e.key === 'Enter') && filteredCmds.length > 0) { e.preventDefault(); pickSlash(filteredCmds[slashIdx]); return; }
-      if (e.key === 'Escape')     { setShowSlash(false); return; }
+    // Popup is only "active" when visible AND has results — not just because input starts with /
+    const popupActive = showSlash && filteredCmds.length > 0;
+    if (popupActive) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIdx(p => Math.min(p + 1, filteredCmds.length - 1)); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setSlashIdx(p => Math.max(p - 1, 0)); return; }
+      if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); pickSlash(filteredCmds[slashIdx]); return; }
+      if (e.key === 'Escape')    { setShowSlash(false); return; }
     }
-    if (e.key === 'Enter' && !e.shiftKey && !showSlash) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Enter' && !e.shiftKey && !popupActive) { e.preventDefault(); sendMessage(); }
   };
 
   return (
@@ -631,8 +637,39 @@ function MemoryView() {
 // DATA SOURCES VIEW
 // ─────────────────────────────────────────────────────────────
 function DataSourcesView() {
+  const [modal, setModal] = useState(null); // { name, envVars }
+
+  const showConnect = (src) => setModal({ name: src.name, envVars: src.envVars });
+
   return (
     <div className="view-panel">
+      {/* Connect modal */}
+      {modal && (
+        <div className="ds-modal-overlay" onClick={() => setModal(null)}>
+          <div className="ds-modal" onClick={e => e.stopPropagation()}>
+            <div className="ds-modal-header">
+              <span className="ds-modal-title">Connect {modal.name}</span>
+              <button className="ctx-close" onClick={() => setModal(null)}>✕</button>
+            </div>
+            <p className="ds-modal-body">
+              Add the following environment variables in your <strong>Render dashboard</strong> under <em>Environment → Environment Variables</em>:
+            </p>
+            <div className="ds-modal-vars">
+              {modal.envVars.map(v => (
+                <div key={v} className="ds-modal-var">
+                  <span className="ds-modal-var-name">{v}</span>
+                  <span className="ds-modal-var-hint">required</span>
+                </div>
+              ))}
+            </div>
+            <p className="ds-modal-footer">
+              After adding variables, redeploy your backend. SwarmOps will detect the connection automatically.
+            </p>
+            <button className="ds-modal-close" onClick={() => setModal(null)}>Got it</button>
+          </div>
+        </div>
+      )}
+
       <div className="view-header">
         <h2 className="view-title">Data Sources</h2>
         <p className="view-sub">Connect your marketing stack for real-data analysis</p>
@@ -649,7 +686,10 @@ function DataSourcesView() {
             <div className="ds-name">{src.name}</div>
             <div className="ds-desc">{src.desc}</div>
             {src.freshness && <div className="ds-freshness">Updated {src.freshness}</div>}
-            <button className={`ds-btn ${src.status === 'connected' ? 'ds-btn-manage' : 'ds-btn-connect'}`}>
+            <button
+              className={`ds-btn ${src.status === 'connected' ? 'ds-btn-manage' : 'ds-btn-connect'}`}
+              onClick={() => src.status !== 'connected' && showConnect(src)}
+            >
               {src.status === 'connected' ? 'Manage' : 'Connect'}
             </button>
           </div>

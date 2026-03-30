@@ -3,7 +3,7 @@ SwarmOps - FastAPI Backend
 Full Nexus orchestrator + 10 agents + real integrations
 """
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File as FastAPIFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -1146,7 +1146,16 @@ async def _onboarding_extract_brand(url: str, mem) -> dict:
 
 def _workflow_call_agent(agent_id: str, full_prompt: str) -> str:
     """Dispatch to a single agent for workflow execution. Returns response text."""
-    full_prompt = build_agent_context_header() + "\n" + full_prompt
+    header = build_agent_context_header()
+    # Inject uploaded document content if any files have been uploaded
+    try:
+        from file_processor import get_file_processor
+        file_ctx = get_file_processor().get_context_block()
+        if file_ctx:
+            header = header + "\n\n" + file_ctx
+    except Exception:
+        pass
+    full_prompt = header + "\n" + full_prompt
     from model_router import call_model_sync
     try:
         if agent_id == "seo":
@@ -2995,6 +3004,101 @@ async def kb_search(q: str = "", limit: int = 5):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# USER CREDENTIALS ENDPOINTS
+# ============================================================================
+
+@app.post("/api/credentials/connect")
+async def credentials_connect(request: Request):
+    """Connect a data source by saving user-supplied credentials."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    service     = body.get("service", "")
+    credentials = body.get("credentials", {})
+
+    from user_credentials import get_credential_manager, VALID_SERVICES
+    if service not in VALID_SERVICES:
+        return JSONResponse({"success": False, "error": f"Invalid service. Valid: {VALID_SERVICES}"})
+    if not credentials or not any(v for v in credentials.values() if v):
+        return JSONResponse({"success": False, "error": "No credentials provided"})
+
+    mgr     = get_credential_manager()
+    success = mgr.save(service, credentials)
+    return JSONResponse({"success": success, "service": service,
+                         "status": "connected" if success else "error"})
+
+
+@app.post("/api/credentials/disconnect")
+async def credentials_disconnect(request: Request):
+    """Remove stored credentials for a service."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    service = body.get("service", "")
+    from user_credentials import get_credential_manager
+    mgr     = get_credential_manager()
+    success = mgr.disconnect(service)
+    return JSONResponse({"success": success, "service": service, "status": "disconnected"})
+
+
+@app.get("/api/credentials/status")
+async def credentials_status():
+    """Return connection status of all data sources."""
+    from user_credentials import get_credential_manager
+    return JSONResponse(get_credential_manager().all_status())
+
+
+# ============================================================================
+# FILE UPLOAD ENDPOINTS
+# ============================================================================
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = FastAPIFile(...)):
+    """Upload a document (PDF/CSV/DOCX/XLSX/TXT/JSON/image) for agent analysis."""
+    from file_processor import get_file_processor
+    processor = get_file_processor()
+    result    = await processor.process_upload(file)
+
+    if not result.get("success"):
+        return JSONResponse({"success": False, "error": result.get("error", "Upload failed")})
+
+    return JSONResponse({
+        "success":    True,
+        "filename":   result["filename"],
+        "file_type":  result["file_type"],
+        "word_count": result["word_count"],
+        "summary":    result["summary"],
+        "metadata":   result.get("metadata", {}),
+        "message":    (
+            f"'{result['filename']}' uploaded ({result['word_count']:,} words). "
+            "I'll use this data in my recommendations — ask me anything about it."
+        ),
+    })
+
+
+@app.get("/api/uploads")
+async def list_uploads():
+    """List all uploaded files for this session."""
+    from file_processor import get_file_processor
+    processor = get_file_processor()
+    files = [
+        {
+            "filename":    f["filename"],
+            "file_type":   f["file_type"],
+            "word_count":  f["word_count"],
+            "summary":     f["summary"],
+            "uploaded_at": f["uploaded_at"],
+        }
+        for f in processor.uploaded_files if f.get("success")
+    ]
+    return JSONResponse({"files": files, "total": processor.count})
 
 
 # ============================================================================

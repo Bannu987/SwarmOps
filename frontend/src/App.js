@@ -258,7 +258,7 @@ function SlashPopup({ filter, activeIdx, onPick }) {
 // ─────────────────────────────────────────────────────────────
 // COMMAND CENTER
 // ─────────────────────────────────────────────────────────────
-function CommandCenter({ messages, loading, input, setInput, sendMessage, onApprove, selectedMsg, setSelectedMsg }) {
+function CommandCenter({ messages, setMessages, loading, input, setInput, sendMessage, onApprove, selectedMsg, setSelectedMsg }) {
   const [showSlash, setShowSlash]   = useState(false);
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIdx, setSlashIdx]     = useState(0);
@@ -372,6 +372,42 @@ function CommandCenter({ messages, loading, input, setInput, sendMessage, onAppr
             rows={1}
             disabled={loading}
           />
+          {/* File upload */}
+          <label className="upload-btn" title="Upload document (PDF, CSV, DOCX, XLSX, TXT, JSON)">
+            <span>📎</span>
+            <input
+              type="file"
+              accept=".pdf,.csv,.txt,.docx,.xlsx,.json,.png,.jpg,.jpeg"
+              style={{ display: 'none' }}
+              disabled={loading}
+              onChange={async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                e.target.value = '';
+                // Show uploading message
+                setMessages(prev => [...prev, {
+                  role: 'user', content: `📎 Uploading: ${file.name}`, timestamp: Date.now(),
+                }]);
+                try {
+                  const res  = await fetch(`${API_URL}/api/upload`, { method: 'POST', body: formData });
+                  const data = await res.json();
+                  setMessages(prev => [...prev, {
+                    role:      'assistant',
+                    content:   data.success
+                      ? `**${data.filename}** uploaded (${data.word_count?.toLocaleString()} words).\n\n${data.summary}\n\nAsk me anything about this file.`
+                      : `Upload failed: ${data.error}`,
+                    timestamp: Date.now(),
+                  }]);
+                } catch (err) {
+                  setMessages(prev => [...prev, {
+                    role: 'assistant', content: `Upload error: ${err.message}`, timestamp: Date.now(),
+                  }]);
+                }
+              }}
+            />
+          </label>
           <button
             className={`cmd-send${(!input.trim() || loading) ? ' cmd-send-disabled' : ''}`}
             onClick={sendMessage}
@@ -382,6 +418,7 @@ function CommandCenter({ messages, loading, input, setInput, sendMessage, onAppr
           <span><kbd>⏎</kbd> send</span>
           <span><kbd>⇧⏎</kbd> new line</span>
           <span><kbd>/</kbd> commands</span>
+          <span><kbd>📎</kbd> upload file</span>
         </div>
       </div>
     </div>
@@ -634,66 +671,180 @@ function MemoryView() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// CREDENTIAL FIELDS CONFIG
+// ─────────────────────────────────────────────────────────────
+const CRED_FIELDS = {
+  ga4: [
+    { key: 'property_id',      label: 'Property ID',             placeholder: '123456789',          type: 'text'     },
+    { key: 'credentials_json', label: 'Service Account JSON',    placeholder: 'Paste the full JSON key file contents…', type: 'textarea' },
+  ],
+  gsc: [
+    { key: 'site_url',         label: 'Site URL',                placeholder: 'https://yoursite.com', type: 'text'    },
+    { key: 'credentials_json', label: 'Service Account JSON',    placeholder: 'Paste the full JSON key file contents…', type: 'textarea' },
+  ],
+  hubspot: [
+    { key: 'api_key',          label: 'Private App Token',       placeholder: 'pat-na1-xxxxxxxx…',   type: 'text'     },
+  ],
+  google_ads: [
+    { key: 'developer_token',  label: 'Developer Token',         placeholder: 'ABcDEFgHiJkLmN',      type: 'text'     },
+    { key: 'customer_id',      label: 'Customer ID',             placeholder: '123-456-7890',        type: 'text'     },
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────
 // DATA SOURCES VIEW
 // ─────────────────────────────────────────────────────────────
 function DataSourcesView() {
-  const [modal, setModal] = useState(null); // { name, envVars }
+  const [statuses,     setStatuses]     = useState({});   // { ga4: {connected,source}, … }
+  const [connectModal, setConnectModal] = useState(null); // source id being connected
+  const [formValues,   setFormValues]   = useState({});
+  const [saving,       setSaving]       = useState(false);
+  const [saveMsg,      setSaveMsg]      = useState('');
 
-  const showConnect = (src) => setModal({ name: src.name, envVars: src.envVars });
+  // Fetch live status from backend on mount
+  useEffect(() => {
+    fetch(`${API_URL}/api/credentials/status`)
+      .then(r => r.json())
+      .then(data => setStatuses(data))
+      .catch(() => {});
+  }, []);
+
+  const openModal = (src) => {
+    setConnectModal(src.id);
+    setFormValues({});
+    setSaveMsg('');
+  };
+  const closeModal = () => { setConnectModal(null); setSaveMsg(''); };
+
+  const handleSave = async () => {
+    if (!connectModal) return;
+    setSaving(true);
+    setSaveMsg('');
+    try {
+      const res = await fetch(`${API_URL}/api/credentials/connect`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ service: connectModal, credentials: formValues }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatuses(prev => ({ ...prev, [connectModal]: { connected: true, source: 'database' } }));
+        setSaveMsg('Connected successfully!');
+        setTimeout(closeModal, 1000);
+      } else {
+        setSaveMsg(data.error || 'Failed to save credentials.');
+      }
+    } catch (e) {
+      setSaveMsg('Network error — is the backend running?');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDisconnect = async (id) => {
+    try {
+      await fetch(`${API_URL}/api/credentials/disconnect`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ service: id }),
+      });
+      setStatuses(prev => ({ ...prev, [id]: { connected: false, source: 'none' } }));
+    } catch (e) {}
+  };
+
+  const activeSource = DATA_SOURCES.find(s => s.id === connectModal);
 
   return (
     <div className="view-panel">
-      {/* Connect modal */}
-      {modal && (
-        <div className="ds-modal-overlay" onClick={() => setModal(null)}>
+      {/* Credential form modal */}
+      {connectModal && activeSource && (
+        <div className="ds-modal-overlay" onClick={closeModal}>
           <div className="ds-modal" onClick={e => e.stopPropagation()}>
             <div className="ds-modal-header">
-              <span className="ds-modal-title">Connect {modal.name}</span>
-              <button className="ctx-close" onClick={() => setModal(null)}>✕</button>
+              <span className="ds-modal-title">Connect {activeSource.name}</span>
+              <button className="ctx-close" onClick={closeModal}>✕</button>
             </div>
             <p className="ds-modal-body">
-              Add the following environment variables in your <strong>Render dashboard</strong> under <em>Environment → Environment Variables</em>:
+              Enter your API credentials below. They are stored securely in SwarmOps' database.
             </p>
-            <div className="ds-modal-vars">
-              {modal.envVars.map(v => (
-                <div key={v} className="ds-modal-var">
-                  <span className="ds-modal-var-name">{v}</span>
-                  <span className="ds-modal-var-hint">required</span>
+            <div className="ds-form">
+              {(CRED_FIELDS[connectModal] || []).map(f => (
+                <div key={f.key} className="ds-form-field">
+                  <label className="ds-form-label">{f.label}</label>
+                  {f.type === 'textarea' ? (
+                    <textarea
+                      className="ds-form-textarea"
+                      placeholder={f.placeholder}
+                      value={formValues[f.key] || ''}
+                      onChange={e => setFormValues(v => ({ ...v, [f.key]: e.target.value }))}
+                      rows={4}
+                    />
+                  ) : (
+                    <input
+                      className="ds-form-input"
+                      type="text"
+                      placeholder={f.placeholder}
+                      value={formValues[f.key] || ''}
+                      onChange={e => setFormValues(v => ({ ...v, [f.key]: e.target.value }))}
+                    />
+                  )}
                 </div>
               ))}
             </div>
-            <p className="ds-modal-footer">
-              After adding variables, redeploy your backend. SwarmOps will detect the connection automatically.
-            </p>
-            <button className="ds-modal-close" onClick={() => setModal(null)}>Got it</button>
+            {saveMsg && (
+              <p className={`ds-save-msg ${saveMsg.includes('success') ? 'ds-save-ok' : 'ds-save-err'}`}>
+                {saveMsg}
+              </p>
+            )}
+            <div className="ds-modal-btns">
+              <button className="ds-modal-save" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving…' : 'Save & Connect'}
+              </button>
+              <button className="ds-modal-cancel" onClick={closeModal}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
       <div className="view-header">
         <h2 className="view-title">Data Sources</h2>
-        <p className="view-sub">Connect your marketing stack for real-data analysis</p>
+        <p className="view-sub">Connect your marketing stack for real-data insights</p>
       </div>
       <div className="ds-grid">
-        {DATA_SOURCES.map(src => (
-          <div key={src.id} className={`ds-card ds-${src.status}`}>
-            <div className="ds-top">
-              <span className="ds-icon">{src.icon}</span>
-              <span className={`ds-badge ds-badge-${src.status}`}>
-                {src.status === 'connected' ? '● Connected' : '○ Not connected'}
-              </span>
+        {DATA_SOURCES.map(src => {
+          const liveStatus = statuses[src.id];
+          const connected  = liveStatus ? liveStatus.connected : false;
+          const source     = liveStatus?.source || 'none';
+          return (
+            <div key={src.id} className={`ds-card ${connected ? 'ds-connected' : 'ds-disconnected'}`}>
+              <div className="ds-top">
+                <span className="ds-icon">{src.icon}</span>
+                <span className={`ds-badge ${connected ? 'ds-badge-connected' : 'ds-badge-disconnected'}`}>
+                  {connected ? '● Connected' : '○ Not connected'}
+                </span>
+              </div>
+              <div className="ds-name">{src.name}</div>
+              <div className="ds-desc">{src.desc}</div>
+              {connected && source === 'database' && (
+                <div className="ds-source-tag">credentials stored</div>
+              )}
+              {connected && source === 'env_var' && (
+                <div className="ds-source-tag ds-source-env">via env var</div>
+              )}
+              <div className="ds-card-actions">
+                {connected ? (
+                  <button className="ds-btn ds-btn-manage" onClick={() => handleDisconnect(src.id)}>
+                    Disconnect
+                  </button>
+                ) : (
+                  <button className="ds-btn ds-btn-connect" onClick={() => openModal(src)}>
+                    Connect
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="ds-name">{src.name}</div>
-            <div className="ds-desc">{src.desc}</div>
-            {src.freshness && <div className="ds-freshness">Updated {src.freshness}</div>}
-            <button
-              className={`ds-btn ${src.status === 'connected' ? 'ds-btn-manage' : 'ds-btn-connect'}`}
-              onClick={() => src.status !== 'connected' && showConnect(src)}
-            >
-              {src.status === 'connected' ? 'Manage' : 'Connect'}
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="ds-note">
         <span>⬡</span>
@@ -822,7 +973,7 @@ export default function App() {
       <main className="app-main">
         {view === 'chat' && (
           <CommandCenter
-            messages={messages} loading={loading}
+            messages={messages} setMessages={setMessages} loading={loading}
             input={input} setInput={setInput}
             sendMessage={sendMessage}
             onApprove={approveArtifact}

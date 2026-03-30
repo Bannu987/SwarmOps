@@ -17,6 +17,28 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+def _creds():
+    """Lazy-import credential manager (avoids circular import at module load)."""
+    try:
+        from user_credentials import get_credential_manager
+        return get_credential_manager()
+    except Exception:
+        return None
+
+
+def _is_connected(service: str) -> bool:
+    """Check if a service is connected via user creds or env vars."""
+    mgr = _creds()
+    if mgr:
+        return mgr.is_connected(service)
+    # Fallback: env vars only
+    _env = {
+        "ga4": "GA4_PROPERTY_ID", "gsc": "GSC_SITE_URL",
+        "hubspot": "HUBSPOT_API_KEY", "google_ads": "GOOGLE_ADS_DEVELOPER_TOKEN",
+    }
+    return bool(os.environ.get(_env.get(service, ""), ""))
+
+
 class MCPToolRegistry:
     """Registry of available MCP tools for SwarmOps agents."""
 
@@ -30,42 +52,42 @@ class MCPToolRegistry:
             "name": "GA4 Website Overview",
             "description": "Get website traffic overview: sessions, users, bounce rate, conversion rate",
             "requires": "GA4_PROPERTY_ID",
-            "available": bool(os.environ.get("GA4_PROPERTY_ID")),
+            "available": _is_connected("ga4"),
             "handler": self._ga4_overview,
         }
         self.tools["ga4_traffic_sources"] = {
             "name": "GA4 Traffic Sources",
             "description": "Breakdown of traffic by source/medium",
             "requires": "GA4_PROPERTY_ID",
-            "available": bool(os.environ.get("GA4_PROPERTY_ID")),
+            "available": _is_connected("ga4"),
             "handler": self._ga4_traffic_sources,
         }
         self.tools["ga4_top_pages"] = {
             "name": "GA4 Top Pages",
             "description": "Top performing pages by sessions and conversions",
             "requires": "GA4_PROPERTY_ID",
-            "available": bool(os.environ.get("GA4_PROPERTY_ID")),
+            "available": _is_connected("ga4"),
             "handler": self._ga4_top_pages,
         }
         self.tools["gsc_keywords"] = {
             "name": "GSC Top Keywords",
             "description": "Top keywords by clicks, impressions, CTR, position",
             "requires": "GSC_SITE_URL",
-            "available": bool(os.environ.get("GSC_SITE_URL")),
+            "available": _is_connected("gsc"),
             "handler": self._gsc_keywords,
         }
         self.tools["gsc_pages"] = {
             "name": "GSC Top Pages",
             "description": "Top pages in search results with performance data",
             "requires": "GSC_SITE_URL",
-            "available": bool(os.environ.get("GSC_SITE_URL")),
+            "available": _is_connected("gsc"),
             "handler": self._gsc_pages,
         }
         self.tools["hubspot_contacts"] = {
             "name": "HubSpot Contacts",
             "description": "Get contacts by lifecycle stage",
             "requires": "HUBSPOT_API_KEY",
-            "available": bool(os.environ.get("HUBSPOT_API_KEY")),
+            "available": _is_connected("hubspot"),
             "handler": self._hubspot_contacts,
         }
         self.tools["generate_schema"] = {

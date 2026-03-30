@@ -625,3 +625,58 @@ input, textarea { font-family: var(--font); font-size: 13.5px; color: var(--t0);
 }
 .ds-modal-close:hover { background: var(--acc-s); border-color: var(--acc); }
 
+/* Credential form inside modal */
+.ds-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.ds-form-field { display: flex; flex-direction: column; gap: 4px; }
+.ds-form-label { font-size: 11px; font-weight: 700; color: var(--t2); text-transform: uppercase; letter-spacing: 0.08em; }
+.ds-form-input,
+.ds-form-textarea {
+  background: var(--bg); border: 1px solid var(--b2); border-radius: var(--r4);
+  padding: 8px 10px; font-size: 13px; color: var(--t0);
+  transition: border-color var(--tr), box-shadow var(--tr);
+  font-family: var(--font);
+}
+.ds-form-textarea { resize: vertical; min-height: 80px; font-family: var(--mono); font-size: 11.5px; }
+.ds-form-input:focus,
+.ds-form-textarea:focus { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc-s); outline: none; }
+.ds-form-input::placeholder,
+.ds-form-textarea::placeholder { color: var(--t3); }
+
+.ds-save-msg { font-size: 12.5px; margin-bottom: 10px; padding: 6px 10px; border-radius: var(--r3); }
+.ds-save-ok  { color: var(--green); background: var(--green-s); }
+.ds-save-err { color: var(--red); background: var(--red-s); }
+
+.ds-modal-btns { display: flex; gap: 8px; }
+.ds-modal-save {
+  flex: 1; padding: 8px; border-radius: var(--r4);
+  background: var(--acc); border: 1px solid var(--acc);
+  color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all var(--tr);
+}
+.ds-modal-save:hover:not(:disabled) { background: var(--acc-2); }
+.ds-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.ds-modal-cancel {
+  padding: 8px 14px; border-radius: var(--r4);
+  background: var(--s3); border: 1px solid var(--b1);
+  color: var(--t1); font-size: 13px; cursor: pointer;
+  transition: all var(--tr);
+}
+.ds-modal-cancel:hover { background: var(--s4); color: var(--t0); }
+
+/* Data source card connected state */
+.ds-connected { border-color: rgba(34,197,94,0.2); }
+.ds-connected:hover { border-color: rgba(34,197,94,0.35); }
+.ds-source-tag { font-size: 10.5px; color: var(--green); background: var(--green-s); padding: 2px 7px; border-radius: 99px; width: fit-content; }
+.ds-source-env { color: var(--cyan); background: rgba(34,211,238,0.1); }
+.ds-card-actions { margin-top: 4px; }
+
+/* File upload button */
+.upload-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--r4);
+  cursor: pointer; font-size: 16px; opacity: 0.45;
+  transition: opacity var(--tr), background var(--tr);
+  flex-shrink: 0;
+}
+.upload-btn:hover { opacity: 1; background: var(--s3); }
+

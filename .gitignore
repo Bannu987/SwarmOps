@@ -32,9 +32,15 @@ memory.json
 enhanced_memory.json
 test_memory_report.json
 marketingos.db
+marketingos.db-shm
+marketingos.db-wal
+test_creds.db
 test_output.json
 NUL
 backend/memory.json
+
+# Uploaded files
+uploads/
 
 # Logs
 *.log

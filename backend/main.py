@@ -1322,6 +1322,7 @@ def _get_conversation_context() -> str:
 class ChatRequest(BaseModel):
     message: str
     agent: str = "nexus"
+    conversation_id: Optional[str] = None
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest, skip_review: bool = Query(False)):
@@ -2323,6 +2324,16 @@ async def chat(request: ChatRequest, skip_review: bool = Query(False)):
         if quality is not None:
             response["quality"] = quality
 
+        # Optional: persist to Supabase if conversation_id provided
+        if request.conversation_id:
+            try:
+                from supabase_client import persist_message, HAS_SUPABASE
+                if HAS_SUPABASE:
+                    persist_message(request.conversation_id, "user", user_msg, agent)
+                    persist_message(request.conversation_id, "assistant", final_text, agent)
+            except Exception:
+                pass  # non-fatal — SQLite memory already saved
+
         return response
 
     except Exception as e:
@@ -3099,6 +3110,86 @@ async def list_uploads():
         for f in processor.uploaded_files if f.get("success")
     ]
     return JSONResponse({"files": files, "total": processor.count})
+
+
+# ============================================================================
+# AUTH ENDPOINTS (Supabase — graceful no-op if not configured)
+# ============================================================================
+
+class AuthSignupRequest(BaseModel):
+    email: str
+    password: str
+
+class AuthLoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.get("/api/auth/status")
+async def auth_status():
+    """Returns whether Supabase auth is configured."""
+    try:
+        from supabase_client import HAS_SUPABASE
+        return JSONResponse({"configured": HAS_SUPABASE, "provider": "supabase" if HAS_SUPABASE else "none"})
+    except Exception:
+        return JSONResponse({"configured": False, "provider": "none"})
+
+@app.post("/api/auth/signup")
+async def auth_signup(request: AuthSignupRequest):
+    """Create a new Supabase user account."""
+    try:
+        from supabase_client import sign_up
+        result = sign_up(request.email, request.password)
+        if "error" in result:
+            return JSONResponse({"success": False, "error": result["error"]}, status_code=400)
+        return JSONResponse({"success": True, **result})
+    except Exception as e:
+        logger.error(f"[auth] signup error: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+@app.post("/api/auth/login")
+async def auth_login(request: AuthLoginRequest):
+    """Sign in with email + password."""
+    try:
+        from supabase_client import sign_in
+        result = sign_in(request.email, request.password)
+        if "error" in result:
+            return JSONResponse({"success": False, "error": result["error"]}, status_code=401)
+        return JSONResponse({"success": True, **result})
+    except Exception as e:
+        logger.error(f"[auth] login error: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+@app.post("/api/auth/logout")
+async def auth_logout(req: Request):
+    """Invalidate a session token."""
+    try:
+        from supabase_client import sign_out
+        body = await req.json()
+        access_token = body.get("access_token", "")
+        result = sign_out(access_token)
+        if "error" in result:
+            return JSONResponse({"success": False, "error": result["error"]}, status_code=400)
+        return JSONResponse({"success": True})
+    except Exception as e:
+        logger.error(f"[auth] logout error: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+@app.get("/api/auth/me")
+async def auth_me(req: Request):
+    """Validate token and return user info."""
+    try:
+        from supabase_client import get_user
+        auth_header = req.headers.get("Authorization", "")
+        access_token = auth_header.replace("Bearer ", "").strip()
+        if not access_token:
+            return JSONResponse({"authenticated": False, "user": None}, status_code=401)
+        user = get_user(access_token)
+        if user:
+            return JSONResponse({"authenticated": True, "user": user})
+        return JSONResponse({"authenticated": False, "user": None}, status_code=401)
+    except Exception as e:
+        logger.error(f"[auth] /me error: {e}")
+        return JSONResponse({"authenticated": False, "user": None}, status_code=500)
 
 
 # ============================================================================

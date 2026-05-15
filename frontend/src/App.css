@@ -680,3 +680,34 @@ input, textarea { font-family: var(--font); font-size: 13.5px; color: var(--t0);
 }
 .upload-btn:hover { opacity: 1; background: var(--s3); }
 
+
+/* Sidebar user menu */
+.sb-user-menu {
+  margin-top: auto;
+  padding: 10px 10px 6px;
+  border-top: 1px solid var(--b1);
+}
+.sb-user-email {
+  font-size: 11px;
+  color: var(--t2);
+  padding: 4px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-signout {
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--t2);
+  background: transparent;
+  border: none;
+  border-radius: var(--r3);
+  cursor: pointer;
+  transition: background var(--tr), color var(--tr);
+}
+.sb-signout:hover {
+  background: var(--s3);
+  color: var(--t0);
+}

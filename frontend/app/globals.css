@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 91%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 91%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 91%;
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 13%;
+    --secondary-foreground: 0 0% 91%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 239 84% 67%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 12%;
+    --input: 0 0% 10%;
+    --ring: 239 84% 67%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+/* Markdown rendering */
+.prose-swarm {
+  color: hsl(var(--foreground));
+  line-height: 1.7;
+}
+.prose-swarm h2 { @apply text-lg font-semibold mt-4 mb-2 text-foreground; }
+.prose-swarm h3 { @apply text-base font-semibold mt-3 mb-1.5 text-foreground; }
+.prose-swarm p { @apply mb-3; }
+.prose-swarm ul { @apply list-disc list-outside ml-5 mb-3 space-y-1; }
+.prose-swarm ol { @apply list-decimal list-outside ml-5 mb-3 space-y-1; }
+.prose-swarm li { @apply text-sm; }
+.prose-swarm strong { @apply font-semibold text-foreground; }
+.prose-swarm code { @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono; }
+.prose-swarm pre { @apply bg-muted border border-border rounded-lg p-3 my-3 overflow-x-auto; }
+.prose-swarm pre code { @apply bg-transparent p-0 text-sm; }
+.prose-swarm blockquote { @apply border-l-2 border-primary pl-3 italic text-muted-foreground my-3; }

@@ -1,55 +1,38 @@
-# Dependencies
-node_modules/
-venv/
+# Python
 __pycache__/
-*.pyc
-*.pyo
-
-# Environment files
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
 .env
-backend/.env
-*.env.local
-google_service_account.json
+.env.local
+.env.*.local
 
-# Build outputs
-frontend/build/
+# Node
+node_modules/
+.next/
+out/
+build/
 dist/
-*.egg-info/
+*.log
+npm-debug.log*
 
 # IDE
 .vscode/
 .idea/
 *.swp
-*.swo
-
-# OS files
 .DS_Store
-Thumbs.db
 
-# Runtime generated
-*.json.bak
-memory.json
-enhanced_memory.json
-test_memory_report.json
-marketingos.db
-marketingos.db-shm
-marketingos.db-wal
-test_creds.db
-test_output.json
-NUL
-backend/memory.json
+# Vercel
+.vercel
 
-# Uploaded files
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Uploads
 uploads/
-
-# Logs
-*.log
-npm-debug.log*
-
-# Exports (generated files)
-SwarmOps_Export_*
-
-# Test coverage
-coverage/
-.coverage
-htmlcov/
+*.backup

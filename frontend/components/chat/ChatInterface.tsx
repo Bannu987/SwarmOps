@@ -1,66 +1,153 @@
 "use client"
 
-import { useState } from "react"
-import { Sparkles } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { sendChat, uploadFile } from "@/lib/api"
+import { UserMessage } from "./UserMessage"
+import { AgentMessageCard } from "./AgentMessageCard"
+import { ChatInput } from "./ChatInput"
+import { LoadingMessage } from "./LoadingMessage"
+import { EmptyState } from "./EmptyState"
+import type { Message, FileAttachment } from "@/types"
 
 export function ChatInterface() {
-  const [message, setMessage] = useState("")
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([])
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  const quickActions = [
-    "Run a marketing audit on my site",
-    "Create a content strategy for Q1",
-    "Find SEO keyword opportunities",
-    "Analyze my conversion funnel",
-  ]
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    })
+  }, [messages, loading])
+
+  const handleSend = async (text: string) => {
+    const userMsg: Message = {
+      role: "user",
+      content: text,
+      attachments: pendingAttachments.length > 0 ? pendingAttachments : undefined,
+      timestamp: Date.now(),
+    }
+    setMessages((prev) => [...prev, userMsg])
+    setPendingAttachments([])
+    setLoading(true)
+
+    try {
+      const data = await sendChat(text)
+      const assistantMsg: Message = {
+        role: "assistant",
+        content: data.response || data.message || "No response received.",
+        agents_used: data.agents_used || [],
+        workflow: data.workflow,
+        latency_ms: data.latency_ms,
+        confidence: data.confidence,
+        artifact_id: data.artifact_id,
+        timestamp: Date.now(),
+      }
+      setMessages((prev) => [...prev, assistantMsg])
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Connection error. The backend may be waking up (free tier sleeps after 15 min). Try again in 30 seconds.",
+          timestamp: Date.now(),
+        },
+      ])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true)
+    try {
+      const result = await uploadFile(file)
+      if (result.success) {
+        const attachment: FileAttachment = {
+          filename: result.filename,
+          file_type: result.file_type,
+          file_size: result.file_size,
+          word_count: result.word_count,
+          summary: result.summary,
+        }
+        setPendingAttachments((prev) => [...prev, attachment])
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `📎 **${result.filename}** uploaded (${(result.file_size / 1024).toFixed(1)}KB)\n\n${result.summary}\n\nAsk me anything about this file.`,
+            timestamp: Date.now(),
+          },
+        ])
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `Upload failed: ${result.error || "unknown error"}`,
+            timestamp: Date.now(),
+          },
+        ])
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "unknown error"
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Upload failed: ${msg}`,
+          timestamp: Date.now(),
+        },
+      ])
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 py-3 border-b border-border">
-        <h1 className="font-semibold">Command Center</h1>
-        <p className="text-xs text-muted-foreground">Orchestrated by Nexus CMO</p>
-      </div>
-
-      {/* Empty state */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 max-w-2xl mx-auto w-full">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-swarm-cyan flex items-center justify-center text-white mb-5">
-          <Sparkles className="w-6 h-6" />
+      <div className="px-6 py-3 border-b border-border flex items-center justify-between">
+        <div>
+          <h1 className="font-semibold">Command Center</h1>
+          <p className="text-xs text-muted-foreground">Orchestrated by Nexus CMO</p>
         </div>
-
-        <h2 className="text-2xl font-semibold mb-2 text-center">
-          How can your AI marketing team help?
-        </h2>
-        <p className="text-sm text-muted-foreground mb-8 text-center">
-          6 specialist agents · 6 workflows · Ready to execute
-        </p>
-
-        <div className="grid grid-cols-2 gap-2 w-full mb-8">
-          {quickActions.map((action) => (
-            <button
-              key={action}
-              onClick={() => setMessage(action)}
-              className="text-left px-4 py-3 bg-card hover:bg-muted border border-border rounded-lg text-sm text-muted-foreground hover:text-foreground transition"
-            >
-              {action}
-            </button>
-          ))}
-        </div>
-
-        {/* Input placeholder — full chat ships in Part 4 */}
-        <div className="w-full">
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Full chat interface ships in Part 4..."
-            rows={2}
-            className="w-full px-4 py-3 bg-card border border-border rounded-xl text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-primary resize-none"
-            disabled
-          />
-          <p className="mt-2 text-xs text-muted-foreground text-center">
-            Part 4 will add: slash commands · file upload · agent cards · streaming
-          </p>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          Online
         </div>
       </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+        {messages.length === 0 ? (
+          <EmptyState onQuickAction={handleSend} />
+        ) : (
+          <div className="max-w-3xl mx-auto space-y-5">
+            {messages.map((msg, i) =>
+              msg.role === "user" ? (
+                <UserMessage key={i} message={msg} />
+              ) : (
+                <AgentMessageCard key={i} message={msg} />
+              )
+            )}
+            {loading && <LoadingMessage />}
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <ChatInput
+        onSend={handleSend}
+        onFileUpload={handleFileUpload}
+        loading={loading}
+        uploading={uploading}
+      />
     </div>
   )
 }

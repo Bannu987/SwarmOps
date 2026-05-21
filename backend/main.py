@@ -164,6 +164,8 @@ async def chat(
         "agents_used": result.get("agents_used", []),
         "workflow": result.get("workflow"),
         "latency_ms": result.get("latency_ms", 0),
+        "confidence": result.get("confidence", 0.5),
+        "structured": result.get("structured"),  # for future UI
     }
 
 

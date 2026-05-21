@@ -83,7 +83,10 @@ def run_agent(agent_id: str, prompt: str, context_header: str = "") -> Dict:
 
 
 def run_workflow(workflow_name: str, message: str, conversation_id: str = "default") -> Dict:
-    """Run a multi-agent workflow."""
+    """Run a multi-agent workflow with structured output."""
+    from .agent_runner import run_agent_structured
+    from .schemas import SwarmDecision
+
     if workflow_name not in WORKFLOWS:
         return {"error": f"Unknown workflow: {workflow_name}"}
 
@@ -92,88 +95,122 @@ def run_workflow(workflow_name: str, message: str, conversation_id: str = "defau
 
     ctx = get_context(conversation_id)
     memory = get_memory(conversation_id)
-
     memory.store(message, role="user", mem_type="conversation")
-
-    context_header = ctx.context_header()
-    relevant_memory = memory.recall_as_context(message, top_k=3)
-    if relevant_memory:
-        context_header = f"{context_header}\n\n{relevant_memory}"
 
     start = time.time()
 
-    # Run all specialist agents in parallel
-    specialist_results = []
+    # Phase 1: All specialists respond in parallel with structured output
+    specialist_outputs = []
     with ThreadPoolExecutor(max_workers=min(len(agents), 5)) as executor:
         futures = {
-            executor.submit(run_agent, agent, message, context_header): agent
+            executor.submit(run_agent_structured, agent, message, conversation_id): agent
             for agent in agents
         }
         for future in as_completed(futures):
-            result = future.result()
-            specialist_results.append(result)
+            output = future.result()
+            specialist_outputs.append(output)
 
-    # Synthesize via Nexus
-    synthesis_input = f"User asked: {message}\n\nSpecialist agent outputs:\n\n"
-    for r in specialist_results:
-        synthesis_input += f"--- {r['agent'].upper()} ---\n{r['response']}\n\n"
+    # Phase 2: Recalculate confidence with cross-agent agreement
+    from .confidence import compute_confidence
+    for output in specialist_outputs:
+        others = [o for o in specialist_outputs if o.agent_id != output.agent_id]
+        output.confidence = compute_confidence(output, others)
 
-    synthesis_input += (
-        "\nSynthesize these into ONE cohesive, actionable response for the user.\n"
-        "- Lead with the most important insight (Pyramid Principle)\n"
-        "- Integrate findings naturally (don't list 'SEO says X, Content says Y')\n"
-        "- Be direct and specific\n"
-        "- Include concrete next actions\n"
-        "- Acknowledge data limitations honestly\n"
+    # Phase 3: Nexus synthesizes
+    synthesis_input = _build_synthesis_input(message, specialist_outputs)
+    nexus_output = run_agent_structured("nexus", synthesis_input, conversation_id, specialist_outputs)
+
+    avg_confidence = sum(o.confidence for o in specialist_outputs) / len(specialist_outputs)
+    agreed = [o.agent_id for o in specialist_outputs if o.confidence > 0.5]
+    dissented = [o.agent_id for o in specialist_outputs if o.confidence <= 0.5]
+
+    swarm_decision = SwarmDecision(
+        decision=nexus_output.conclusion,
+        rationale=nexus_output.summary,
+        agents_consulted=[o.agent_id for o in specialist_outputs],
+        agents_agreed=agreed,
+        agents_dissented=dissented,
+        confidence=round((nexus_output.confidence + avg_confidence) / 2, 2),
+        next_action=nexus_output.recommendations[0] if nexus_output.recommendations else None,
     )
 
-    nexus_result = run_agent("nexus", synthesis_input, context_header)
-
-    memory.store(
-        nexus_result["response"][:500],
-        role="assistant",
-        mem_type="workflow",
-        importance=0.7,
-    )
+    memory.store(nexus_output.conclusion[:500], role="assistant", mem_type="workflow", importance=0.7)
 
     total_elapsed = time.time() - start
 
     return {
+        # OLD shape (keeps existing UI working)
         "workflow": workflow_name,
-        "response": nexus_result["response"],
-        "agents_used": agents,
-        "specialist_outputs": [
-            {"agent": r["agent"], "elapsed": r["elapsed"]}
-            for r in specialist_results
-        ],
+        "response": nexus_output.summary or nexus_output.conclusion,
+        "agents_used": [o.agent_id for o in specialist_outputs],
         "latency_ms": int(total_elapsed * 1000),
+        "confidence": swarm_decision.confidence,
+
+        # NEW structured shape (for future UI)
+        "structured": {
+            "decision": swarm_decision.dict(),
+            "specialists": [o.dict() for o in specialist_outputs],
+            "nexus": nexus_output.dict(),
+        },
     }
 
 
 def run_single_agent(agent_id: str, message: str, conversation_id: str = "default") -> Dict:
-    """Run a single specific agent (used for slash commands)."""
+    """Run a single specific agent with structured output."""
+    from .agent_runner import run_agent_structured
+
     ctx = get_context(conversation_id)
     memory = get_memory(conversation_id)
-
     memory.store(message, role="user", mem_type="conversation")
 
-    context_header = ctx.context_header()
-    relevant_memory = memory.recall_as_context(message, top_k=3)
-    if relevant_memory:
-        context_header = f"{context_header}\n\n{relevant_memory}"
+    start = time.time()
+    output = run_agent_structured(agent_id, message, conversation_id)
+    elapsed = time.time() - start
 
-    result = run_agent(agent_id, message, context_header)
-
-    memory.store(
-        result["response"][:500],
-        role="assistant",
-        mem_type="conversation",
-        importance=0.5,
-    )
+    memory.store(output.conclusion[:500], role="assistant", mem_type="conversation", importance=0.5)
 
     return {
+        # OLD shape
         "agent": agent_id,
-        "response": result["response"],
+        "response": output.summary or output.conclusion,
         "agents_used": [agent_id],
-        "latency_ms": int(result["elapsed"] * 1000),
+        "latency_ms": int(elapsed * 1000),
+        "confidence": output.confidence,
+
+        # NEW shape
+        "structured": {
+            "specialist": output.dict(),
+        },
     }
+
+
+def _build_synthesis_input(user_message: str, outputs: List) -> str:
+    """Build Nexus's synthesis prompt from specialist outputs."""
+    lines = [f"USER ASKED: {user_message}\n"]
+    lines.append("SPECIALIST OUTPUTS:\n")
+
+    for o in outputs:
+        lines.append(f"--- {o.agent_id.upper()} (confidence: {int(o.confidence * 100)}%) ---")
+        lines.append(f"CONCLUSION: {o.conclusion}")
+        if o.evidence:
+            lines.append(f"EVIDENCE: {len(o.evidence)} items, sources: {', '.join(set(e.source for e in o.evidence))}")
+        if o.recommendations:
+            lines.append(f"TOP REC: {o.recommendations[0].action}")
+        if o.assumptions:
+            lines.append(f"ASSUMPTIONS: {'; '.join(o.assumptions[:2])}")
+        lines.append("")
+
+    lines.append(
+        "SYNTHESIZE these specialist outputs into ONE cohesive decision for the user.\n"
+        "\n"
+        "Your response should:\n"
+        "- Lead with the most important insight (Pyramid Principle)\n"
+        "- Integrate findings naturally (don't list 'SEO says X, Content says Y')\n"
+        "- Be honest about confidence and data gaps\n"
+        "- Recommend specific next actions\n"
+        "- If specialists disagreed, briefly note the dissent\n"
+        "\n"
+        "Return your response as the standard JSON schema."
+    )
+
+    return "\n".join(lines)

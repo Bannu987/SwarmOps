@@ -2,16 +2,21 @@
 SwarmOps Backend v2 — FastAPI App
 All routes consolidated. Auth optional (graceful fallback).
 """
+import asyncio
 import os
 import re
 import logging
+import uuid
 from typing import Optional
 from fastapi import FastAPI, Header, HTTPException, UploadFile, File as FastAPIFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from core.supabase_client import get_user_from_token, get_admin_client, is_available as supabase_available
 from core.workflow_engine import detect_workflow, run_workflow, run_single_agent
+from core.events import create_bus, remove_bus
+from core.streaming_workflow import run_workflow_streaming, run_single_agent_streaming
 from core.context import get_context
 from core.memory import get_memory
 from integrations.file_processor import process_file
@@ -167,6 +172,110 @@ async def chat(
         "confidence": result.get("confidence", 0.5),
         "structured": result.get("structured"),  # for future UI
     }
+
+
+# ============================================================
+# CHAT — STREAMING (SSE)
+# ============================================================
+
+@app.post("/api/chat/stream")
+async def chat_stream(
+    request: ChatRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Streaming chat endpoint.
+    Returns SSE stream of agent events: started, thinking, responded,
+    challenged, confidence.shifted, decision.reached.
+    """
+    user = await get_user(authorization)
+    user_id = str(user.id) if user else None
+
+    msg = request.message.strip()
+    if not msg:
+        raise HTTPException(status_code=400, detail="Empty message")
+
+    conversation_id = request.conversation_id or "default"
+    request_id = str(uuid.uuid4())
+    bus = create_bus(request_id)
+
+    async def event_generator():
+        loop = asyncio.get_event_loop()
+
+        def workflow_thread():
+            try:
+                if msg.startswith("/"):
+                    parts = msg.split(maxsplit=1)
+                    cmd = parts[0][1:]
+                    remainder = parts[1] if len(parts) > 1 else ""
+
+                    if cmd in ["seo", "content", "analytics", "cro", "aeo"]:
+                        actual_msg = remainder.strip() or f"Help me as the {cmd.upper()} specialist."
+                        result = run_single_agent_streaming(cmd, actual_msg, conversation_id, bus)
+                    else:
+                        workflow = detect_workflow(msg)
+                        if workflow:
+                            result = run_workflow_streaming(workflow, msg, conversation_id, bus)
+                        else:
+                            result = run_single_agent_streaming("nexus", msg, conversation_id, bus)
+                else:
+                    workflow = detect_workflow(msg)
+                    if workflow:
+                        result = run_workflow_streaming(workflow, msg, conversation_id, bus)
+                    else:
+                        result = run_single_agent_streaming("nexus", msg, conversation_id, bus)
+
+                # Persist if authenticated
+                if user_id and supabase_available():
+                    try:
+                        admin = get_admin_client()
+                        if admin and conversation_id != "default":
+                            admin.table("messages").insert([
+                                {
+                                    "conversation_id": conversation_id,
+                                    "user_id": user_id,
+                                    "role": "user",
+                                    "content": msg,
+                                },
+                                {
+                                    "conversation_id": conversation_id,
+                                    "user_id": user_id,
+                                    "role": "assistant",
+                                    "content": result.get("response", ""),
+                                    "agents_used": result.get("agents_used", []),
+                                    "workflow": result.get("workflow"),
+                                    "latency_ms": result.get("latency_ms"),
+                                    "metadata": {"structured": result.get("structured")},
+                                },
+                            ]).execute()
+                    except Exception as e:
+                        logger.warning(f"Failed to persist: {e}")
+            except Exception as e:
+                logger.error(f"Streaming workflow error: {e}")
+                bus.emit("error", {"message": str(e)})
+                bus.emit("stream.end", {})
+
+        future = loop.run_in_executor(None, workflow_thread)
+
+        try:
+            async for sse in bus.stream():
+                yield sse
+        finally:
+            remove_bus(request_id)
+            try:
+                await future
+            except Exception:
+                pass
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # disable Render's buffering
+            "Connection": "keep-alive",
+        },
+    )
 
 
 # ============================================================

@@ -118,7 +118,10 @@ def run_workflow(workflow_name: str, message: str, conversation_id: str = "defau
 
     # Phase 3: Nexus synthesizes
     synthesis_input = _build_synthesis_input(message, specialist_outputs)
-    nexus_output = run_agent_structured("nexus", synthesis_input, conversation_id, specialist_outputs)
+    nexus_output = run_agent_structured(
+        "nexus", synthesis_input, conversation_id,
+        specialist_outputs, is_synthesis=True,
+    )
 
     avg_confidence = sum(o.confidence for o in specialist_outputs) / len(specialist_outputs)
     agreed = [o.agent_id for o in specialist_outputs if o.confidence > 0.5]
@@ -190,7 +193,7 @@ def _build_synthesis_input(user_message: str, outputs: List) -> str:
     lines.append("SPECIALIST OUTPUTS:\n")
 
     for o in outputs:
-        lines.append(f"--- {o.agent_id.upper()} (confidence: {int(o.confidence * 100)}%) ---")
+        lines.append(f"--- {o.agent_id.upper()} (confidence: {int(o.confidence * 100)}%, tier: {o.tier_used}) ---")
         lines.append(f"CONCLUSION: {o.conclusion}")
         if o.evidence:
             lines.append(f"EVIDENCE: {len(o.evidence)} items, sources: {', '.join(set(e.source for e in o.evidence))}")

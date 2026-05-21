@@ -24,20 +24,6 @@ FREE_MODELS = {
     "fallback":  "meta-llama/llama-4-maverick:free",
 }
 
-AGENT_MODEL = {
-    "nexus":     NEXUS_MODEL,
-    "seo":       FREE_MODELS["primary"],
-    "content":   FREE_MODELS["primary"],
-    "analytics": FREE_MODELS["fast"],
-    "cro":       FREE_MODELS["primary"],
-    "aeo":       FREE_MODELS["primary"],
-}
-
-FALLBACK_CHAIN = [
-    FREE_MODELS["primary"],
-    FREE_MODELS["fast"],
-    FREE_MODELS["fallback"],
-]
 
 
 class ModelRouter:
@@ -53,14 +39,21 @@ class ModelRouter:
         max_tokens: int = 2000,
         temperature: float = 0.7,
         json_mode: bool = False,
+        user_message: str = "",       # used for tier classification
+        is_synthesis: bool = False,   # synthesis is always Tier 3
     ) -> str:
-        """Call a model via OpenRouter."""
+        """Call a model via OpenRouter with tier-based routing."""
+        from .tier_router import classify_task, select_model, fallback_chain
+
         if not self.api_key:
             return "[OpenRouter API key not configured]"
 
-        model = AGENT_MODEL.get(agent_id, FREE_MODELS["primary"])
+        # Classify the task and pick the model
+        tier = classify_task(user_message or prompt, agent_id, is_synthesis)
+        model = select_model(tier)
+        fallbacks = fallback_chain(tier)
 
-        # Simple rate limit (18 RPM buffer from 20 RPM limit)
+        # Rate limit buffer
         elapsed = time.time() - self._last_request
         if elapsed < 3.5:
             time.sleep(3.5 - elapsed)
@@ -75,12 +68,9 @@ class ModelRouter:
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "models": fallbacks,
+            "route": "fallback",
         }
-
-        # Add fallbacks for free models (not Nexus)
-        if agent_id != "nexus":
-            payload["models"] = [model] + FALLBACK_CHAIN
-            payload["route"] = "fallback"
 
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
@@ -120,7 +110,8 @@ class ModelRouter:
 
                 if text:
                     usage = data.get("usage", {})
-                    logger.info(f"[{agent_id}] {model.split('/')[-1]} | tokens={usage.get('total_tokens', 0)}")
+                    actual_model = data.get("model", model).split("/")[-1]
+                    logger.info(f"[{agent_id}] tier={tier} model={actual_model} tokens={usage.get('total_tokens', 0)}")
                     return text
 
                 if attempt < 2:
@@ -147,4 +138,4 @@ _router = ModelRouter()
 
 
 def call_model(prompt: str, agent_id: str = "nexus", **kwargs) -> str:
-    return _router.call(prompt, agent_id, **kwargs)
+    return _router.call(prompt, agent_id=agent_id, **kwargs)

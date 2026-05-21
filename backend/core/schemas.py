@@ -49,6 +49,7 @@ class AgentOutput(BaseModel):
     used_real_data: bool = False
     used_benchmarks: bool = False
     used_frameworks: bool = False
+    tier_used: int = 1  # which routing tier this ran on
 
 
 class DebateRound(BaseModel):

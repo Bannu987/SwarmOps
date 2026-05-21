@@ -11,6 +11,7 @@ from .prompts import get_prompt
 from .schemas import AgentOutput, Evidence, Recommendation
 from .confidence import compute_confidence
 from .context import get_context
+from .tier_router import classify_task
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ def run_agent_structured(
     user_message: str,
     conversation_id: str = "default",
     other_agent_outputs: Optional[List[AgentOutput]] = None,
+    is_synthesis: bool = False,
 ) -> AgentOutput:
     """
     Run an agent and parse structured output. Falls back gracefully if
@@ -75,13 +77,18 @@ def run_agent_structured(
     system = get_prompt(agent_id)
     structured_prompt = _build_structured_prompt(agent_id, user_message, context_header)
 
+    # Classify which tier this call lands on (for the response)
+    tier = classify_task(user_message, agent_id, is_synthesis)
+
     raw_response = call_model(
         prompt=structured_prompt,
         agent_id=agent_id,
-        system=system + "\n\nALWAYS return JSON only. Never wrap in markdown fences.",
+        system=system + "\n\nALWAYS return JSON only. No markdown fences.",
         max_tokens=2500,
         temperature=0.5,
         json_mode=True,
+        user_message=user_message,
+        is_synthesis=is_synthesis,
     )
 
     parsed = _safe_parse_json(raw_response)
@@ -99,13 +106,14 @@ def run_agent_structured(
                 used_real_data=parsed.get("used_real_data", False),
                 used_benchmarks=parsed.get("used_benchmarks", False),
                 used_frameworks=parsed.get("used_frameworks", False),
+                tier_used=tier,
             )
         except Exception as e:
             logger.warning(f"[{agent_id}] schema validation failed: {e}")
-            output = _fallback_output(agent_id, raw_response)
+            output = _fallback_output(agent_id, raw_response, tier)
     else:
         logger.warning(f"[{agent_id}] could not parse JSON, falling back to text")
-        output = _fallback_output(agent_id, raw_response)
+        output = _fallback_output(agent_id, raw_response, tier)
 
     output.confidence = compute_confidence(output, other_agent_outputs or [])
 
@@ -148,7 +156,7 @@ def _safe_parse_json(raw: str) -> Optional[Dict]:
     return None
 
 
-def _fallback_output(agent_id: str, raw: str) -> AgentOutput:
+def _fallback_output(agent_id: str, raw: str, tier: int = 1) -> AgentOutput:
     """When JSON parsing fails, salvage what we can."""
     text = raw if raw and not raw.startswith("[") else "Agent could not generate a structured response."
 
@@ -162,4 +170,5 @@ def _fallback_output(agent_id: str, raw: str) -> AgentOutput:
         used_real_data=False,
         used_benchmarks=False,
         used_frameworks=False,
+        tier_used=tier,
     )

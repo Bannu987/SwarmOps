@@ -7,6 +7,7 @@ import os
 import re
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, Header, HTTPException, UploadFile, File as FastAPIFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,11 +22,46 @@ from core.context import get_context
 from core.memory import get_memory
 from integrations.file_processor import process_file
 from integrations.credentials import save_credentials, get_credentials, list_credentials, disconnect_service
+from core.scanner_runner import run_all_scans, run_scans_for_user
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="SwarmOps", version="2.0.0")
+
+async def background_scan_loop():
+    """
+    Background loop that runs scans every 6 hours.
+    Lightweight enough to run inside the web process for v1.
+    For scale, move to dedicated worker (Render Background Worker).
+    """
+    await asyncio.sleep(60)  # initial delay on startup
+    while True:
+        try:
+            logger.info("[background] Starting scan loop")
+            result = run_all_scans()
+            logger.info(f"[background] Scan complete: {result}")
+            await asyncio.sleep(6 * 60 * 60)  # 6 hours
+        except asyncio.CancelledError:
+            logger.info("[background] Scan loop cancelled")
+            break
+        except Exception as e:
+            logger.error(f"[background] Scan loop error: {e}")
+            await asyncio.sleep(300)  # 5 min before retry on error
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Background scan loop on startup."""
+    task = asyncio.create_task(background_scan_loop())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="SwarmOps", version="2.1.0", lifespan=lifespan)
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
@@ -462,3 +498,175 @@ async def create_project(
         return result.data[0] if result.data else {}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# SIGNALS
+# ============================================================
+
+@app.get("/api/signals")
+async def list_signals(
+    status: str = "active",
+    limit: int = 50,
+    authorization: Optional[str] = Header(None),
+):
+    """List signals for the current user."""
+    user = await get_user(authorization)
+    if not user:
+        return {"signals": []}
+
+    admin = get_admin_client()
+    if not admin:
+        return {"signals": []}
+
+    try:
+        query = admin.table("signals") \
+            .select("*") \
+            .eq("user_id", str(user.id)) \
+            .order("detected_at", desc=True) \
+            .limit(limit)
+
+        if status != "all":
+            query = query.eq("status", status)
+
+        result = query.execute()
+        return {"signals": result.data or []}
+    except Exception as e:
+        logger.error(f"List signals failed: {e}")
+        return {"signals": []}
+
+
+@app.patch("/api/signals/{signal_id}")
+async def update_signal(
+    signal_id: str,
+    request: dict,
+    authorization: Optional[str] = Header(None),
+):
+    """Mark signal as seen / addressed / dismissed."""
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    admin = get_admin_client()
+    if not admin:
+        raise HTTPException(status_code=500)
+
+    updates = {}
+    if "seen" in request:
+        updates["seen"] = bool(request["seen"])
+    if "status" in request and request["status"] in ["active", "addressed", "dismissed"]:
+        updates["status"] = request["status"]
+
+    try:
+        admin.table("signals") \
+            .update(updates) \
+            .eq("id", signal_id) \
+            .eq("user_id", str(user.id)) \
+            .execute()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# OPPORTUNITIES
+# ============================================================
+
+@app.get("/api/opportunities")
+async def list_opportunities(
+    status: str = "active",
+    limit: int = 50,
+    authorization: Optional[str] = Header(None),
+):
+    """List opportunities ranked by RICE score."""
+    user = await get_user(authorization)
+    if not user:
+        return {"opportunities": []}
+
+    admin = get_admin_client()
+    if not admin:
+        return {"opportunities": []}
+
+    try:
+        query = admin.table("opportunities") \
+            .select("*") \
+            .eq("user_id", str(user.id)) \
+            .order("rice_score", desc=True) \
+            .limit(limit)
+
+        if status != "all":
+            query = query.eq("status", status)
+
+        result = query.execute()
+        return {"opportunities": result.data or []}
+    except Exception as e:
+        logger.error(f"List opportunities failed: {e}")
+        return {"opportunities": []}
+
+
+@app.patch("/api/opportunities/{opportunity_id}")
+async def update_opportunity(
+    opportunity_id: str,
+    request: dict,
+    authorization: Optional[str] = Header(None),
+):
+    """Mark opportunity as in_progress / completed / dismissed."""
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    admin = get_admin_client()
+
+    updates = {}
+    if "status" in request and request["status"] in ["active", "in_progress", "completed", "dismissed"]:
+        updates["status"] = request["status"]
+    if "user_action" in request:
+        updates["user_action"] = request["user_action"][:500]
+
+    try:
+        admin.table("opportunities") \
+            .update(updates) \
+            .eq("id", opportunity_id) \
+            .eq("user_id", str(user.id)) \
+            .execute()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# SCAN TRIGGERS
+# ============================================================
+
+@app.post("/api/scan")
+async def trigger_scan(
+    request: dict = {},
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Trigger an immediate scan for the current user.
+    Used when user adds website URL or wants to refresh.
+    """
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    project_id = request.get("project_id") if request else None
+    result = run_scans_for_user(str(user.id), project_id)
+    return result
+
+
+@app.post("/api/scan/all")
+async def trigger_all_scans(authorization: Optional[str] = Header(None)):
+    """
+    Run scans for ALL users. Called by cron job (e.g. Render cron).
+    Protected by CRON_SECRET env var if set.
+    """
+    cron_secret = os.environ.get("CRON_SECRET")
+    if cron_secret:
+        provided = authorization.replace("Bearer ", "") if authorization else ""
+        if provided != cron_secret:
+            raise HTTPException(status_code=403)
+
+    result = run_all_scans()
+    return result

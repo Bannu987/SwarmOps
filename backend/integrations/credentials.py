@@ -1,7 +1,7 @@
 """Per-user API credentials manager (uses Supabase)."""
 import logging
 from typing import Dict, Optional
-from ..core.supabase_client import get_admin_client
+from core.supabase_client import get_admin_client
 
 logger = logging.getLogger(__name__)
 

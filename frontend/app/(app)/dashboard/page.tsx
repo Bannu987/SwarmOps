@@ -1,5 +1,5 @@
-import { ChatInterface } from "@/components/chat/ChatInterface"
+import { OperationsFloor } from "@/components/operations/OperationsFloor"
 
 export default function DashboardPage() {
-  return <ChatInterface />
+  return <OperationsFloor />
 }

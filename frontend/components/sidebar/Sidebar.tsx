@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client"
 import { cn, getInitials } from "@/lib/utils"
 import type { User } from "@supabase/supabase-js"
 import {
+  Activity,
   MessageSquare,
   Users,
   CheckSquare,
@@ -30,7 +31,8 @@ export function Sidebar({ user }: SidebarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const navItems = [
-    { href: "/dashboard", icon: MessageSquare, label: "Command Center" },
+    { href: "/dashboard", icon: Activity, label: "Operations Floor" },
+    { href: "/chat", icon: MessageSquare, label: "Brief Room" },
     { href: "/projects", icon: FolderKanban, label: "Projects" },
     { href: "/agents", icon: Users, label: "Agents" },
     { href: "/approval", icon: CheckSquare, label: "Approval Queue", badge: 0 },
@@ -60,11 +62,11 @@ export function Sidebar({ user }: SidebarProps) {
       {/* New chat */}
       <div className="px-3 pb-3">
         <Link
-          href="/dashboard"
+          href="/chat"
           className="w-full py-2 px-3 bg-input hover:bg-muted border border-border rounded-lg text-foreground text-sm font-medium transition flex items-center gap-2"
         >
           <Plus className="w-4 h-4 text-primary" />
-          New Chat
+          Brief the swarm
         </Link>
       </div>
 

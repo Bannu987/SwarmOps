@@ -13,15 +13,15 @@ from typing import Optional
 
 # Models per tier — easy to swap
 TIER_1_MODELS = {
-    "primary":  "google/gemma-3-27b-it:free",
-    "fast":     "google/gemma-3-12b-it:free",
-    "fallback": "meta-llama/llama-4-maverick:free",
+    "primary":  "meta-llama/llama-3.3-70b-instruct:free",
+    "fast":     "meta-llama/llama-3.1-8b-instruct:free",
+    "fallback": "mistralai/mistral-7b-instruct:free",
 }
 
 TIER_2_MODELS = {
-    "primary":   "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",  # large context
-    "reasoning": "deepseek/deepseek-r1:free",                      # step-by-step
-    "fallback":  "google/gemma-3-27b-it:free",
+    "primary":   "deepseek/deepseek-chat-v3-0324:free",
+    "reasoning": "deepseek/deepseek-r1-0528:free",
+    "fallback":  "meta-llama/llama-3.3-70b-instruct:free",
 }
 
 TIER_3_MODELS = {

@@ -17,11 +17,11 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 NEXUS_MODEL = "anthropic/claude-sonnet-4-20250514"
 
 FREE_MODELS = {
-    "primary":   "meta-llama/llama-3.3-70b-instruct:free",
-    "large":     "deepseek/deepseek-chat-v3-0324:free",
-    "fast":      "meta-llama/llama-3.1-8b-instruct:free",
-    "reasoning": "deepseek/deepseek-r1-0528:free",
-    "fallback":  "mistralai/mistral-7b-instruct:free",
+    "primary":   "google/gemma-4-31b-it:free",
+    "large":     "openai/gpt-oss-120b:free",
+    "fast":      "openai/gpt-oss-120b:free",
+    "reasoning": "google/gemma-4-31b-it:free",
+    "fallback":  "nvidia/nemotron-3-super-120b-a12b:free",
 }
 
 

@@ -209,6 +209,7 @@ def run_workflow_streaming(
 
     bus.emit("decision.reached", {
         "decision": swarm_decision.decision,
+        "rationale": swarm_decision.rationale,
         "confidence": swarm_decision.confidence,
         "agents_consulted": swarm_decision.agents_consulted,
         "agents_agreed": swarm_decision.agents_agreed,
@@ -263,6 +264,7 @@ def run_single_agent_streaming(
 
     bus.emit("decision.reached", {
         "decision": output.conclusion,
+        "rationale": output.summary or output.conclusion,
         "confidence": output.confidence,
         "agents_consulted": [agent_id],
         "agents_agreed": [agent_id] if output.confidence > 0.5 else [],

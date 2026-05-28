@@ -155,9 +155,10 @@ export interface Opportunity {
 // SIGNALS
 // ============================================================
 
-export async function listSignals(status: string = "active") {
+export async function listSignals(status: string = "active", projectId?: string) {
   const headers = await authHeaders()
-  const res = await fetch(`${API_URL}/api/signals?status=${status}&limit=50`, { headers })
+  const url = `${API_URL}/api/signals?status=${status}&limit=50` + (projectId ? `&project_id=${projectId}` : "")
+  const res = await fetch(url, { headers })
   return res.json() as Promise<{ signals: Signal[] }>
 }
 
@@ -175,9 +176,10 @@ export async function updateSignal(id: string, updates: { seen?: boolean; status
 // OPPORTUNITIES
 // ============================================================
 
-export async function listOpportunities(status: string = "active") {
+export async function listOpportunities(status: string = "active", projectId?: string) {
   const headers = await authHeaders()
-  const res = await fetch(`${API_URL}/api/opportunities?status=${status}&limit=50`, { headers })
+  const url = `${API_URL}/api/opportunities?status=${status}&limit=50` + (projectId ? `&project_id=${projectId}` : "")
+  const res = await fetch(url, { headers })
   return res.json() as Promise<{ opportunities: Opportunity[] }>
 }
 
@@ -203,4 +205,57 @@ export async function triggerScan(projectId?: string) {
     body: JSON.stringify(projectId ? { project_id: projectId } : {}),
   })
   return res.json()
+}
+
+// ============================================================
+// CHAT STREAMING (SSE)
+// ============================================================
+
+export async function streamChat(
+  message: string,
+  conversationId: string,
+  onEvent: (event: any) => void
+) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ message, conversation_id: conversationId }),
+  })
+
+  if (!res.ok) {
+    throw new Error(`HTTP error ${res.status}`)
+  }
+
+  const reader = res.body?.getReader()
+  if (!reader) {
+    throw new Error("No readable stream in response")
+  }
+
+  const decoder = new TextDecoder("utf-8")
+  let buffer = ""
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split("\n\n")
+    buffer = lines.pop() || ""
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+
+      if (trimmed.startsWith("data: ")) {
+        try {
+          const rawJson = trimmed.substring(6)
+          const data = JSON.parse(rawJson)
+          onEvent(data)
+        } catch (e) {
+          console.error("Failed to parse SSE line:", trimmed, e)
+        }
+      }
+    }
+  }
 }

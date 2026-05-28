@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { listSignals, listOpportunities, listProjects, triggerScan } from "@/lib/api"
-import type { Signal, Opportunity, Project } from "@/lib/api"
+import { listSignals, listOpportunities, triggerScan } from "@/lib/api"
+import type { Signal, Opportunity } from "@/lib/api"
+import { useActiveProject } from "@/lib/hooks/useActiveProject"
 import { Column } from "./Column"
 import { OpportunityCard } from "./OpportunityCard"
 import { SignalCard } from "./SignalCard"
@@ -16,29 +17,39 @@ import Link from "next/link"
 export function OperationsFloor() {
   const router = useRouter()
 
+  const {
+    projects,
+    activeProject,
+    loading: projectsLoading,
+    selectProject,
+  } = useActiveProject()
+
   const [signals, setSignals] = useState<Signal[]>([])
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
   const [activeWork, setActiveWork] = useState<ActiveWorkItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [dataLoading, setDataLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
 
   const loadData = useCallback(async () => {
+    if (!activeProject) {
+      setSignals([])
+      setOpportunities([])
+      setDataLoading(false)
+      return
+    }
     try {
-      const [projectsRes, signalsRes, oppsRes] = await Promise.all([
-        listProjects(),
-        listSignals("active"),
-        listOpportunities("active"),
+      const [signalsRes, oppsRes] = await Promise.all([
+        listSignals("active", activeProject.id),
+        listOpportunities("active", activeProject.id),
       ])
-      setProjects(projectsRes.projects || [])
       setSignals(signalsRes.signals || [])
       setOpportunities(oppsRes.opportunities || [])
     } catch (e) {
       console.error("Failed to load operations data:", e)
     } finally {
-      setLoading(false)
+      setDataLoading(false)
     }
-  }, [])
+  }, [activeProject])
 
   useEffect(() => {
     loadData()
@@ -47,15 +58,15 @@ export function OperationsFloor() {
   }, [loadData])
 
   const handleScan = async () => {
+    if (!activeProject) return
     setScanning(true)
-    const firstProject = projects[0]
 
     setActiveWork([
       { id: "scan-1", agentId: "seo", task: "Scanning site for issues", status: "thinking", progress: 30 },
     ])
 
     try {
-      await triggerScan(firstProject?.id)
+      await triggerScan(activeProject.id)
       await loadData()
     } catch (e) {
       console.error("Scan failed:", e)
@@ -65,10 +76,15 @@ export function OperationsFloor() {
     }
   }
 
+  const loading = projectsLoading || dataLoading
+
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-sm text-muted-foreground">Loading operations floor...</div>
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="w-5 h-5 text-primary animate-spin" />
+          <div className="text-xs text-muted-foreground">Loading operations floor...</div>
+        </div>
       </div>
     )
   }
@@ -89,14 +105,34 @@ export function OperationsFloor() {
   const unseen = signals.filter((s) => !s.seen).length
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-background text-foreground">
       {/* Header */}
       <div className="px-6 py-3 border-b border-border flex items-center justify-between">
         <div>
           <h1 className="text-base font-medium tracking-tight">Operations Floor</h1>
-          <p className="text-[11px] text-muted-foreground">
-            {projects[0]?.name} · {projects[0]?.website_url || "no URL"}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            {projects.length > 1 ? (
+              <select
+                value={activeProject?.id || ""}
+                onChange={(e) => selectProject(e.target.value)}
+                className="bg-card hover:bg-muted border border-border rounded px-2 py-0.5 text-xs text-foreground font-medium outline-none cursor-pointer focus:border-primary transition"
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-[11px] text-muted-foreground font-medium">
+                {activeProject?.name}
+              </p>
+            )}
+            <span className="text-[11px] text-muted-foreground/60">·</span>
+            <p className="text-[11px] text-muted-foreground">
+              {activeProject?.website_url || "no URL"}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button

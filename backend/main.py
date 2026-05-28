@@ -69,6 +69,7 @@ app.add_middleware(
     allow_origins=[
         FRONTEND_URL,
         "http://localhost:3000",
+        "http://127.0.0.1:3000",
         "https://*.vercel.app",
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
@@ -328,12 +329,58 @@ async def upload(
     result = await process_file(file)
 
     if result.get("success"):
+        # Add to local workflow memory context
         ctx = get_context(conversation_id or "default")
         ctx.add_upload({
             "filename": result["filename"],
             "content": result["content"],
             "file_type": result["file_type"],
         })
+
+        # Persist upload to database if authenticated
+        user = await get_user(authorization)
+        user_id = str(user.id) if user else None
+
+        if user_id and supabase_available():
+            try:
+                admin = get_admin_client()
+                if admin:
+                    storage_path = f"uploads/{user_id}/{result['filename']}"
+                    
+                    # Attempt storage bucket upload
+                    try:
+                        await file.seek(0)
+                        file_bytes = await file.read()
+                        admin.storage.from_("uploads").upload(
+                            path=f"{user_id}/{result['filename']}",
+                            file=file_bytes,
+                            file_options={"content-type": file.content_type or "application/octet-stream"}
+                        )
+                    except Exception as storage_err:
+                        logger.warning(f"Supabase Storage upload skipped/failed: {storage_err}")
+
+                    # Validate and format conversation_id UUID
+                    valid_conv_id = None
+                    if conversation_id and conversation_id != "default":
+                        try:
+                            uuid.UUID(conversation_id)
+                            valid_conv_id = conversation_id
+                        except ValueError:
+                            pass
+
+                    # Write record to file_uploads table
+                    admin.table("file_uploads").insert({
+                        "user_id": user_id,
+                        "conversation_id": valid_conv_id,
+                        "filename": result["filename"],
+                        "file_type": result["file_type"],
+                        "file_size": result["file_size"],
+                        "storage_path": storage_path,
+                        "extracted_text": result["content"],
+                        "metadata": result.get("metadata", {}),
+                    }).execute()
+            except Exception as db_err:
+                logger.error(f"Failed to persist file upload to database: {db_err}")
 
     return result
 
@@ -506,6 +553,7 @@ async def create_project(
 
 @app.get("/api/signals")
 async def list_signals(
+    project_id: Optional[str] = None,
     status: str = "active",
     limit: int = 50,
     authorization: Optional[str] = Header(None),
@@ -526,6 +574,8 @@ async def list_signals(
             .order("detected_at", desc=True) \
             .limit(limit)
 
+        if project_id:
+            query = query.eq("project_id", project_id)
         if status != "all":
             query = query.eq("status", status)
 
@@ -574,6 +624,7 @@ async def update_signal(
 
 @app.get("/api/opportunities")
 async def list_opportunities(
+    project_id: Optional[str] = None,
     status: str = "active",
     limit: int = 50,
     authorization: Optional[str] = Header(None),
@@ -594,6 +645,8 @@ async def list_opportunities(
             .order("rice_score", desc=True) \
             .limit(limit)
 
+        if project_id:
+            query = query.eq("project_id", project_id)
         if status != "all":
             query = query.eq("status", status)
 

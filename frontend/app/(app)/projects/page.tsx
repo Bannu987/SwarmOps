@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react"
 import { Plus, FolderKanban, Pin, Loader2 } from "lucide-react"
 import { listProjects, createProject } from "@/lib/api"
 import type { Project } from "@/types"
+import { createClient } from "@/lib/supabase/client"
 import { WelcomeOnboarding } from "@/components/shared/WelcomeOnboarding"
 import { useSearchParams } from "next/navigation"
 
@@ -52,6 +53,13 @@ function ProjectsList() {
       return
     }
 
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      setError("Your session has expired. Please log in again.")
+      return
+    }
+
     setCreating(true)
     setError(null)
     setSuccess(null)
@@ -85,7 +93,15 @@ function ProjectsList() {
 
     } catch (err: any) {
       console.error("Failed to create project:", err)
-      setError(err.message || "Could not create project. Check if backend is waking up and try again.")
+      
+      let errMsg = "Could not create project. Check if backend is waking up and try again."
+      if (err instanceof TypeError || (err.message && (err.message.toLowerCase().includes("fetch") || err.message.toLowerCase().includes("cors")))) {
+        errMsg = "Browser blocked the workspace request. Backend CORS must allow this Netlify domain or verify the Render service is running."
+      } else if (err.message) {
+        errMsg = err.message
+      }
+      
+      setError(errMsg)
     } finally {
       setCreating(false)
     }

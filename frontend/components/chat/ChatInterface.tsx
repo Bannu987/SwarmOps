@@ -13,7 +13,7 @@ import { useActiveProject } from "@/lib/hooks/useActiveProject"
 import { WelcomeOnboarding } from "@/components/shared/WelcomeOnboarding"
 import { Loader2 } from "lucide-react"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://marketingos2-0.onrender.com"
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://swarmops.onrender.com"
 
 export function ChatInterface() {
   const {

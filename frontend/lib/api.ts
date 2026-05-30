@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://marketingos2-0.onrender.com"
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://swarmops.onrender.com"
 
 async function authHeaders(): Promise<Record<string, string>> {
   const supabase = createClient()

@@ -13,6 +13,7 @@ import { PulseBar } from "./PulseBar"
 import { EmptyOperationsState } from "./EmptyOperationsState"
 import { RefreshCw, MessageSquarePlus } from "lucide-react"
 import Link from "next/link"
+import { WelcomeOnboarding } from "@/components/shared/WelcomeOnboarding"
 
 export function OperationsFloor() {
   const router = useRouter()
@@ -90,7 +91,11 @@ export function OperationsFloor() {
   }
 
   if (projects.length === 0) {
-    return <EmptyOperationsState hasProject={false} />
+    return (
+      <div className="flex-grow flex items-center justify-center bg-background">
+        <WelcomeOnboarding />
+      </div>
+    )
   }
 
   if (signals.length === 0 && opportunities.length === 0 && activeWork.length === 0) {
@@ -109,7 +114,10 @@ export function OperationsFloor() {
       {/* Header */}
       <div className="px-6 py-3 border-b border-border flex items-center justify-between">
         <div>
-          <h1 className="text-base font-medium tracking-tight">Operations Floor</h1>
+          <h1 className="text-base font-semibold tracking-tight text-foreground">Command Center</h1>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">
+            Live marketing signals, opportunities, and next actions for your active workspace.
+          </p>
           <div className="flex items-center gap-2 mt-0.5">
             {projects.length > 1 ? (
               <select

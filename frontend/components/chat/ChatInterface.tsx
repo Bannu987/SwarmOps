@@ -9,8 +9,19 @@ import { LoadingMessage } from "./LoadingMessage"
 import { EmptyState } from "./EmptyState"
 import type { Message, FileAttachment } from "@/types"
 import { useSearchParams } from "next/navigation"
+import { useActiveProject } from "@/lib/hooks/useActiveProject"
+import { WelcomeOnboarding } from "@/components/shared/WelcomeOnboarding"
+import { Loader2 } from "lucide-react"
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://marketingos2-0.onrender.com"
 
 export function ChatInterface() {
+  const {
+    projects,
+    activeProject,
+    loading: projectsLoading,
+  } = useActiveProject()
+
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -19,6 +30,64 @@ export function ChatInterface() {
   
   const searchParams = useSearchParams()
   const [initiated, setInitiated] = useState(false)
+
+  // Backend connection checking states
+  const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "waking" | "offline" | "misconfigured">("checking")
+  const [retryCount, setRetryCount] = useState(0)
+
+  useEffect(() => {
+    checkHealth(0)
+  }, [])
+
+  const checkHealth = async (attempt = 0) => {
+    if (!API_URL || (API_URL.includes("localhost") && typeof window !== "undefined" && !window.location.hostname.includes("localhost"))) {
+      if (typeof window !== "undefined" && !window.location.hostname.includes("localhost")) {
+        setBackendStatus("misconfigured")
+        return
+      }
+    }
+    
+    try {
+      new URL(API_URL)
+    } catch {
+      setBackendStatus("misconfigured")
+      return
+    }
+
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 6000) // 6 seconds ping limit
+      
+      const res = await fetch(`${API_URL}/health`, {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+      
+      if (res.ok) {
+        setBackendStatus("online")
+        setRetryCount(0)
+      } else {
+        throw new Error("Backend non-200")
+      }
+    } catch (err) {
+      console.warn("Backend health ping failed:", err)
+      if (attempt < 5) {
+        setBackendStatus("waking")
+        setRetryCount(attempt + 1)
+        setTimeout(() => {
+          checkHealth(attempt + 1)
+        }, 10000)
+      } else {
+        setBackendStatus("offline")
+      }
+    }
+  }
+
+  const handleManualRetry = () => {
+    setBackendStatus("checking")
+    setRetryCount(0)
+    checkHealth(0)
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -170,18 +239,54 @@ export function ChatInterface() {
           )
         }
       })
-    } catch {
+    } catch (err: any) {
+      console.error("SSE stream failed:", err)
+      const isOnline = backendStatus === "online"
+      
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMsgId
             ? {
                 ...msg,
-                content:
-                  "Connection error. The backend may be waking up (free tier sleeps after 15 min). Try again in 30 seconds.",
+                content: isOnline 
+                  ? "Backend is online, but streaming failed. Falling back to non-streaming response..."
+                  : "Connection error. The backend may be waking up (free tier sleeps after 15 min). Try again in 30 seconds.",
               }
             : msg
         )
       )
+
+      if (isOnline) {
+        // Fallback to standard HTTP POST request
+        try {
+          const res = await sendChat(text, "default")
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    content: res.response || "No response received.",
+                    agents_used: res.agents_used || msg.agents_used,
+                    confidence: res.confidence,
+                    latency_ms: res.latency_ms,
+                  }
+                : msg
+            )
+          )
+        } catch (fallbackErr: any) {
+          console.error("Fallback also failed:", fallbackErr)
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    content: "Fallback failed: Backend rejected the request. Check CORS/auth configuration.",
+                  }
+                : msg
+            )
+          )
+        }
+      }
     } finally {
       setLoading(false)
     }
@@ -234,22 +339,112 @@ export function ChatInterface() {
     }
   }
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-6 py-3 border-b border-border flex items-center justify-between">
-        <div>
-          <h1 className="font-semibold">Command Center</h1>
-          <p className="text-xs text-muted-foreground">Orchestrated by Nexus CMO</p>
+  // Handle Workspace empty states
+  if (projectsLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
+          <div className="text-xs text-muted-foreground">Loading Brief Room workspace...</div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          Online
+      </div>
+    )
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="flex-1 overflow-y-auto bg-background flex items-center justify-center">
+        <WelcomeOnboarding />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-background">
+      {/* Header */}
+      <div className="px-6 py-3 border-b border-border flex items-center justify-between bg-card">
+        <div>
+          <h1 className="font-semibold text-sm text-foreground">AI Brief Room</h1>
+          <p className="text-[10px] text-muted-foreground mt-0.5 max-w-lg leading-tight">
+            Ask Nexus and specialist agents to analyze campaigns, SEO, content, and growth opportunities.
+          </p>
+        </div>
+
+        {/* Dynamic Status Indicator */}
+        <div className="flex-shrink-0">
+          {backendStatus === "checking" && (
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Loader2 className="w-3 h-3 animate-spin text-primary" />
+              Checking...
+            </div>
+          )}
+          {backendStatus === "online" && (
+            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Online
+            </div>
+          )}
+          {backendStatus === "waking" && (
+            <div className="flex items-center gap-1.5 text-[10px] text-amber-500 font-medium">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+              Waking ({retryCount}/6)
+            </div>
+          )}
+          {backendStatus === "offline" && (
+            <div className="flex items-center gap-1.5 text-[10px] text-destructive font-medium">
+              <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+              Offline
+            </div>
+          )}
+          {backendStatus === "misconfigured" && (
+            <div className="flex items-center gap-1.5 text-[10px] text-destructive font-medium">
+              <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+              Config Error
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Backend Status Warning Banners */}
+      {backendStatus === "waking" && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-6 py-2.5 flex items-center justify-between text-amber-500 text-[11px] animate-fade-in">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping flex-shrink-0" />
+            <span>Render free tier is waking up. This can take 30–60 seconds. We&apos;ll retry automatically.</span>
+          </div>
+          <button
+            onClick={handleManualRetry}
+            className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded text-[10px] transition"
+          >
+            Retry now
+          </button>
+        </div>
+      )}
+
+      {backendStatus === "offline" && (
+        <div className="bg-destructive/10 border-b border-destructive/30 px-6 py-2.5 flex items-center justify-between text-destructive text-[11px] animate-fade-in">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />
+            <span>Backend is offline or unreachable. Please verify that your backend service is running.</span>
+          </div>
+          <button
+            onClick={handleManualRetry}
+            className="px-2 py-0.5 bg-destructive hover:bg-destructive/90 text-white font-semibold rounded text-[10px] transition"
+          >
+            Retry now
+          </button>
+        </div>
+      )}
+
+      {backendStatus === "misconfigured" && (
+        <div className="bg-destructive/10 border-b border-destructive/30 px-6 py-2.5 text-destructive text-[11px] flex items-center gap-2 animate-fade-in">
+          <div className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />
+          <span>Production API URL is not configured correctly. Check NEXT_PUBLIC_API_URL in Netlify.</span>
+        </div>
+      )}
+
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+      <div ref={scrollRef} className="flex-grow overflow-y-auto px-6 py-6 bg-background">
         {messages.length === 0 ? (
           <EmptyState onQuickAction={handleSend} />
         ) : (

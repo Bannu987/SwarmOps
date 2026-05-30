@@ -31,12 +31,12 @@ export function Sidebar({ user }: SidebarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const navItems = [
-    { href: "/dashboard", icon: Activity, label: "Operations Floor" },
-    { href: "/chat", icon: MessageSquare, label: "Brief Room" },
-    { href: "/projects", icon: FolderKanban, label: "Projects" },
-    { href: "/agents", icon: Users, label: "Agents" },
-    { href: "/approval", icon: CheckSquare, label: "Approval Queue", badge: 0 },
-    { href: "/sources", icon: Database, label: "Data Sources" },
+    { href: "/dashboard", icon: Activity, label: "Command Center" },
+    { href: "/chat", icon: MessageSquare, label: "AI Brief Room" },
+    { href: "/projects", icon: FolderKanban, label: "Workspaces" },
+    { href: "/agents", icon: Users, label: "Agent Network" },
+    { href: "/approval", icon: CheckSquare, label: "Approvals", badge: 0 },
+    { href: "/sources", icon: Database, label: "Integrations" },
   ]
 
   const handleSignOut = async () => {
@@ -66,7 +66,7 @@ export function Sidebar({ user }: SidebarProps) {
           className="w-full py-2 px-3 bg-input hover:bg-muted border border-border rounded-lg text-foreground text-sm font-medium transition flex items-center gap-2"
         >
           <Plus className="w-4 h-4 text-primary" />
-          Brief the swarm
+          New AI Brief
         </Link>
       </div>
 

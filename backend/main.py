@@ -9,7 +9,7 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
-from fastapi import FastAPI, Header, HTTPException, UploadFile, File as FastAPIFile
+from fastapi import FastAPI, Header, HTTPException, UploadFile, File as FastAPIFile, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -77,7 +77,7 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_origin_regex=r"https://.*\.netlify\.app$|https://.*\.vercel\.app$",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
     expose_headers=["Content-Type"],
 )
@@ -110,16 +110,41 @@ class ProjectRequest(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "service": "SwarmOps Backend v2"}
+    return {
+        "service": "SwarmOps backend",
+        "status": "healthy",
+        "version": "production"
+    }
 
 
 @app.get("/health")
 async def health():
     return {
         "status": "healthy",
+        "service": "swarmops-backend",
         "supabase": supabase_available(),
         "openrouter": bool(os.environ.get("OPENROUTER_API_KEY")),
     }
+
+
+@app.head("/health")
+async def health_head():
+    return Response(status_code=200)
+
+
+@app.get("/api/health")
+async def api_health():
+    return {
+        "status": "healthy",
+        "service": "swarmops-backend",
+        "supabase": supabase_available(),
+        "openrouter": bool(os.environ.get("OPENROUTER_API_KEY")),
+    }
+
+
+@app.head("/api/health")
+async def api_health_head():
+    return Response(status_code=200)
 
 
 # ============================================================

@@ -34,6 +34,7 @@ export function ChatInterface() {
   // Backend connection checking states
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "waking" | "offline" | "misconfigured">("checking")
   const [retryCount, setRetryCount] = useState(0)
+  const [healthError, setHealthError] = useState<string | null>(null)
 
   useEffect(() => {
     checkHealth(0)
@@ -43,6 +44,7 @@ export function ChatInterface() {
     if (!API_URL || (API_URL.includes("localhost") && typeof window !== "undefined" && !window.location.hostname.includes("localhost"))) {
       if (typeof window !== "undefined" && !window.location.hostname.includes("localhost")) {
         setBackendStatus("misconfigured")
+        setHealthError("CORS/Configuration Error: Production client is trying to connect to a localhost API.")
         return
       }
     }
@@ -51,12 +53,13 @@ export function ChatInterface() {
       new URL(API_URL)
     } catch {
       setBackendStatus("misconfigured")
+      setHealthError("Configuration Error: Invalid backend API URL.")
       return
     }
 
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 6000) // 6 seconds ping limit
+      const timeoutId = setTimeout(() => controller.abort(), 6000) // 6 seconds timeout
       
       const res = await fetch(`${API_URL}/health`, {
         signal: controller.signal
@@ -66,11 +69,30 @@ export function ChatInterface() {
       if (res.ok) {
         setBackendStatus("online")
         setRetryCount(0)
+        setHealthError(null)
       } else {
-        throw new Error("Backend non-200")
+        if (res.status === 404) {
+          throw new Error("404: Backend health endpoint missing or wrong API URL.")
+        } else if (res.status === 502 || res.status === 503) {
+          throw new Error("502/503: Render backend unavailable or waking.")
+        } else {
+          throw new Error(`HTTP ${res.status}: Server returned an error status.`)
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn("Backend health ping failed:", err)
+      let customError = "Backend is waking or overloaded."
+      
+      if (err.name === "AbortError" || (err.message && err.message.includes("abort"))) {
+        customError = "Timeout: Backend is waking or overloaded."
+      } else if (err instanceof TypeError || (err.message && err.message.toLowerCase().includes("fetch"))) {
+        customError = "CORS/Network error: Browser blocked backend request. Check CORS."
+      } else if (err.message) {
+        customError = err.message
+      }
+
+      setHealthError(customError)
+      
       if (attempt < 5) {
         setBackendStatus("waking")
         setRetryCount(attempt + 1)
@@ -410,14 +432,14 @@ export function ChatInterface() {
 
       {/* Backend Status Warning Banners */}
       {backendStatus === "waking" && (
-        <div className="bg-amber-500/10 border-b border-amber-500/30 px-6 py-2.5 flex items-center justify-between text-amber-500 text-[11px] animate-fade-in">
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-6 py-2.5 flex items-center justify-between text-amber-500 text-[11px] animate-fade-in animate-pulse">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping flex-shrink-0" />
-            <span>Render free tier is waking up. This can take 30–60 seconds. We&apos;ll retry automatically.</span>
+            <span>{healthError || "Render free tier is waking up. This can take 30–60 seconds. We'll retry automatically."} (Attempt {retryCount}/6)</span>
           </div>
           <button
             onClick={handleManualRetry}
-            className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded text-[10px] transition"
+            className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded text-[10px] transition flex-shrink-0"
           >
             Retry now
           </button>
@@ -428,11 +450,11 @@ export function ChatInterface() {
         <div className="bg-destructive/10 border-b border-destructive/30 px-6 py-2.5 flex items-center justify-between text-destructive text-[11px] animate-fade-in">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />
-            <span>Backend is offline or unreachable. Please verify that your backend service is running.</span>
+            <span>{healthError || "Backend is offline or unreachable. Please verify that your backend service is running."}</span>
           </div>
           <button
             onClick={handleManualRetry}
-            className="px-2 py-0.5 bg-destructive hover:bg-destructive/90 text-white font-semibold rounded text-[10px] transition"
+            className="px-2 py-0.5 bg-destructive hover:bg-destructive/90 text-white font-semibold rounded text-[10px] transition flex-shrink-0"
           >
             Retry now
           </button>
@@ -442,7 +464,7 @@ export function ChatInterface() {
       {backendStatus === "misconfigured" && (
         <div className="bg-destructive/10 border-b border-destructive/30 px-6 py-2.5 text-destructive text-[11px] flex items-center gap-2 animate-fade-in">
           <div className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />
-          <span>Production API URL is not configured correctly. Check NEXT_PUBLIC_API_URL in Netlify.</span>
+          <span>{healthError || "Production API URL is not configured correctly. Check NEXT_PUBLIC_API_URL in Netlify."}</span>
         </div>
       )}
 

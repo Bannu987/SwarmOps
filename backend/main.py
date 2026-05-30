@@ -64,17 +64,22 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SwarmOps", version="2.1.0", lifespan=lifespan)
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+
+allowed_origins = [
+    FRONTEND_URL,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://6a17ca7---calm-creponne-043104.netlify.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        FRONTEND_URL,
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
-    allow_origin_regex=r"https://.*\.netlify\.app|https://.*\.vercel\.app",
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.netlify\.app$|https://.*\.vercel\.app$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    expose_headers=["Content-Type"],
 )
 
 

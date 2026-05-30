@@ -242,6 +242,7 @@ export function ChatInterface() {
     } catch (err: any) {
       console.error("SSE stream failed:", err)
       const isOnline = backendStatus === "online"
+      const isCORS = err instanceof TypeError || (err.message && (err.message.toLowerCase().includes("fetch") || err.message.toLowerCase().includes("cors") || err.message.toLowerCase().includes("preflight")))
       
       setMessages((prev) =>
         prev.map((msg) =>
@@ -250,7 +251,9 @@ export function ChatInterface() {
                 ...msg,
                 content: isOnline 
                   ? "Backend is online, but streaming failed. Falling back to non-streaming response..."
-                  : "Connection error. The backend may be waking up (free tier sleeps after 15 min). Try again in 30 seconds.",
+                  : isCORS
+                    ? "Browser blocked the backend request. Check CORS configuration for this frontend domain or verify the backend is active."
+                    : "Connection error. The backend may be waking up (free tier sleeps after 15 min). Try again in 30 seconds.",
               }
             : msg
         )

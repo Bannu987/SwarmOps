@@ -50,7 +50,7 @@ export default function ApprovalPage() {
       setTimeout(() => {
         setFeedbackMsg(null)
         loadOpportunities()
-      }, 2000)
+      }, 5000)
     } catch (e) {
       console.error("Failed to approve opportunity:", e)
     } finally {
@@ -143,13 +143,13 @@ export default function ApprovalPage() {
                 return (
                   <div
                     key={opp.id}
-                    className={`border rounded-xl p-6 text-center animate-fade-in transition-all ${
+                    className={`border rounded-xl p-6 text-center animate-fade-in transition-all flex flex-col items-center justify-center gap-3 ${
                       feedbackMsg.type === "success"
                         ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                         : "bg-amber-500/10 border-amber-500/30 text-amber-400"
                     }`}
                   >
-                    <div className="w-8 h-8 rounded-full bg-current/10 mx-auto flex items-center justify-center mb-2">
+                    <div className="w-8 h-8 rounded-full bg-current/10 flex items-center justify-center">
                       {feedbackMsg.type === "success" ? (
                         <Check className="w-4 h-4" />
                       ) : (
@@ -157,6 +157,15 @@ export default function ApprovalPage() {
                       )}
                     </div>
                     <p className="text-xs font-semibold">{feedbackMsg.text}</p>
+                    {feedbackMsg.type === "success" && (
+                      <Link
+                        href="/action-plans"
+                        className="px-3.5 py-1.5 bg-emerald-400 hover:bg-emerald-350 text-black text-[10px] font-bold rounded-lg transition shadow-md flex items-center gap-1"
+                      >
+                        <span>View Execution Action Plan</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    )}
                   </div>
                 )
               }

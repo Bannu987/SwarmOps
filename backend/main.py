@@ -700,6 +700,202 @@ async def list_opportunities(
         return {"opportunities": []}
 
 
+def generate_action_plan_from_opportunity(opportunity: dict, project: dict, memories: list, signals: list) -> dict:
+    project_text = f"Project Name: {project.get('name')}\nWebsite: {project.get('website_url')}\nDescription: {project.get('description', '')}"
+    
+    memories_text = "No prior strategic memories."
+    if memories:
+        m_lines = []
+        for m in memories:
+            m_lines.append(f"- [{m.get('memory_type').upper()}]: {m.get('title')} -> {m.get('summary')}")
+        memories_text = "\n".join(m_lines)
+        
+    sigs_text = "No active warning signals."
+    if signals:
+        s_lines = []
+        for s in signals[:4]:
+            s_lines.append(f"- Signal [{s.get('severity').upper()}]: {s.get('title')} -> {s.get('description')}")
+        sigs_text = "\n".join(s_lines)
+
+    prompt = f"""You are the boardroom Chief Marketing Strategist (Nexus) at SwarmOps.
+Analyze this approved marketing opportunity and compile a production-grade, highly specific, and execution-ready Action Plan.
+
+=== APPROVED OPPORTUNITY ===
+Title: {opportunity.get('title')}
+Description: {opportunity.get('description')}
+Category: {opportunity.get('category')}
+Recommended Action: {opportunity.get('recommended_action')}
+RICE Score: {opportunity.get('rice_score')}
+Proposing Agent: {opportunity.get('proposed_by')}
+
+=== BRAND & CONTEXT ===
+{project_text}
+
+=== PERSISTENT STRATEGIC MEMORY ===
+{memories_text}
+
+=== ACTIVE TELEMETRY SIGNALS ===
+{sigs_text}
+
+Your task is to break down this approved action into a highly practical execution plan.
+Classify this plan into one of these plan_type values:
+- 'seo_growth' (if related to search engines, keywords, backlinks, topical authority)
+- 'paid_ads' (if related to Meta, Google, LinkedIn Ads, budgets, ROAS, tracking)
+- 'lead_generation' (if related to lead magnets, forms, qualification, cold outreach)
+- 'content_calendar' (if related to writing articles, blog posts, video scripts, social schedules)
+- 'crm_lifecycle' (if related to email lists, drip nurture, reactivations, newsletters)
+- 'product_launch' (if related to new features, positioning, GTM launch checklists)
+- 'competitor_attack' (if related to bid hacking, pricing comparison, feature audits)
+- 'conversion_rate_optimization' (if related to landing pages, MECLABS heurists, headline tests)
+- 'general_strategy' (default if general)
+
+You MUST structure the action plan with a set of 4-6 granular, practical tasks.
+Avoid vague placeholders. Every task checklist item must be complete and execution-ready, specifying EXACT details (e.g. what keyword to use, which tool to run, which target audience to set, or what headline hook to draft).
+
+You MUST respond with a single JSON object matching this schema:
+{{
+  "title": "Action Plan Title (matching the campaign context)",
+  "objective": "A specific 1-2 sentence business objective",
+  "plan_type": "one of the types listed above",
+  "priority": "high",
+  "estimated_effort": "medium",
+  "expected_impact": "high",
+  "confidence": 0.85,
+  "tasks": [
+    {{
+      "id": "task_1",
+      "title": "Specific, execution-ready task title with context",
+      "status": "pending",
+      "owner": "nexus"
+    }}
+  ],
+  "kpis": [
+    {{
+      "metric": "KPI Metric Name",
+      "target": "Target Value (e.g. +20% click rate or <$15 CAC)",
+      "timeframe": "next 30 days"
+    }}
+  ],
+  "dependencies": [
+    "Requirement 1 (e.g., Active GA4 tracking configured)",
+    "Requirement 2"
+  ],
+  "risks": [
+    {{
+      "risk": "Potential Bottleneck (e.g. ad disapproval)",
+      "mitigation": "Backup Plan"
+    }}
+  ]
+}}
+
+Return ONLY the raw JSON object. No markdown code fences, no introductory or trailing text."""
+
+    try:
+        from core.model_router import call_model
+        raw_response = call_model(
+            prompt=prompt,
+            agent_id="nexus",
+            system="Always return a single raw JSON object matching the requested schema.",
+            max_tokens=2000,
+            temperature=0.3,
+            json_mode=True
+        )
+        
+        # Safe JSON parse
+        import json
+        from core.agent_runner import _safe_parse_json
+        parsed = _safe_parse_json(raw_response)
+        
+        if not parsed:
+            # Try manual cleanup of code fences if present
+            cleaned = raw_response.strip()
+            if cleaned.startswith("```"):
+                parts = cleaned.split("```", 2)
+                if len(parts) >= 2:
+                    cleaned = parts[1]
+                    if cleaned.startswith("json"):
+                        cleaned = cleaned[4:]
+                    cleaned = cleaned.strip()
+            parsed = json.loads(cleaned)
+            
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception as e:
+        logger.error(f"Failed to generate structured action plan: {e}")
+        return {}
+
+
+def generate_and_save_action_plan_background(opportunity_id: str, user_id: str, project_id: str):
+    import threading
+    
+    def worker():
+        try:
+            admin = get_admin_client()
+            if not admin:
+                return
+            
+            # 1. Fetch opportunity
+            opp_res = admin.table("opportunities").select("*").eq("id", opportunity_id).execute()
+            if not opp_res.data:
+                return
+            opportunity = opp_res.data[0]
+            
+            # 2. Fetch project
+            proj_res = admin.table("projects").select("*").eq("id", project_id).execute()
+            if not proj_res.data:
+                return
+            project = proj_res.data[0]
+            
+            # 3. Fetch context data
+            from core.memory import list_project_memories, create_project_memory
+            memories = list_project_memories(project_id)
+            
+            sigs_res = admin.table("signals").select("*").eq("project_id", project_id).eq("status", "active").execute()
+            signals = sigs_res.data or []
+            
+            # 4. Generate structured action plan
+            plan_data = generate_action_plan_from_opportunity(opportunity, project, memories, signals)
+            
+            if plan_data:
+                # Insert into DB
+                admin.table("action_plans").insert({
+                    "user_id": user_id,
+                    "project_id": project_id,
+                    "opportunity_id": opportunity_id,
+                    "source_type": "opportunity",
+                    "source_id": opportunity_id,
+                    "title": plan_data.get("title", f"Action Plan: {opportunity.get('title')}"),
+                    "objective": plan_data.get("objective", opportunity.get("description", "")),
+                    "plan_type": plan_data.get("plan_type", "general_strategy"),
+                    "priority": plan_data.get("priority", "medium"),
+                    "status": "pending",
+                    "owner_label": "nexus",
+                    "estimated_effort": plan_data.get("estimated_effort", "medium"),
+                    "expected_impact": plan_data.get("expected_impact", "medium"),
+                    "confidence": plan_data.get("confidence", 0.5),
+                    "tasks": plan_data.get("tasks", []),
+                    "kpis": plan_data.get("kpis", []),
+                    "dependencies": plan_data.get("dependencies", []),
+                    "risks": plan_data.get("risks", [])
+                }).execute()
+                
+                # Persist as project memory
+                create_project_memory(
+                    user_id=user_id,
+                    project_id=project_id,
+                    memory_type="approved_action",
+                    title=f"Approved Action Plan: {plan_data.get('title')}",
+                    summary=f"Objective: {plan_data.get('objective')}. Plan Type: {plan_data.get('plan_type')}.",
+                    source="swarm_decision",
+                    confidence=0.9,
+                    tags=["approved_action", plan_data.get("plan_type")]
+                )
+                logger.info(f"Action plan generated successfully for opportunity {opportunity_id}")
+        except Exception as e:
+            logger.error(f"Failed in background action plan generation: {e}")
+            
+    threading.Thread(target=worker).start()
+
+
 @app.patch("/api/opportunities/{opportunity_id}")
 async def update_opportunity(
     opportunity_id: str,
@@ -725,6 +921,14 @@ async def update_opportunity(
             .eq("id", opportunity_id) \
             .eq("user_id", str(user.id)) \
             .execute()
+            
+        # Get opportunity project_id to scope background generation
+        opp_res = admin.table("opportunities").select("project_id").eq("id", opportunity_id).execute()
+        if opp_res.data:
+            project_id = opp_res.data[0].get("project_id")
+            if project_id and updates.get("status") == "completed":
+                generate_and_save_action_plan_background(opportunity_id, str(user.id), str(project_id))
+                
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -785,6 +989,7 @@ class MemoryCreateRequest(BaseModel):
 
 class BriefGenerateRequest(BaseModel):
     user_directive: Optional[str] = ""
+    template: Optional[str] = "general_strategy"
 
 @app.get("/api/projects/{project_id}/memories")
 async def get_project_memories_endpoint(
@@ -836,7 +1041,7 @@ async def delete_project_memory_endpoint(
 # STRATEGY BRIEFS GENERATION
 # ============================================================
 
-def generate_campaign_strategy_brief(project: dict, memories: list, opportunities: list, signals: list, user_directive: str = "") -> str:
+def generate_campaign_strategy_brief(project: dict, memories: list, opportunities: list, signals: list, user_directive: str = "", template: str = "general_strategy") -> str:
     project_text = f"Project Name: {project.get('name')}\nWebsite: {project.get('website_url')}\nDescription: {project.get('description', '')}"
     
     memories_text = "No prior strategic memories stored yet."
@@ -860,8 +1065,118 @@ def generate_campaign_strategy_brief(project: dict, memories: list, opportunitie
             s_lines.append(f"- Signal [{s.get('severity').upper()}]: {s.get('title')} -> {s.get('description')}")
         sigs_text = "\n".join(s_lines)
 
+    template_instructions = ""
+    sections_list = """## 1. Executive Summary
+## 2. ICP / Target Audience
+## 3. Current Signals & Opportunities (crawled telemetry)
+## 4. Proposed Campaign Strategy & positioning angle
+## 5. Multi-Channel Execution Plan (SEO, Content, Creative Hooks, PPC, AEO)
+## 6. Landing Page & CRO recommendations (MECLABS seq)
+## 7. Lifecycle Drip & Retention flows (abandoned cart, reactivation)
+## 8. North Star KPIs & Measurement Matrix
+## 9. RICE-Ranked Experiment Roadmap
+## 10. Next 7-Day Action Plan"""
+
+    if template == "seo_growth":
+        template_instructions = "This is a specialized Technical and Content SEO brief. Focus heavily on keywords, backlink networks, Answer Engine Optimization (AEO), schema, and domain topical coverage."
+        sections_list = """## 1. Executive Summary
+## 2. ICP / Target Audience
+## 3. Current Search Signals & GSC Gaps
+## 4. Proposed SEO Angle & Topical Positioning
+## 5. Technical SEO & Content Architecture Plan (keyword clusters, search intent mapping)
+## 6. Topical Authority Cluster & Link Acquisition Strategy
+## 7. AEO (Answer Engine Optimization) & Schema Markup Plan
+## 8. 30-Day Organic Execution Sprint
+## 9. Content KPIs & Organic traffic expectations
+## 10. Next 7-Day Actions"""
+    elif template == "paid_ads":
+        template_instructions = "This is a specialized Paid Traffic Ads Funnel brief. Focus heavily on Google Search, Meta, LinkedIn, bid strategies, ad hooks, creative angles, and CPA/LTV economics."
+        sections_list = """## 1. Executive Summary
+## 2. Target Persona & Paid Channels Selection
+## 3. Competitor Ad Telemetry & Keyword Intelligence
+## 4. Proposed Offer Angle & High-Converting Value Prop
+## 5. PPC Account Strategy & Funnel Setup (Campaign structures, bid strategies)
+## 6. Paid Creative Copywriting & Visual Storyboarding (Meta Hooks, LinkedIn angles)
+## 7. CAC, CPA, ROAS Unit Economics & Budget Test Plan
+## 8. Pixels, Conversions Tracking & Attribution Strategy
+## 9. Next 30-Day Paid Ads Optimization Sprint
+## 10. Next 7-Day Actions"""
+    elif template == "lead_generation":
+        template_instructions = "This is a B2B or High-Ticket Lead Generation brief. Focus heavily on lead magnets, custom landing pages, B2B cold email, CRM automated followups, and qualification routing."
+        sections_list = """## 1. Executive Summary
+## 2. B2B Buying Persona & Decision Maker Profiles
+## 3. High-Value Lead Magnet / Offer Specification
+## 4. Multi-Channel Outreach Plan (LinkedIn, Cold Email)
+## 5. Landing Page Wireframing & Conversions Audit (MECLABS friction review)
+## 6. B2B LinkedIn & Email Cold Outreach Sequence Scripting
+## 7. CRM automated followups & Qualification Routing
+## 8. MQL -> SQL Conversion funnel and lead scoring metrics
+## 9. Next 30-Day Lead Gen Sprint
+## 10. Next 7-Day Actions"""
+    elif template == "product_launch":
+        template_instructions = "This is a specialized GTM Product Launch brief. Focus heavily on category positioning, launches sequence timing, partner co-promotions, ProductHunt/social calendars, and active user retention loops."
+        sections_list = """## 1. Executive Summary
+## 2. Launch Market fit & Positioning Angle
+## 3. Category Mapping & GTM Message Framework
+## 4. Pre-Launch Buzz Building & Waitlist Acquisition
+## 5. Launch Sequence Timing (Launch day triggers, email drips, social run)
+## 6. Influencer & Partner GTM Co-Promotion Roadmap
+## 7. ProductHunt / Social Amplification Strategy
+## 8. Lifecycle Retention & Active Usage Trigger Sequence
+## 9. Launch Day KPIs & north-star metrics
+## 10. Next 7-Day Actions"""
+    elif template == "content_calendar":
+        template_instructions = "This is an Organic Content and Social Media calendar brief. Focus heavily on native hooks, editorial templates, short-form scripts, and multi-platform distribution matrices."
+        sections_list = """## 1. Executive Summary
+## 2. Social Media ICP & Platform Native Preferences
+## 3. Content Pillars & Branding positioning guide
+## 4. Content Calendar (BOFU/MOFU/TOFU clustering)
+## 5. Organic Content Pillars & Editorial Calendar Plan
+## 6. Platform Native Hooks (Short-form video scripts, LinkedIn Carousels)
+## 7. Domain Topical Coverage Expansion Roadmap
+## 8. Content Promotion, Repurposing & Distribution Matrix
+## 9. Organic Reach & engagement metrics goals
+## 10. Next 7-Day Actions"""
+    elif template == "crm_lifecycle":
+        template_instructions = "This is a specialized CRM Lifecycle email nurture brief. Focus heavily on segmentation, cart abandonment, re-engagement automations, and subscriber LTV expansion plans."
+        sections_list = """## 1. Executive Summary
+## 2. Customer Lifecycle Stage Segmentation
+## 3. Primary CRM / Email Lead Flow audit
+## 4. Email List Segmentation & Customer Lifecycle Mapping
+## 5. High-Converting Drip Flows (Welcome, Cart Abandon, Re-engagement)
+## 6. SMS/Push Notification Triggers & Multi-Channel Touchpoints
+## 7. Subscriber Retention, Churn Analysis & LTV Expansion Playbook
+## 8. Deliverability & list health guidelines
+## 9. Open rates, CTR & Revenue attribution goals
+## 10. Next 7-Day Actions"""
+    elif template == "competitor_attack":
+        template_instructions = "This is a Competitor Attack and Bid Hijacking brief. Focus heavily on BOFU comparisons, differentiation grids, price audits, custom retargeting, and sales objection battlecards."
+        sections_list = """## 1. Executive Summary
+## 2. Competitor intelligence, market pricing & G2 audit
+## 3. Competitor Feature Gaps, Price Comparisons & Differentiation Audit
+## 4. Competitor Keyword Hijacking (BOFU comparisons e.g. alternative to X)
+## 5. Custom Audience Retargeting (Targeting competitor visitors/demographics)
+## 6. Sales Objection Battlecards & Comparison Landing Page Spec
+## 7. Comparative Ad Angles & bid hijack plans
+## 8. Retaliation risks, price war and reputation mitigation
+## 9. Market share acquisition KPI goals
+## 10. Next 7-Day Actions"""
+    elif template == "cro_landing_page":
+        template_instructions = "This is a CRO Landing Page Optimization brief. Focus heavily on cognitive load audits, value propositions, incentive structures, and A/B test matrices."
+        sections_list = """## 1. Executive Summary
+## 2. Mobile vs. Desktop Traffic Persona Audit
+## 3. Value prop motivation & conversions audit
+## 4. Current Page Friction & Cognitive Load Audit
+## 5. MECLABS Conversion Heuristic Analysis (Motivation, Value Prop, Incentive)
+## 6. Copywriting Framework & Friction Reduction Design Specs
+## 7. A/B Testing Matrix & Growth Metrics Goals
+## 8. Analytics tracking setup & heatmapping
+## 9. Next 30-Day Page Audit & A/B Sprint
+## 10. Next 7-Day Actions"""
+
     prompt = f"""You are the boardroom Chief Marketing Strategist (Nexus) at SwarmOps.
 Your task is to compile a highly professional, client-ready, and execution-ready Campaign Strategy Brief.
+{template_instructions}
 
 === BRAND & CONTEXT ===
 {project_text}
@@ -883,16 +1198,7 @@ You MUST produce a comprehensive Strategy Brief in clean, highly structured Mark
 Your brief MUST contain these exact sections:
 # STRATEGY BRIEF: [Strategic Campaign Name]
 
-## 1. Executive Summary
-## 2. ICP / Target Audience
-## 3. Current Signals & Opportunities (crawled telemetry)
-## 4. Proposed Campaign Strategy & positioning angle
-## 5. Multi-Channel Execution Plan (SEO, Content, Creative Hooks, PPC, AEO)
-## 6. Landing Page & CRO recommendations (MECLABS seq)
-## 7. Lifecycle Drip & Retention flows (abandoned cart, reactivation)
-## 8. North Star KPIs & Measurement Matrix
-## 9. RICE-Ranked Experiment Roadmap
-## 10. Next 7-Day Action Plan
+{sections_list}
 
 Make every recommendation hyper-specific (which keyword, which segment, which trigger, which ad hook) and completely action-ready. Let's make it brilliant!"""
 
@@ -945,7 +1251,8 @@ async def generate_strategy_brief_endpoint(
             memories=memories,
             opportunities=opportunities,
             signals=signals,
-            user_directive=request.user_directive
+            user_directive=request.user_directive,
+            template=request.template or "general_strategy"
         )
         
         # Extract title from first line
@@ -963,7 +1270,8 @@ async def generate_strategy_brief_endpoint(
             "title": title,
             "content": {
                 "markdown": markdown_content,
-                "user_directive": request.user_directive
+                "user_directive": request.user_directive,
+                "template": request.template or "general_strategy"
             },
             "status": "pending"
         }).execute()
@@ -1019,5 +1327,206 @@ async def get_strategy_brief_endpoint(
         return res.data[0]
     except Exception as e:
         logger.error(f"Failed to fetch brief: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# ACTION PLANS PYDANTIC SCHEMAS
+# ============================================================
+
+class ActionPlanCreateRequest(BaseModel):
+    opportunity_id: Optional[str] = None
+    source_type: str = "user"
+    source_id: Optional[str] = None
+    title: str
+    objective: str
+    plan_type: str = "general_strategy"
+    priority: str = "medium"
+    status: str = "pending"
+    owner_label: Optional[str] = "nexus"
+    due_date: Optional[str] = None
+    estimated_effort: Optional[str] = "medium"
+    expected_impact: Optional[str] = "medium"
+    confidence: Optional[float] = 0.5
+    tasks: Optional[list] = []
+    kpis: Optional[list] = []
+    dependencies: Optional[list] = []
+    risks: Optional[list] = []
+
+class ActionPlanUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    objective: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    owner_label: Optional[str] = None
+    due_date: Optional[str] = None
+    estimated_effort: Optional[str] = None
+    expected_impact: Optional[str] = None
+    confidence: Optional[float] = None
+    tasks: Optional[list] = None
+    kpis: Optional[list] = None
+    dependencies: Optional[list] = None
+    risks: Optional[list] = None
+
+
+# ============================================================
+# ACTION PLANS ENDPOINTS
+# ============================================================
+
+@app.get("/api/projects/{project_id}/action-plans")
+async def list_action_plans_endpoint(
+    project_id: str,
+    status: Optional[str] = "all",
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        return {"action_plans": []}
+        
+    try:
+        query = admin.table("action_plans").select("*").eq("project_id", project_id)
+        if status and status != "all":
+            query = query.eq("status", status)
+            
+        res = query.order("created_at", desc=True).execute()
+        return {"action_plans": res.data or []}
+    except Exception as e:
+        logger.error(f"Failed to list action plans: {e}")
+        return {"action_plans": []}
+
+@app.post("/api/projects/{project_id}/action-plans")
+async def create_action_plan_endpoint(
+    project_id: str,
+    request: ActionPlanCreateRequest,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        raise HTTPException(status_code=500, detail="Database not configured")
+        
+    try:
+        res = admin.table("action_plans").insert({
+            "user_id": str(user.id),
+            "project_id": project_id,
+            "opportunity_id": request.opportunity_id,
+            "source_type": request.source_type,
+            "source_id": request.source_id,
+            "title": request.title,
+            "objective": request.objective,
+            "plan_type": request.plan_type,
+            "priority": request.priority,
+            "status": request.status,
+            "owner_label": request.owner_label or "nexus",
+            "due_date": request.due_date,
+            "estimated_effort": request.estimated_effort,
+            "expected_impact": request.expected_impact,
+            "confidence": request.confidence,
+            "tasks": request.tasks or [],
+            "kpis": request.kpis or [],
+            "dependencies": request.dependencies or [],
+            "risks": request.risks or []
+        }).execute()
+        
+        # Persist a project memory for manual plans
+        from core.memory import create_project_memory
+        create_project_memory(
+            user_id=str(user.id),
+            project_id=project_id,
+            memory_type="approved_action",
+            title=f"Manual Plan: {request.title}",
+            summary=f"Objective: {request.objective}. Created by user.",
+            source="user",
+            confidence=1.0,
+            tags=["manual_action", request.plan_type]
+        )
+        
+        return res.data[0] if res.data else {}
+    except Exception as e:
+        logger.error(f"Failed to create action plan: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/action-plans/{plan_id}")
+async def update_action_plan_endpoint(
+    plan_id: str,
+    request: ActionPlanUpdateRequest,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        raise HTTPException(status_code=500, detail="Database not configured")
+        
+    updates = {}
+    if request.title is not None:
+        updates["title"] = request.title
+    if request.objective is not None:
+        updates["objective"] = request.objective
+    if request.priority is not None:
+        updates["priority"] = request.priority
+    if request.status is not None:
+        updates["status"] = request.status
+    if request.owner_label is not None:
+        updates["owner_label"] = request.owner_label
+    if request.due_date is not None:
+        updates["due_date"] = request.due_date
+    if request.estimated_effort is not None:
+        updates["estimated_effort"] = request.estimated_effort
+    if request.expected_impact is not None:
+        updates["expected_impact"] = request.expected_impact
+    if request.confidence is not None:
+        updates["confidence"] = request.confidence
+    if request.tasks is not None:
+        updates["tasks"] = request.tasks
+    if request.kpis is not None:
+        updates["kpis"] = request.kpis
+    if request.dependencies is not None:
+        updates["dependencies"] = request.dependencies
+    if request.risks is not None:
+        updates["risks"] = request.risks
+        
+    try:
+        res = admin.table("action_plans") \
+            .update(updates) \
+            .eq("id", plan_id) \
+            .eq("user_id", str(user.id)) \
+            .execute()
+        return res.data[0] if res.data else {}
+    except Exception as e:
+        logger.error(f"Failed to update action plan: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/action-plans/{plan_id}")
+async def delete_action_plan_endpoint(
+    plan_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        raise HTTPException(status_code=500, detail="Database not configured")
+        
+    try:
+        admin.table("action_plans") \
+            .delete() \
+            .eq("id", plan_id) \
+            .eq("user_id", str(user.id)) \
+            .execute()
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Failed to delete action plan: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

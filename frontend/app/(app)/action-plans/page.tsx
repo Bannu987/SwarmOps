@@ -1,0 +1,595 @@
+"use client"
+
+import { useEffect, useState, useCallback } from "react"
+import { listActionPlans, updateActionPlan, deleteActionPlan } from "@/lib/api"
+import type { ActionPlan, ActionPlanTask } from "@/lib/api"
+import { useActiveProject } from "@/lib/hooks/useActiveProject"
+import { WelcomeOnboarding } from "@/components/shared/WelcomeOnboarding"
+import { 
+  ClipboardList, 
+  Loader2, 
+  Trash2, 
+  Download, 
+  Copy, 
+  Calendar, 
+  Sparkles, 
+  ArrowRight, 
+  TrendingUp, 
+  AlertTriangle, 
+  ShieldAlert, 
+  Link2,
+  CheckCircle2, 
+  Circle,
+  Play,
+  XCircle,
+  Clock
+} from "lucide-react"
+
+export default function ActionPlansPage() {
+  const { projects, activeProject, loading: projectsLoading } = useActiveProject()
+  const [plans, setPlans] = useState<ActionPlan[]>([])
+  const [loadingPlans, setLoadingPlans] = useState(true)
+  const [selectedPlan, setSelectedPlan] = useState<ActionPlan | null>(null)
+  
+  // Filters
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [typeFilter, setTypeFilter] = useState("all")
+  const [copied, setCopied] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const loadPlans = useCallback(async () => {
+    if (!activeProject?.id) {
+      setPlans([])
+      setLoadingPlans(false)
+      return
+    }
+    setLoadingPlans(true)
+    try {
+      const res = await listActionPlans(activeProject.id, statusFilter)
+      const list = res.action_plans || []
+      setPlans(list)
+      
+      // Auto-select first or update selected
+      if (list.length > 0) {
+        if (selectedPlan) {
+          const fresh = list.find((p) => p.id === selectedPlan.id)
+          setSelectedPlan(fresh || list[0])
+        } else {
+          setSelectedPlan(list[0])
+        }
+      } else {
+        setSelectedPlan(null)
+      }
+    } catch (e) {
+      console.error("Failed to load action plans:", e)
+    } finally {
+      setLoadingPlans(false)
+    }
+  }, [activeProject?.id, statusFilter, selectedPlan])
+
+  useEffect(() => {
+    loadPlans()
+  }, [activeProject?.id, statusFilter]) // Reload on active project or status filter toggle
+
+  const handleTaskToggle = async (plan: ActionPlan, taskId: string) => {
+    const updatedTasks = plan.tasks.map((t) => {
+      if (t.id === taskId) {
+        const nextStatus: ActionPlanTask["status"] = t.status === "completed" ? "pending" : "completed"
+        return { ...t, status: nextStatus }
+      }
+      return t
+    })
+
+    // Optimistic update
+    const updatedPlan = { ...plan, tasks: updatedTasks }
+    setPlans((prev) => prev.map((p) => p.id === plan.id ? updatedPlan : p))
+    if (selectedPlan?.id === plan.id) {
+      setSelectedPlan(updatedPlan)
+    }
+
+    try {
+      await updateActionPlan(plan.id, { tasks: updatedTasks })
+    } catch (e) {
+      console.error("Failed to toggle task:", e)
+      // Rollback
+      loadPlans()
+    }
+  }
+
+  const handleTaskStatusChange = async (plan: ActionPlan, taskId: string, newStatus: ActionPlanTask["status"]) => {
+    const updatedTasks = plan.tasks.map((t) => {
+      if (t.id === taskId) {
+        return { ...t, status: newStatus }
+      }
+      return t
+    })
+
+    const updatedPlan = { ...plan, tasks: updatedTasks }
+    setPlans((prev) => prev.map((p) => p.id === plan.id ? updatedPlan : p))
+    if (selectedPlan?.id === plan.id) {
+      setSelectedPlan(updatedPlan)
+    }
+
+    try {
+      await updateActionPlan(plan.id, { tasks: updatedTasks })
+    } catch (e) {
+      console.error("Failed to update task status:", e)
+      loadPlans()
+    }
+  }
+
+  const handleDeletePlan = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this action plan?")) return
+    try {
+      const res = await deleteActionPlan(id)
+      if (res.success) {
+        setPlans((prev) => prev.filter((p) => p.id !== id))
+        if (selectedPlan?.id === id) {
+          setSelectedPlan(null)
+        }
+      }
+    } catch (e) {
+      console.error("Failed to delete plan:", e)
+    }
+  }
+
+  const handleCopyMarkdown = (plan: ActionPlan) => {
+    const tasksMd = plan.tasks.map((t) => `- [${t.status === "completed" ? "x" : " "}] ${t.title} (${t.owner})`).join("\n")
+    const kpisMd = plan.kpis.map((k) => `- **{k.metric}**: {k.target} ({k.timeframe})`).join("\n")
+    const risksMd = plan.risks.map((r) => `- **Risk**: {r.risk} | **Mitigation**: {r.mitigation}`).join("\n")
+    const depsMd = plan.dependencies.map((d) => `- {d}`).join("\n")
+
+    const markdown = `# ACTION PLAN: ${plan.title}
+
+## Objective
+${plan.objective}
+
+## Plan Details
+- **Plan Type**: ${plan.plan_type.replace("_", " ").toUpperCase()}
+- **Priority**: ${plan.priority.toUpperCase()}
+- **Confidence Rating**: ${Math.round(plan.confidence * 100)}%
+- **Estimated Effort**: ${plan.estimated_effort.toUpperCase()}
+- **Expected Impact**: ${plan.expected_impact.toUpperCase()}
+
+## 📋 Task Checklist
+${tasksMd}
+
+## 🎯 KPIs & Target Metrics
+${kpisMd}
+
+## ⚠️ Risks & Backups
+${risksMd}
+
+## 🔗 Project Dependencies
+${depsMd}
+
+_Generated by SwarmOps Action Engine_`
+
+    navigator.clipboard.writeText(markdown)
+    setCopiedId(plan.id)
+    setCopied(true)
+    setTimeout(() => {
+      setCopied(false)
+      setCopiedId(null)
+    }, 2000)
+  }
+
+  const handleDownloadMarkdown = (plan: ActionPlan) => {
+    const tasksMd = plan.tasks.map((t) => `- [${t.status === "completed" ? "x" : " "}] ${t.title} (${t.owner})`).join("\n")
+    const kpisMd = plan.kpis.map((k) => `- **${k.metric}**: ${k.target} (${k.timeframe})`).join("\n")
+    const risksMd = plan.risks.map((r) => `- **Risk**: ${r.risk} | **Mitigation**: ${r.mitigation}`).join("\n")
+    const depsMd = plan.dependencies.map((d) => `- ${d}`).join("\n")
+
+    const markdown = `# ACTION PLAN: ${plan.title}
+
+## Objective
+${plan.objective}
+
+## Plan Details
+- **Plan Type**: ${plan.plan_type.replace("_", " ").toUpperCase()}
+- **Priority**: ${plan.priority.toUpperCase()}
+- **Confidence Rating**: ${Math.round(plan.confidence * 100)}%
+- **Estimated Effort**: ${plan.estimated_effort.toUpperCase()}
+- **Expected Impact**: ${plan.expected_impact.toUpperCase()}
+
+## 📋 Task Checklist
+${tasksMd}
+
+## 🎯 KPIs & Target Metrics
+${kpisMd}
+
+## ⚠️ Risks & Backups
+${risksMd}
+
+## 🔗 Project Dependencies
+${depsMd}
+
+_Generated by SwarmOps Action Engine_`
+
+    const blob = new Blob([markdown], { type: "text/markdown" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `action_plan_${plan.title.toLowerCase().replace(/[^a-z0-9]+/g, "_")}.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const loading = projectsLoading || loadingPlans
+
+  if (loading && plans.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
+          <div className="text-xs text-muted-foreground">Loading Action Plans Command Center...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <WelcomeOnboarding />
+      </div>
+    )
+  }
+
+  if (!activeProject) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background p-6">
+        <div className="bg-card border border-border rounded-2xl p-8 max-w-md text-center shadow-lg">
+          <ClipboardList className="w-10 h-10 text-primary mx-auto mb-4 animate-bounce" />
+          <h3 className="text-base font-semibold text-foreground mb-1">Select a Workspace</h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            Select or create a workspace from the dashboard to unlock the Action Plan Engine.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const filteredPlans = plans.filter((p) => {
+    return typeFilter === "all" || p.plan_type === typeFilter
+  })
+
+  return (
+    <div className="flex-grow flex h-full overflow-hidden bg-background text-foreground">
+      {/* Left List Pane */}
+      <div className="w-80 border-r border-border flex flex-col h-full bg-card/60 flex-shrink-0">
+        <div className="p-4 border-b border-border space-y-3">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-primary" />
+            <h2 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">
+              Execution Plans
+            </h2>
+          </div>
+          
+          {/* Quick Filters */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-2 py-1.5 bg-input border border-border rounded-lg text-[10px] text-foreground outline-none cursor-pointer"
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="blocked">Blocked</option>
+            </select>
+
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-2 py-1.5 bg-input border border-border rounded-lg text-[10px] text-foreground outline-none cursor-pointer"
+            >
+              <option value="all">All Types</option>
+              <option value="seo_growth">SEO Growth</option>
+              <option value="paid_ads">Paid Funnels</option>
+              <option value="lead_generation">Lead Gen</option>
+              <option value="crm_lifecycle">CRM Drips</option>
+              <option value="product_launch">Product Launch</option>
+              <option value="competitor_attack">Competitor Attack</option>
+              <option value="conversion_rate_optimization">CRO Page</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Plans List Scroll */}
+        <div className="flex-grow overflow-y-auto p-2 space-y-1.5">
+          {filteredPlans.length === 0 ? (
+            <div className="text-center py-16 px-4">
+              <ClipboardList className="w-6 h-6 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                No executing action plans. Approve campaign signals on the Approvals Board to trigger auto-checklists.
+              </p>
+            </div>
+          ) : (
+            filteredPlans.map((plan) => {
+              const isSelected = selectedPlan?.id === plan.id
+              const doneCount = plan.tasks.filter((t) => t.status === "completed").length
+              const totalCount = plan.tasks.length
+              const percentage = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0
+
+              return (
+                <button
+                  key={plan.id}
+                  onClick={() => setSelectedPlan(plan)}
+                  className={`w-full text-left p-3 rounded-xl text-xs transition border flex flex-col gap-2.5 relative group ${
+                    isSelected 
+                      ? "bg-primary/10 border-primary/20 text-foreground" 
+                      : "bg-muted/10 border-transparent hover:bg-muted/30 hover:border-border/60 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <div>
+                    {/* Category tag */}
+                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/10 mb-1.5">
+                      {plan.plan_type.replace("_", " ")}
+                    </span>
+                    <h4 className="font-semibold leading-snug truncate max-w-full text-foreground">
+                      {plan.title}
+                    </h4>
+                  </div>
+
+                  {/* Micro Progress Bar */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[9px] text-muted-foreground/60">
+                      <span>Checklist Progress</span>
+                      <span>{percentage}% ({doneCount}/{totalCount})</span>
+                    </div>
+                    <div className="w-full bg-border/40 h-1 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-primary h-full rounded-full transition-all duration-500" 
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Priority indicator */}
+                  <div className="flex items-center gap-2 text-[9px] text-muted-foreground/60 border-t border-border/20 pt-2 mt-0.5">
+                    <span className="flex items-center gap-1 capitalize">
+                      <Clock className="w-3 h-3" />
+                      {new Date(plan.created_at).toLocaleDateString()}
+                    </span>
+                    <span>·</span>
+                    <span className="capitalize">Priority: {plan.priority}</span>
+                  </div>
+                </button>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Right Plan Detail Pane */}
+      <div className="flex-1 overflow-y-auto bg-card/25 flex flex-col h-full">
+        {selectedPlan ? (
+          <div className="flex-grow p-6 space-y-6">
+            
+            {/* Header Actions */}
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary/10 border border-primary/20 text-primary">
+                    {selectedPlan.plan_type.replace("_", " ")}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/60">·</span>
+                  <span className="text-[10px] text-muted-foreground">Confidence: {Math.round(selectedPlan.confidence * 100)}%</span>
+                </div>
+                <h1 className="text-lg font-bold tracking-tight text-foreground mt-1.5">
+                  {selectedPlan.title}
+                </h1>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                  {selectedPlan.objective}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => handleCopyMarkdown(selectedPlan)}
+                  className="p-2 border border-border hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 text-xs font-semibold"
+                  title="Copy as Markdown"
+                >
+                  {copiedId === selectedPlan.id ? (
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Copied!
+                    </span>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleDownloadMarkdown(selectedPlan)}
+                  className="p-2 border border-border hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition flex items-center gap-1.5 text-xs font-semibold"
+                  title="Download Markdown File"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </button>
+                <button
+                  onClick={() => handleDeletePlan(selectedPlan.id)}
+                  className="p-2 border border-destructive/20 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg transition"
+                  title="Delete Execution Plan"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Primary Details Checklist */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Checklist Column */}
+              <div className="lg:col-span-2 space-y-4">
+                <h3 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-primary" />
+                  Campaign Checklist & Sub-Tasks
+                </h3>
+                
+                <div className="bg-card border border-border rounded-xl p-5 space-y-3.5">
+                  {selectedPlan.tasks.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">No tasks created for this plan.</p>
+                  ) : (
+                    selectedPlan.tasks.map((task) => {
+                      const isCompleted = task.status === "completed"
+                      const isBlocked = task.status === "blocked"
+                      const isProgress = task.status === "in_progress"
+
+                      return (
+                        <div 
+                          key={task.id} 
+                          className={`flex items-start gap-3 p-3 rounded-lg border transition group ${
+                            isCompleted 
+                              ? "bg-emerald-500/5 border-emerald-500/10 text-muted-foreground" 
+                              : isBlocked
+                                ? "bg-destructive/5 border-destructive/10"
+                                : isProgress
+                                  ? "bg-primary/5 border-primary/20 text-foreground ring-1 ring-primary/10"
+                                  : "bg-muted/10 border-transparent hover:border-border text-foreground/90"
+                          }`}
+                        >
+                          <button
+                            onClick={() => handleTaskToggle(selectedPlan, task.id)}
+                            className="mt-0.5 flex-shrink-0 transition text-muted-foreground hover:text-foreground"
+                          >
+                            {isCompleted ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-400/20" />
+                            ) : (
+                              <Circle className="w-4 h-4 text-muted-foreground/60" />
+                            )}
+                          </button>
+                          
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-xs font-medium leading-relaxed block ${isCompleted ? "line-through text-muted-foreground/50" : ""}`}>
+                              {task.title}
+                            </span>
+                            
+                            {/* Task Metadata */}
+                            <div className="flex items-center gap-3 mt-2 text-[9px] text-muted-foreground/60">
+                              <span className="flex items-center gap-1 uppercase">
+                                <Clock className="w-2.5 h-2.5" />
+                                {task.owner}
+                              </span>
+                              <span>·</span>
+                              <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                  onClick={() => handleTaskStatusChange(selectedPlan, task.id, "in_progress")}
+                                  className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition ${isProgress ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted-hover text-foreground"}`}
+                                >
+                                  In Progress
+                                </button>
+                                <button 
+                                  onClick={() => handleTaskStatusChange(selectedPlan, task.id, "blocked")}
+                                  className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition ${isBlocked ? "bg-destructive text-destructive-foreground" : "bg-muted hover:bg-muted-hover text-foreground"}`}
+                                >
+                                  Block
+                                </button>
+                                <button 
+                                  onClick={() => handleTaskStatusChange(selectedPlan, task.id, "pending")}
+                                  className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition ${task.status === "pending" ? "bg-muted-hover" : "bg-muted hover:bg-muted-hover text-foreground"}`}
+                                >
+                                  Reset
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Side Cards: KPIs, Risks, Dependencies */}
+              <div className="space-y-6">
+                
+                {/* KPIs Target */}
+                <div className="space-y-2">
+                  <h3 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    Target metrics (KPIs)
+                  </h3>
+                  <div className="bg-card border border-border rounded-xl p-4.5 space-y-3">
+                    {selectedPlan.kpis.map((kpi, idx) => (
+                      <div key={idx} className="border-b border-border/40 last:border-0 pb-3 last:pb-0">
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{kpi.metric}</div>
+                        <div className="flex items-baseline justify-between mt-1">
+                          <span className="text-xs font-bold text-emerald-400">{kpi.target}</span>
+                          <span className="text-[9px] text-muted-foreground/60">{kpi.timeframe}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Dependencies */}
+                <div className="space-y-2">
+                  <h3 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Link2 className="w-4 h-4 text-primary" />
+                    Dependencies
+                  </h3>
+                  <div className="bg-card border border-border rounded-xl p-4.5 space-y-2">
+                    {selectedPlan.dependencies.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground italic">No checklist dependencies declared.</p>
+                    ) : (
+                      selectedPlan.dependencies.map((dep, idx) => (
+                        <div key={idx} className="flex items-start gap-1.5 text-[11px] text-muted-foreground leading-relaxed">
+                          <span className="text-primary mt-1 flex-shrink-0">•</span>
+                          <span>{dep}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Risks mitigation */}
+                <div className="space-y-2">
+                  <h3 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldAlert className="w-4 h-4 text-amber-400" />
+                    Risks & mitigations
+                  </h3>
+                  <div className="bg-card border border-border rounded-xl p-4.5 space-y-3">
+                    {selectedPlan.risks.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground italic">No identified risks.</p>
+                    ) : (
+                      selectedPlan.risks.map((risk, idx) => (
+                        <div key={idx} className="border-b border-border/40 last:border-0 pb-3 last:pb-0 space-y-1">
+                          <div className="text-[11px] font-semibold text-amber-400 flex items-center gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            <span>{risk.risk}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground leading-relaxed pl-5">
+                            Mitigation: {risk.mitigation}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+            
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <ClipboardList className="w-12 h-12 text-muted-foreground/30 mb-4 animate-pulse" />
+            <h2 className="font-semibold text-sm mb-1 text-foreground">Select an Action Plan</h2>
+            <p className="text-xs text-muted-foreground max-w-sm">
+              Click a plan from the left list history or approve a new marketing signal to compile a dynamic checklist.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

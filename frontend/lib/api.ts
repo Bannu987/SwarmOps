@@ -326,12 +326,15 @@ export async function deleteProjectMemory(memoryId: string) {
   return res.json() as Promise<{ success: boolean }>
 }
 
-export async function generateStrategyBrief(projectId: string, userDirective?: string) {
+export async function generateStrategyBrief(projectId: string, userDirective?: string, template?: string) {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}/api/projects/${projectId}/briefs`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({ user_directive: userDirective || "" }),
+    body: JSON.stringify({ 
+      user_directive: userDirective || "",
+      template: template || "general_strategy"
+    }),
   })
   return res.json() as Promise<StrategyBrief>
 }
@@ -346,5 +349,86 @@ export async function getStrategyBrief(briefId: string) {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}/api/briefs/${briefId}`, { headers })
   return res.json() as Promise<StrategyBrief>
+}
+
+// ============================================================
+// ACTION PLANS
+// ============================================================
+
+export interface ActionPlanTask {
+  id: string
+  title: string
+  status: "pending" | "in_progress" | "completed" | "blocked" | "dismissed"
+  owner: string
+}
+
+export interface ActionPlanKPI {
+  metric: string
+  target: string
+  timeframe: string
+}
+
+export interface ActionPlanRisk {
+  risk: string
+  mitigation: string
+}
+
+export interface ActionPlan {
+  id: string
+  user_id: string
+  project_id: string
+  opportunity_id: string | null
+  source_type: "opportunity" | "swarm_decision" | "strategy_brief" | "user"
+  source_id: string | null
+  title: string
+  objective: string
+  plan_type: "seo_growth" | "paid_ads" | "lead_generation" | "content_calendar" | "crm_lifecycle" | "product_launch" | "competitor_attack" | "conversion_rate_optimization" | "general_strategy"
+  priority: "high" | "medium" | "low"
+  status: "pending" | "in_progress" | "completed" | "blocked" | "dismissed"
+  owner_label: string
+  due_date: string | null
+  estimated_effort: "low" | "medium" | "high"
+  expected_impact: "low" | "medium" | "high"
+  confidence: number
+  tasks: ActionPlanTask[]
+  kpis: ActionPlanKPI[]
+  dependencies: string[]
+  risks: ActionPlanRisk[]
+  created_at: string
+}
+
+export async function listActionPlans(projectId: string, status: string = "all") {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/action-plans?status=${status}`, { headers })
+  return res.json() as Promise<{ action_plans: ActionPlan[] }>
+}
+
+export async function createActionPlan(projectId: string, data: Partial<ActionPlan>) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/action-plans`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(data),
+  })
+  return res.json() as Promise<ActionPlan>
+}
+
+export async function updateActionPlan(planId: string, updates: Partial<ActionPlan>) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/action-plans/${planId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(updates),
+  })
+  return res.json() as Promise<ActionPlan>
+}
+
+export async function deleteActionPlan(planId: string) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/action-plans/${planId}`, {
+    method: "DELETE",
+    headers,
+  })
+  return res.json() as Promise<{ success: boolean }>
 }
 

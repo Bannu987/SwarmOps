@@ -18,6 +18,7 @@ import {
   LogOut,
   ChevronDown,
   Bot,
+  ClipboardList,
 } from "lucide-react"
 
 interface SidebarProps {
@@ -34,6 +35,7 @@ export function Sidebar({ user }: SidebarProps) {
     { href: "/dashboard", icon: Activity, label: "Command Center" },
     { href: "/chat", icon: MessageSquare, label: "AI Brief Room" },
     { href: "/projects", icon: FolderKanban, label: "Workspaces" },
+    { href: "/action-plans", icon: ClipboardList, label: "Action Plans" },
     { href: "/agents", icon: Users, label: "Agent Network" },
     { href: "/approval", icon: CheckSquare, label: "Approvals", badge: 0 },
     { href: "/sources", icon: Database, label: "Integrations" },

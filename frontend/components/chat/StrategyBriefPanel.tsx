@@ -18,6 +18,7 @@ export function StrategyBriefPanel({ projectId, onClose }: Props) {
   const [directive, setDirective] = useState("")
   const [copied, setCopied] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [template, setTemplate] = useState("general_strategy")
 
   const loadBriefs = useCallback(async () => {
     setLoading(true)
@@ -42,7 +43,7 @@ export function StrategyBriefPanel({ projectId, onClose }: Props) {
   const handleGenerate = async () => {
     setGenerating(true)
     try {
-      const res = await generateStrategyBrief(projectId, directive)
+      const res = await generateStrategyBrief(projectId, directive, template)
       if (res && res.id) {
         setDirective("")
         setShowCreate(false)
@@ -167,6 +168,26 @@ export function StrategyBriefPanel({ projectId, onClose }: Props) {
               
               <div className="space-y-4">
                 <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1.5">
+                    Brief Template
+                  </label>
+                  <select
+                    value={template}
+                    onChange={(e) => setTemplate(e.target.value)}
+                    disabled={generating}
+                    className="w-full px-3 py-2 bg-input border border-border rounded-lg text-xs text-foreground outline-none focus:border-primary transition mb-4"
+                  >
+                    <option value="general_strategy">General Strategy Brief</option>
+                    <option value="seo_growth">SEO Growth Brief</option>
+                    <option value="paid_ads">Paid Ads Funnel Brief</option>
+                    <option value="lead_generation">Lead Generation Brief</option>
+                    <option value="product_launch">Product Launch Brief</option>
+                    <option value="content_calendar">Content Calendar Brief</option>
+                    <option value="crm_lifecycle">CRM Lifecycle Brief</option>
+                    <option value="competitor_attack">Competitor Attack Brief</option>
+                    <option value="cro_landing_page">CRO / Landing Page Brief</option>
+                  </select>
+
                   <label className="text-xs font-semibold text-muted-foreground block mb-2">
                     Custom directives / campaign focus (optional)
                   </label>

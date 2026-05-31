@@ -76,7 +76,7 @@ def run_all_scans() -> Dict:
     return summary
 
 
-def run_scans_for_user(user_id: str, project_id: str = None) -> Dict:
+def run_scans_for_user(user_id: str, project_id: str = None, force: bool = False) -> Dict:
     """
     Run scanners for a specific user/project. Used by on-demand
     endpoint (e.g. when user adds website URL, scan immediately).
@@ -100,7 +100,7 @@ def run_scans_for_user(user_id: str, project_id: str = None) -> Dict:
     for project in projects:
         for scanner in ALL_SCANNERS:
             try:
-                signals_created = scanner.run_for_user(user_id, project)
+                signals_created = scanner.run_for_user(user_id, project, force=force)
                 total_signals += signals_created
             except Exception as e:
                 logger.error(f"Scanner failed: {e}")

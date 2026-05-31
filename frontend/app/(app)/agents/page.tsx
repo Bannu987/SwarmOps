@@ -2,6 +2,7 @@
 
 import { AGENTS } from "@/lib/constants/agents"
 import { Bot, Sparkles, Network } from "lucide-react"
+import Link from "next/link"
 
 const AGENT_DESCRIPTIONS: Record<string, string> = {
   nexus: "Orchestrates the entire swarm debate, consolidates recommendations, guarantees brand context alignment, and serves as the strategic chief marketing officer.",
@@ -61,9 +62,12 @@ export default function AgentsPage() {
                     <Bot className="w-3.5 h-3.5 text-primary/80" />
                     Model: OpenRouter Claude/GPT
                   </span>
-                  <span className="flex items-center gap-1 font-semibold text-primary group-hover:underline">
+                  <Link
+                    href={`/chat?agent=${agent.id.toLowerCase()}`}
+                    className="flex items-center gap-1 font-semibold text-primary hover:underline"
+                  >
                     Deploy <Sparkles className="w-2.5 h-2.5" />
-                  </span>
+                  </Link>
                 </div>
               </div>
             )

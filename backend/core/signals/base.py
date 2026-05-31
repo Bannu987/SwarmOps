@@ -91,7 +91,7 @@ class BaseScanner(ABC):
             logger.warning(f"[{self.name}] should_run check failed: {e}")
             return False
 
-    def run_for_user(self, user_id: str, project: Dict) -> int:
+    def run_for_user(self, user_id: str, project: Dict, force: bool = False) -> int:
         """
         Run scanner and persist signals. Returns number of signals created.
         Wraps scan() with timing + history tracking.
@@ -100,7 +100,7 @@ class BaseScanner(ABC):
         if not admin:
             return 0
 
-        if not self.should_run(user_id, project):
+        if not force and not self.should_run(user_id, project):
             logger.info(f"[{self.name}] skipping for {user_id} (too soon)")
             return 0
 

@@ -6,10 +6,13 @@ import { listProjects, createProject } from "@/lib/api"
 import type { Project } from "@/types"
 import { createClient } from "@/lib/supabase/client"
 import { WelcomeOnboarding } from "@/components/shared/WelcomeOnboarding"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
+import { useActiveProject } from "@/lib/hooks/useActiveProject"
 
 function ProjectsList() {
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const { selectProject } = useActiveProject()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -139,6 +142,10 @@ function ProjectsList() {
             {projects.map((p) => (
               <div
                 key={p.id}
+                onClick={() => {
+                  selectProject(p.id)
+                  router.push("/dashboard")
+                }}
                 className="bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-3">

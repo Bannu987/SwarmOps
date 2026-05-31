@@ -12,6 +12,7 @@ import { useSearchParams } from "next/navigation"
 import { useActiveProject } from "@/lib/hooks/useActiveProject"
 import { WelcomeOnboarding } from "@/components/shared/WelcomeOnboarding"
 import { Loader2 } from "lucide-react"
+import { AGENTS } from "@/lib/constants/agents"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://swarmops.onrender.com"
 
@@ -122,6 +123,7 @@ export function ChatInterface() {
     if (initiated) return
     const oppId = searchParams.get("opportunity")
     const sigId = searchParams.get("signal")
+    const agentId = searchParams.get("agent")
     
     if (oppId) {
       setInitiated(true)
@@ -139,6 +141,12 @@ export function ChatInterface() {
           handleSend(`Analyze and address this signal: "${sig.title}"\nDescription: ${sig.description}\nDetected by: ${sig.source_agent}`)
         }
       })
+    } else if (agentId) {
+      setInitiated(true)
+      const agentObj = Object.values(AGENTS).find((a) => a.id.toLowerCase() === agentId.toLowerCase())
+      if (agentObj) {
+        handleSend(`Hello ${agentObj.name} Specialist. Please deploy your advanced scanning systems and run a custom audit on my project, then output your latest strategic recommendations.`)
+      }
     }
   }, [searchParams, initiated])
 

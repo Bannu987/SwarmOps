@@ -734,7 +734,8 @@ async def trigger_scan(
         raise HTTPException(status_code=401)
 
     project_id = request.get("project_id") if request else None
-    result = run_scans_for_user(str(user.id), project_id)
+    force = request.get("force", True) if request else True
+    result = run_scans_for_user(str(user.id), project_id, force=force)
     return result
 
 

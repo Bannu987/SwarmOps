@@ -13,6 +13,7 @@ class ContextAwareness:
         self.brand_data: Dict = {}
         self.website_url: str = ""
         self.uploaded_files = []
+        self.project_id: Optional[str] = None
 
     def update_brand(self, brand: Dict, url: str = ""):
         if isinstance(brand, dict):
@@ -103,6 +104,26 @@ class ContextAwareness:
             lines.append("DATA YOU DO NOT HAVE:")
             for item in inv["missing"]:
                 lines.append(f"  - {item}")
+
+        # Inject persistent project memories to prevent redundant / generic advice
+        if self.project_id:
+            try:
+                from .memory import retrieve_relevant_memories
+                memories = retrieve_relevant_memories(self.project_id, limit=6)
+                if memories:
+                    lines.append("\n=== PERSISTENT BRAND & CAMPAIGN HISTORY (DO NOT CONTRADICT) ===")
+                    grouped = {}
+                    for m in memories:
+                        t = m.get("memory_type", "insight").replace("_", " ").upper()
+                        if t not in grouped:
+                            grouped[t] = []
+                        grouped[t].append(f"  * {m.get('title')}: {m.get('summary')}")
+                    
+                    for t, items in grouped.items():
+                        lines.append(f" [{t}]:")
+                        lines.extend(items)
+            except Exception as e:
+                pass
 
         lines.append("")
         lines.append("HONESTY RULES (ABSOLUTE):")

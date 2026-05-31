@@ -139,6 +139,19 @@ def run_workflow(workflow_name: str, message: str, conversation_id: str = "defau
 
     memory.store(nexus_output.conclusion[:500], role="assistant", mem_type="workflow", importance=0.7)
 
+    # Spawn background thread to extract and persist memories from this decision
+    if ctx.project_id and getattr(ctx, "user_id", None):
+        try:
+            from .memory import extract_and_persist_memories_from_decision
+            import threading
+            threading.Thread(
+                target=extract_and_persist_memories_from_decision,
+                args=(ctx.user_id, ctx.project_id, swarm_decision.decision, swarm_decision.rationale),
+                daemon=True
+            ).start()
+        except Exception as e:
+            logger.warning(f"Failed to extract persistent memories: {e}")
+
     total_elapsed = time.time() - start
 
     return {

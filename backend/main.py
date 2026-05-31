@@ -177,6 +177,12 @@ async def chat(
         raise HTTPException(status_code=400, detail="Empty message")
 
     conversation_id = request.conversation_id or "default"
+    
+    ctx = get_context(conversation_id)
+    if user_id:
+        ctx.user_id = user_id
+    if request.project_id:
+        ctx.project_id = request.project_id
 
     # Slash command handling
     if msg.startswith("/"):
@@ -262,7 +268,15 @@ async def chat_stream(
         raise HTTPException(status_code=400, detail="Empty message")
 
     conversation_id = request.conversation_id or "default"
+    
+    ctx = get_context(conversation_id)
+    if user_id:
+        ctx.user_id = user_id
+    if request.project_id:
+        ctx.project_id = request.project_id
+
     request_id = str(uuid.uuid4())
+
     bus = create_bus(request_id)
 
     async def event_generator():
@@ -753,3 +767,257 @@ async def trigger_all_scans(authorization: Optional[str] = Header(None)):
 
     result = run_all_scans()
     return result
+
+
+# ============================================================
+# PERSISTENT MEMORIES AND STRATEGY BRIEFS
+# ============================================================
+
+from typing import List
+from core.memory import create_project_memory, list_project_memories, delete_project_memory
+
+class MemoryCreateRequest(BaseModel):
+    memory_type: str
+    title: str
+    summary: str
+    source: Optional[str] = "user"
+    tags: Optional[List[str]] = []
+
+class BriefGenerateRequest(BaseModel):
+    user_directive: Optional[str] = ""
+
+@app.get("/api/projects/{project_id}/memories")
+async def get_project_memories_endpoint(
+    project_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    memories = list_project_memories(project_id)
+    return {"memories": memories}
+
+@app.post("/api/projects/{project_id}/memories")
+async def create_project_memory_endpoint(
+    project_id: str,
+    request: MemoryCreateRequest,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    res = create_project_memory(
+        user_id=str(user.id),
+        project_id=project_id,
+        memory_type=request.memory_type,
+        title=request.title,
+        summary=request.summary,
+        source=request.source,
+        confidence=0.9,
+        tags=request.tags
+    )
+    return res
+
+@app.delete("/api/memories/{memory_id}")
+async def delete_project_memory_endpoint(
+    memory_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    success = delete_project_memory(memory_id)
+    return {"success": success}
+
+# ============================================================
+# STRATEGY BRIEFS GENERATION
+# ============================================================
+
+def generate_campaign_strategy_brief(project: dict, memories: list, opportunities: list, signals: list, user_directive: str = "") -> str:
+    project_text = f"Project Name: {project.get('name')}\nWebsite: {project.get('website_url')}\nDescription: {project.get('description', '')}"
+    
+    memories_text = "No prior strategic memories stored yet."
+    if memories:
+        m_lines = []
+        for m in memories:
+            m_lines.append(f"- [{m.get('memory_type').upper()}]: {m.get('title')} -> {m.get('summary')}")
+        memories_text = "\n".join(m_lines)
+        
+    opps_text = "No active opportunity signals found."
+    if opportunities:
+        o_lines = []
+        for o in opportunities[:4]:
+            o_lines.append(f"- Opportunity: {o.get('title')} (RICE: {o.get('rice_score')}) -> recommended: {o.get('recommended_action')}")
+        opps_text = "\n".join(o_lines)
+        
+    sigs_text = "No active warning signals."
+    if signals:
+        s_lines = []
+        for s in signals[:4]:
+            s_lines.append(f"- Signal [{s.get('severity').upper()}]: {s.get('title')} -> {s.get('description')}")
+        sigs_text = "\n".join(s_lines)
+
+    prompt = f"""You are the boardroom Chief Marketing Strategist (Nexus) at SwarmOps.
+Your task is to compile a highly professional, client-ready, and execution-ready Campaign Strategy Brief.
+
+=== BRAND & CONTEXT ===
+{project_text}
+
+=== PERSISTENT STRATEGIC MEMORY ===
+{memories_text}
+
+=== ACTIVE OPPORTUNITIES (RICE RANKED) ===
+{opps_text}
+
+=== DETECTED AUDIT SIGNALS ===
+{sigs_text}
+
+=== USER DIRECTIVE / REQUESTED FOCUS ===
+{user_directive or "Generate a comprehensive growth campaign brief."}
+
+You MUST produce a comprehensive Strategy Brief in clean, highly structured Markdown. Avoid introductory conversational fluff (e.g. "Sure, here is your brief").
+
+Your brief MUST contain these exact sections:
+# STRATEGY BRIEF: [Strategic Campaign Name]
+
+## 1. Executive Summary
+## 2. ICP / Target Audience
+## 3. Current Signals & Opportunities (crawled telemetry)
+## 4. Proposed Campaign Strategy & positioning angle
+## 5. Multi-Channel Execution Plan (SEO, Content, Creative Hooks, PPC, AEO)
+## 6. Landing Page & CRO recommendations (MECLABS seq)
+## 7. Lifecycle Drip & Retention flows (abandoned cart, reactivation)
+## 8. North Star KPIs & Measurement Matrix
+## 9. RICE-Ranked Experiment Roadmap
+## 10. Next 7-Day Action Plan
+
+Make every recommendation hyper-specific (which keyword, which segment, which trigger, which ad hook) and completely action-ready. Let's make it brilliant!"""
+
+    try:
+        response = call_model(
+            prompt=prompt,
+            agent_id="nexus",
+            system="Always output professional marketing briefs in clean markdown only.",
+            max_tokens=3000,
+            temperature=0.7
+        )
+        return response
+    except Exception as e:
+        logger.error(f"Failed to generate strategy brief: {e}")
+        return f"# Strategy Brief Generation Failed\n\nError: {e}"
+
+@app.post("/api/projects/{project_id}/briefs")
+async def generate_strategy_brief_endpoint(
+    project_id: str,
+    request: BriefGenerateRequest,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        raise HTTPException(status_code=500, detail="Database not configured")
+        
+    try:
+        # 1. Fetch project
+        proj_res = admin.table("projects").select("*").eq("id", project_id).execute()
+        if not proj_res.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+        project = proj_res.data[0]
+        
+        # 2. Fetch data context
+        memories = list_project_memories(project_id)
+        
+        opps_res = admin.table("opportunities").select("*").eq("project_id", project_id).eq("status", "active").execute()
+        opportunities = opps_res.data or []
+        
+        sigs_res = admin.table("signals").select("*").eq("project_id", project_id).eq("status", "active").execute()
+        signals = sigs_res.data or []
+        
+        # 3. Call generator
+        markdown_content = generate_campaign_strategy_brief(
+            project=project,
+            memories=memories,
+            opportunities=opportunities,
+            signals=signals,
+            user_directive=request.user_directive
+        )
+        
+        # Extract title from first line
+        title = "Strategic Campaign Brief"
+        for line in markdown_content.split("\n"):
+            if line.startswith("# "):
+                title = line.replace("# ", "").strip()
+                break
+                
+        # 4. Save to artifacts table
+        artifact_res = admin.table("artifacts").insert({
+            "user_id": str(user.id),
+            "project_id": project_id,
+            "artifact_type": "strategy_brief",
+            "title": title,
+            "content": {
+                "markdown": markdown_content,
+                "user_directive": request.user_directive
+            },
+            "status": "pending"
+        }).execute()
+        
+        return artifact_res.data[0] if artifact_res.data else {}
+        
+    except Exception as e:
+        logger.error(f"Strategy brief generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/projects/{project_id}/briefs")
+async def list_strategy_briefs_endpoint(
+    project_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        return {"briefs": []}
+        
+    try:
+        res = admin.table("artifacts") \
+            .select("*") \
+            .eq("project_id", project_id) \
+            .eq("artifact_type", "strategy_brief") \
+            .order("created_at", desc=True) \
+            .execute()
+        return {"briefs": res.data or []}
+    except Exception as e:
+        logger.error(f"Failed to list briefs: {e}")
+        return {"briefs": []}
+
+@app.get("/api/briefs/{brief_id}")
+async def get_strategy_brief_endpoint(
+    brief_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        raise HTTPException(status_code=500, detail="Database not configured")
+        
+    try:
+        res = admin.table("artifacts").select("*").eq("id", brief_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Brief not found")
+        return res.data[0]
+    except Exception as e:
+        logger.error(f"Failed to fetch brief: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

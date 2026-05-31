@@ -11,8 +11,9 @@ import type { Message, FileAttachment } from "@/types"
 import { useSearchParams } from "next/navigation"
 import { useActiveProject } from "@/lib/hooks/useActiveProject"
 import { WelcomeOnboarding } from "@/components/shared/WelcomeOnboarding"
-import { Loader2 } from "lucide-react"
+import { Loader2, Sparkles } from "lucide-react"
 import { AGENTS } from "@/lib/constants/agents"
+import { StrategyBriefPanel } from "./StrategyBriefPanel"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://swarmops.onrender.com"
 
@@ -26,6 +27,7 @@ export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [showBriefs, setShowBriefs] = useState(false)
   const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
   
@@ -268,8 +270,9 @@ export function ChatInterface() {
             )
           )
         }
-      })
+      }, activeProject?.id)
     } catch (err: any) {
+
       console.error("SSE stream failed:", err)
       const isOnline = backendStatus === "online"
       const isCORS = err instanceof TypeError || (err.message && (err.message.toLowerCase().includes("fetch") || err.message.toLowerCase().includes("cors") || err.message.toLowerCase().includes("preflight")))
@@ -292,8 +295,9 @@ export function ChatInterface() {
       if (isOnline) {
         // Fallback to standard HTTP POST request
         try {
-          const res = await sendChat(text, "default")
+          const res = await sendChat(text, "default", activeProject?.id)
           setMessages((prev) =>
+
             prev.map((msg) =>
               msg.id === assistantMsgId
                 ? {
@@ -403,38 +407,51 @@ export function ChatInterface() {
           </p>
         </div>
 
-        {/* Dynamic Status Indicator */}
-        <div className="flex-shrink-0">
-          {backendStatus === "checking" && (
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <Loader2 className="w-3 h-3 animate-spin text-primary" />
-              Checking...
-            </div>
+        <div className="flex items-center gap-4 flex-shrink-0">
+          {/* Strategy Brief Button */}
+          {activeProject && (
+            <button
+              onClick={() => setShowBriefs(!showBriefs)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary font-semibold rounded-lg text-xs transition"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
+              <span>Strategy Briefs</span>
+            </button>
           )}
-          {backendStatus === "online" && (
-            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Online
-            </div>
-          )}
-          {backendStatus === "waking" && (
-            <div className="flex items-center gap-1.5 text-[10px] text-amber-500 font-medium">
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-              Waking ({retryCount}/6)
-            </div>
-          )}
-          {backendStatus === "offline" && (
-            <div className="flex items-center gap-1.5 text-[10px] text-destructive font-medium">
-              <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
-              Offline
-            </div>
-          )}
-          {backendStatus === "misconfigured" && (
-            <div className="flex items-center gap-1.5 text-[10px] text-destructive font-medium">
-              <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
-              Config Error
-            </div>
-          )}
+
+          {/* Dynamic Status Indicator */}
+          <div>
+            {backendStatus === "checking" && (
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                Checking...
+              </div>
+            )}
+            {backendStatus === "online" && (
+              <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Online
+              </div>
+            )}
+            {backendStatus === "waking" && (
+              <div className="flex items-center gap-1.5 text-[10px] text-amber-500 font-medium">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                Waking ({retryCount}/6)
+              </div>
+            )}
+            {backendStatus === "offline" && (
+              <div className="flex items-center gap-1.5 text-[10px] text-destructive font-medium">
+                <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                Offline
+              </div>
+            )}
+            {backendStatus === "misconfigured" && (
+              <div className="flex items-center gap-1.5 text-[10px] text-destructive font-medium">
+                <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                Config Error
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -501,6 +518,13 @@ export function ChatInterface() {
         loading={loading}
         uploading={uploading}
       />
+
+      {showBriefs && activeProject && (
+        <StrategyBriefPanel
+          projectId={activeProject.id}
+          onClose={() => setShowBriefs(false)}
+        />
+      )}
     </div>
   )
 }

@@ -10,15 +10,16 @@ async function authHeaders(): Promise<Record<string, string>> {
     : {}
 }
 
-export async function sendChat(message: string, conversationId?: string) {
+export async function sendChat(message: string, conversationId?: string, projectId?: string) {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({ message, conversation_id: conversationId }),
+    body: JSON.stringify({ message, conversation_id: conversationId, project_id: projectId }),
   })
   return res.json()
 }
+
 
 export async function uploadFile(file: File) {
   const headers = await authHeaders()
@@ -214,14 +215,16 @@ export async function triggerScan(projectId?: string) {
 export async function streamChat(
   message: string,
   conversationId: string,
-  onEvent: (event: any) => void
+  onEvent: (event: any) => void,
+  projectId?: string
 ) {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({ message, conversation_id: conversationId }),
+    body: JSON.stringify({ message, conversation_id: conversationId, project_id: projectId }),
   })
+
 
   if (!res.ok) {
     throw new Error(`HTTP error ${res.status}`)
@@ -259,3 +262,89 @@ export async function streamChat(
     }
   }
 }
+
+// ============================================================
+// MEMORIES & BRIEFS
+// ============================================================
+
+export interface ProjectMemory {
+  id: string
+  user_id: string
+  project_id: string
+  memory_type: "brand_voice" | "icp" | "competitor" | "campaign_goal" | "channel_strategy" | "previous_decision" | "approved_action" | "rejected_action" | "data_gap" | "experiment" | "report_insight"
+  title: string
+  summary: string
+  source: "user" | "swarm_decision" | "file_upload" | "scanner"
+  confidence: number
+  tags: string[]
+  created_at: string
+}
+
+export interface StrategyBrief {
+  id: string
+  user_id: string
+  project_id: string | null
+  conversation_id: string | null
+  artifact_type: string
+  title: string
+  content: {
+    markdown: string
+    user_directive?: string
+  }
+  status: "pending" | "approved" | "rejected" | "deployed"
+  created_at: string
+}
+
+export async function listProjectMemories(projectId: string) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/memories`, { headers })
+  return res.json() as Promise<{ memories: ProjectMemory[] }>
+}
+
+export async function createProjectMemory(projectId: string, data: {
+  memory_type: string
+  title: string
+  summary: string
+  source?: string
+  tags?: string[]
+}) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/memories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(data),
+  })
+  return res.json() as Promise<ProjectMemory>
+}
+
+export async function deleteProjectMemory(memoryId: string) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/memories/${memoryId}`, {
+    method: "DELETE",
+    headers,
+  })
+  return res.json() as Promise<{ success: boolean }>
+}
+
+export async function generateStrategyBrief(projectId: string, userDirective?: string) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/briefs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ user_directive: userDirective || "" }),
+  })
+  return res.json() as Promise<StrategyBrief>
+}
+
+export async function listStrategyBriefs(projectId: string) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/briefs`, { headers })
+  return res.json() as Promise<{ briefs: StrategyBrief[] }>
+}
+
+export async function getStrategyBrief(briefId: string) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/briefs/${briefId}`, { headers })
+  return res.json() as Promise<StrategyBrief>
+}
+

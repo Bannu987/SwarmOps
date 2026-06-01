@@ -17,6 +17,29 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY") or ""
 
+# Helper to safely mask keys for startup diagnostics
+def _mask_key(key: str) -> str:
+    if not key:
+        return "MISSING"
+    if len(key) <= 10:
+        return "****"
+    return f"{key[:6]}...{key[-4:]}"
+
+# Diagnose environment variables on startup safely
+logger.info("=== SUPABASE BACKEND DIAGNOSTICS ===")
+logger.info(f"SUPABASE_URL: {SUPABASE_URL if SUPABASE_URL else 'MISSING'}")
+logger.info(f"SUPABASE_ANON_KEY (masked): {_mask_key(SUPABASE_ANON_KEY)}")
+logger.info(f"SUPABASE_SERVICE_ROLE_KEY (masked): {_mask_key(SUPABASE_SERVICE_KEY)}")
+
+# Add startup validation warnings
+if not SUPABASE_URL:
+    logger.error("CRITICAL CONFIGURATION WARNING: SUPABASE_URL environment variable is missing!")
+if not SUPABASE_ANON_KEY:
+    logger.error("CRITICAL CONFIGURATION WARNING: SUPABASE_ANON_KEY environment variable is missing!")
+if not SUPABASE_SERVICE_KEY:
+    logger.error("CRITICAL CONFIGURATION WARNING: SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY) environment variable is missing!")
+logger.info("====================================")
+
 try:
     from supabase import create_client, Client
 

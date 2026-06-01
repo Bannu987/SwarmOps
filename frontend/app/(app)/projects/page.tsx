@@ -101,7 +101,12 @@ function ProjectsList() {
       if (err instanceof TypeError || (err.message && (err.message.toLowerCase().includes("fetch") || err.message.toLowerCase().includes("cors")))) {
         errMsg = "Browser blocked the workspace request. Backend CORS must allow this Netlify domain or verify the Render service is running."
       } else if (err.message) {
-        errMsg = err.message
+        const msg = err.message.toLowerCase()
+        if (msg.includes("invalid api key") || msg.includes("anon") || msg.includes("service_role") || msg.includes("connection is not configured correctly")) {
+          errMsg = "Workspace could not be created because the production database connection is not configured correctly. Please check Supabase environment variables."
+        } else {
+          errMsg = err.message
+        }
       }
       
       setError(errMsg)

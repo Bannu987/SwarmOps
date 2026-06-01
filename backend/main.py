@@ -587,7 +587,19 @@ async def create_project(
         }).execute()
         return result.data[0] if result.data else {}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        err_msg = str(e)
+        logger.error(f"Failed to create project. Raw Supabase error: {err_msg}")
+        
+        # Safe user-friendly error mapping to avoid leaking Supabase internals
+        if "Invalid API key" in err_msg or "anon" in err_msg or "service_role" in err_msg:
+            raise HTTPException(
+                status_code=500,
+                detail="Workspace could not be created because the production database connection is not configured correctly. Please check Supabase environment variables."
+            )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Workspace could not be created due to database failure: {err_msg[:200]}"
+        )
 
 
 # ============================================================

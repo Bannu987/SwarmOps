@@ -707,14 +707,14 @@ def generate_action_plan_from_opportunity(opportunity: dict, project: dict, memo
     if memories:
         m_lines = []
         for m in memories:
-            m_lines.append(f"- [{m.get('memory_type').upper()}]: {m.get('title')} -> {m.get('summary')}")
+            m_lines.append(f"- [{(m.get('memory_type') or 'insight').upper()}]: {m.get('title')} -> {m.get('summary')}")
         memories_text = "\n".join(m_lines)
         
     sigs_text = "No active warning signals."
     if signals:
         s_lines = []
         for s in signals[:4]:
-            s_lines.append(f"- Signal [{s.get('severity').upper()}]: {s.get('title')} -> {s.get('description')}")
+            s_lines.append(f"- Signal [{(s.get('severity') or 'medium').upper()}]: {s.get('title')} -> {s.get('description')}")
         sigs_text = "\n".join(s_lines)
 
     prompt = f"""You are the boardroom Chief Marketing Strategist (Nexus) at SwarmOps.
@@ -831,6 +831,12 @@ def generate_and_save_action_plan_background(opportunity_id: str, user_id: str, 
         try:
             admin = get_admin_client()
             if not admin:
+                return
+            
+            # Check if an action plan already exists for this opportunity to prevent duplicates
+            existing = admin.table("action_plans").select("id").eq("opportunity_id", opportunity_id).execute()
+            if existing.data:
+                logger.info(f"Action plan already exists for opportunity {opportunity_id}, skipping generation.")
                 return
             
             # 1. Fetch opportunity
@@ -1048,7 +1054,7 @@ def generate_campaign_strategy_brief(project: dict, memories: list, opportunitie
     if memories:
         m_lines = []
         for m in memories:
-            m_lines.append(f"- [{m.get('memory_type').upper()}]: {m.get('title')} -> {m.get('summary')}")
+            m_lines.append(f"- [{(m.get('memory_type') or 'insight').upper()}]: {m.get('title')} -> {m.get('summary')}")
         memories_text = "\n".join(m_lines)
         
     opps_text = "No active opportunity signals found."
@@ -1062,7 +1068,7 @@ def generate_campaign_strategy_brief(project: dict, memories: list, opportunitie
     if signals:
         s_lines = []
         for s in signals[:4]:
-            s_lines.append(f"- Signal [{s.get('severity').upper()}]: {s.get('title')} -> {s.get('description')}")
+            s_lines.append(f"- Signal [{(s.get('severity') or 'medium').upper()}]: {s.get('title')} -> {s.get('description')}")
         sigs_text = "\n".join(s_lines)
 
     template_instructions = ""

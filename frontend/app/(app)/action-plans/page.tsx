@@ -135,9 +135,9 @@ export default function ActionPlansPage() {
 
   const handleCopyMarkdown = (plan: ActionPlan) => {
     const tasksMd = plan.tasks.map((t) => `- [${t.status === "completed" ? "x" : " "}] ${t.title} (${t.owner})`).join("\n")
-    const kpisMd = plan.kpis.map((k) => `- **{k.metric}**: {k.target} ({k.timeframe})`).join("\n")
-    const risksMd = plan.risks.map((r) => `- **Risk**: {r.risk} | **Mitigation**: {r.mitigation}`).join("\n")
-    const depsMd = plan.dependencies.map((d) => `- {d}`).join("\n")
+    const kpisMd = plan.kpis.map((k) => `- **${k.metric}**: ${k.target} (${k.timeframe})`).join("\n")
+    const risksMd = plan.risks.map((r) => `- **Risk**: ${r.risk} | **Mitigation**: ${r.mitigation}`).join("\n")
+    const depsMd = plan.dependencies.map((d) => `- ${d}`).join("\n")
 
     const markdown = `# ACTION PLAN: ${plan.title}
 

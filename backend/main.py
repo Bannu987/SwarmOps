@@ -152,10 +152,31 @@ async def api_health_head():
 # ============================================================
 
 async def get_user(authorization: Optional[str] = Header(None)):
-    """Extract user from Bearer token. Returns None if invalid/missing."""
-    if not authorization or not authorization.startswith("Bearer "):
+    """Extract user from Bearer token with secure diagnostic logs. Returns None if invalid/missing."""
+    header_present = authorization is not None
+    token_len = 0
+    
+    if authorization and authorization.lower().startswith("bearer "):
+        parts = authorization.split()
+        if len(parts) == 2:
+            token_len = len(parts[1])
+            
+    logger.info(f"[AUTH DIAGNOSTICS] Authorization header present: {header_present}, Token length: {token_len}")
+    
+    if not authorization:
+        logger.warning("[AUTH DIAGNOSTICS] Missing Authorization header.")
         return None
-    token = authorization.replace("Bearer ", "")
+        
+    if not authorization.lower().startswith("bearer "):
+        logger.warning("[AUTH DIAGNOSTICS] Authorization header does not start with 'Bearer '.")
+        return None
+        
+    parts = authorization.split()
+    if len(parts) != 2:
+        logger.warning("[AUTH DIAGNOSTICS] Authorization header has invalid format. Expected 'Bearer <token>'.")
+        return None
+        
+    token = parts[1]
     return get_user_from_token(token)
 
 

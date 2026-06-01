@@ -69,12 +69,31 @@ def is_available():
 
 
 def get_user_from_token(token: str):
-    """Validate JWT and return user object."""
-    if not _public or not token:
+    """Validate JWT and return user object with secure diagnostic telemetry."""
+    token_len = len(token) if token else 0
+    url_host = SUPABASE_URL.split("//")[-1] if SUPABASE_URL else "MISSING"
+    
+    logger.info(f"[AUTH DIAGNOSTICS] Validating token (len: {token_len}) against Supabase host: {url_host}")
+    
+    if not _public:
+        logger.error("[AUTH DIAGNOSTICS] Public Supabase Client is not initialized! Check SUPABASE_URL and SUPABASE_ANON_KEY variables.")
         return None
+    if not token:
+        logger.error("[AUTH DIAGNOSTICS] Bearer token is empty/missing.")
+        return None
+        
     try:
+        # Diagnostic preview of token's ends without exposing the key
+        preview = f"{token[:8]}...{token[-8:]}" if token_len > 16 else "TOO_SHORT"
+        logger.info(f"[AUTH DIAGNOSTICS] Token preview: {preview}")
+        
         result = _public.auth.get_user(token)
-        return result.user if result else None
+        if result and result.user:
+            logger.info(f"[AUTH DIAGNOSTICS] Token validation SUCCESS for user ID: {result.user.id}")
+            return result.user
+        else:
+            logger.warning("[AUTH DIAGNOSTICS] Token validation succeeded but returned no user/session result.")
+            return None
     except Exception as e:
-        logger.warning(f"Token validation failed: {e}")
+        logger.warning(f"[AUTH DIAGNOSTICS] Token validation FAILED with exception: {e}")
         return None

@@ -97,43 +97,48 @@ export default function ApprovalPage() {
 
   return (
     <div className="flex-grow overflow-y-auto px-8 py-8 bg-background text-foreground">
-      <div className="max-w-5xl mx-auto">
-        <div className="mb-8 flex items-center justify-between border-b border-border pb-5">
+      <div className="max-w-5xl mx-auto animate-fade-in">
+        <div className="mb-8 flex items-center justify-between border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-2xl font-semibold mb-1 text-foreground flex items-center gap-2">
-              <CheckSquare className="w-6 h-6 text-primary" /> Approvals Board
-            </h1>
+            <div className="flex items-center gap-2 mb-1">
+              <CheckSquare className="w-5 h-5 text-primary" />
+              <h1 className="text-2xl font-serif font-normal tracking-tight text-foreground">
+                Approvals Board
+              </h1>
+            </div>
             <p className="text-xs text-muted-foreground max-w-xl">
               Verify, edit, or approve AI-generated campaign actions. Approved actions are queued for channel execution.
             </p>
           </div>
           <button
             onClick={loadOpportunities}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border rounded-lg text-xs text-foreground font-medium transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-card/85 hover:bg-card border border-border/80 hover:border-primary/45 rounded text-xs text-foreground font-medium transition duration-300"
           >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            <RefreshCw className="w-3.5 h-3.5 text-primary/90" />
+            <span className="font-sans text-[11px] font-medium">Sync Queue</span>
           </button>
         </div>
 
         {opportunities.length === 0 ? (
-          <div className="bg-card border border-border rounded-2xl p-8 max-w-lg mx-auto text-center mt-12 shadow-lg">
-            <div className="w-12 h-12 mx-auto rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+          <div className="bg-card/65 border border-border/40 rounded-xl p-8 max-w-lg mx-auto text-center mt-12 shadow-sm">
+            <div className="w-12 h-12 mx-auto rounded-lg bg-primary/10 flex items-center justify-center mb-4">
               <CheckSquare className="w-5 h-5 text-primary animate-pulse" />
             </div>
-            <h3 className="text-base font-semibold text-foreground mb-2">No pending approvals</h3>
+            <h3 className="text-lg font-serif text-foreground mb-2">No pending approvals</h3>
             <p className="text-xs text-muted-foreground mb-6 leading-relaxed">
               Specialist agents generate strategic opportunities during site scans or in the Brief Room.
               Add a URL to run a scan or coordinate a brief with Nexus to populate this queue.
             </p>
             <Link
               href="/chat"
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-lg transition shadow-md"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground text-[10px] font-mono uppercase tracking-wider rounded transition shadow-md"
             >
-              Brief the Swarm <ArrowRight className="w-3.5 h-3.5" />
+              <span>Brief the Swarm</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-5">
             {opportunities.map((opp) => {
               const proposingAgent = getAgentConfig(opp.proposed_by)
               const isActioning = actioningId === opp.id
@@ -143,10 +148,10 @@ export default function ApprovalPage() {
                 return (
                   <div
                     key={opp.id}
-                    className={`border rounded-xl p-6 text-center animate-fade-in transition-all flex flex-col items-center justify-center gap-3 ${
+                    className={`border rounded-xl p-6 text-center animate-fade-in transition-all flex flex-col items-center justify-center gap-3 shadow-inner ${
                       feedbackMsg.type === "success"
-                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                        : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                        ? "bg-[#a3b899]/10 border-[#a3b899]/30 text-[#a3b899]"
+                        : "bg-[#d76f57]/10 border-[#d76f57]/30 text-[#d76f57]"
                     }`}
                   >
                     <div className="w-8 h-8 rounded-full bg-current/10 flex items-center justify-center">
@@ -160,10 +165,10 @@ export default function ApprovalPage() {
                     {feedbackMsg.type === "success" && (
                       <Link
                         href="/action-plans"
-                        className="px-3.5 py-1.5 bg-emerald-400 hover:bg-emerald-350 text-black text-[10px] font-bold rounded-lg transition shadow-md flex items-center gap-1"
+                        className="px-4 py-2 bg-[#a3b899] hover:bg-[#a3b899]/90 text-black text-[10px] font-mono uppercase tracking-wider rounded transition shadow-md flex items-center gap-1.5"
                       >
-                        <span>View Execution Action Plan</span>
-                        <ArrowRight className="w-3 h-3" />
+                        <span>View Action Plan</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
                     )}
                   </div>
@@ -173,94 +178,100 @@ export default function ApprovalPage() {
               return (
                 <div
                   key={opp.id}
-                  className="bg-card border border-border rounded-xl p-5 hover:border-primary/20 transition flex flex-col justify-between shadow-sm relative group"
+                  className="bg-card/65 border border-border/40 rounded-xl p-6 hover:border-primary/35 transition-all duration-300 flex flex-col justify-between shadow-sm relative group"
                 >
                   {/* Top Header */}
-                  <div className="flex items-center justify-between mb-3 border-b border-border/40 pb-3">
+                  <div className="flex items-center justify-between mb-3 border-b border-border/30 pb-3">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-semibold rounded uppercase tracking-wider">
+                      <span className="px-2 py-0.5 bg-primary/10 border border-primary/20 text-primary text-[9px] font-mono uppercase tracking-wider rounded">
                         {opp.category}
                       </span>
-                      <span className="text-[10px] text-muted-foreground/60">·</span>
-                      <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground/40">·</span>
+                      <div className="flex items-center gap-1.5">
                         <div
                           className="w-1.5 h-1.5 rounded-full"
                           style={{ backgroundColor: proposingAgent.color }}
                         />
-                        <span className="text-[10px] text-muted-foreground">
-                          Proposed by <span className="font-semibold text-foreground">{proposingAgent.name}</span>
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          PROPOSED BY <span className="font-semibold text-foreground" style={{ color: proposingAgent.color }}>{proposingAgent.name.toUpperCase()}</span>
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] tracking-wider">
-                      <TrendingUp className="w-3 h-3" />
+                    <div className="flex items-center gap-1.5 text-primary bg-primary/5 border border-primary/20 px-2 py-0.5 rounded text-[10px] font-mono tracking-wider">
+                      <TrendingUp className="w-3 h-3 text-primary/80" />
                       RICE {opp.rice_score.toFixed(2)}
                     </div>
                   </div>
 
                   {/* Title & Desc */}
                   <div className="mb-4">
-                    <h3 className="font-bold text-sm mb-1.5 text-foreground leading-snug">
+                    <h3 className="font-serif font-normal text-lg mb-1.5 text-foreground leading-snug">
                       {opp.title}
                     </h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
+                    <p className="text-xs text-muted-foreground/90 leading-relaxed max-w-3xl">
                       {opp.description}
                     </p>
                   </div>
 
                   {/* Badges and Metrics */}
-                  <div className="flex flex-wrap items-center gap-2 mb-4 bg-muted/40 p-2.5 rounded-lg border border-border/30">
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
-                      <Zap className="w-3 h-3 text-amber-500" />
-                      Impact: <span className="text-foreground capitalize">{opp.expected_impact}</span>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 bg-card/45 p-3 rounded-lg border border-border/35 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/80">
+                    <div className="flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-primary/95" />
+                      <span>IMPACT:</span>
+                      <span className="text-foreground font-semibold">{opp.expected_impact}</span>
                     </div>
-                    <span className="text-muted-foreground/40 text-[10px] font-mono">·</span>
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
-                      <Award className="w-3 h-3 text-sky-500" />
-                      Effort: <span className="text-foreground capitalize">{opp.effort}</span>
+                    <span className="text-muted-foreground/30 font-mono">·</span>
+                    <div className="flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5 text-primary/80" />
+                      <span>EFFORT:</span>
+                      <span className="text-foreground font-semibold">{opp.effort}</span>
                     </div>
-                    <span className="text-muted-foreground/40 text-[10px] font-mono">·</span>
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
-                      <Calendar className="w-3 h-3 text-purple-500" />
-                      Timeframe: <span className="text-foreground">{opp.timeframe}</span>
+                    <span className="text-muted-foreground/30 font-mono">·</span>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-primary/80" />
+                      <span>TIMEFRAME:</span>
+                      <span className="text-foreground font-semibold">{opp.timeframe}</span>
                     </div>
-                    <span className="text-muted-foreground/40 text-[10px] font-mono">·</span>
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-medium">
-                      Confidence: <span className="text-foreground font-semibold">{(opp.confidence * 100).toFixed(0)}%</span>
+                    <span className="text-muted-foreground/30 font-mono">·</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>CONFIDENCE:</span>
+                      <span className="text-foreground font-semibold">{(opp.confidence * 100).toFixed(0)}%</span>
                     </div>
                   </div>
 
                   {/* Action Bar */}
-                  <div className="flex flex-col sm:flex-row gap-2 mt-2 pt-3 border-t border-border/40 justify-between items-stretch sm:items-center">
-                    <div className="text-[10px] text-muted-foreground italic mb-2 sm:mb-0">
-                      Endorsed by {opp.endorsed_by.join(", ").toUpperCase()}
+                  <div className="flex flex-col sm:flex-row gap-4 mt-2 pt-4 border-t border-border/30 justify-between items-stretch sm:items-center">
+                    <div className="text-[9px] font-mono uppercase tracking-wider text-muted-foreground/75">
+                      ENDORSED BY: <span className="text-foreground/90">{opp.endorsed_by.join(", ").toUpperCase()}</span>
                     </div>
                     
-                    <div className="flex gap-2">
+                    <div className="flex gap-2.5">
                       <button
                         onClick={() => handleDismiss(opp.id, opp.title)}
                         disabled={isActioning}
-                        className="px-3 py-1.5 border border-border hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-semibold rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1"
+                        className="px-3.5 py-1.5 border border-border/80 hover:bg-card hover:text-foreground text-muted-foreground font-mono text-[10px] uppercase tracking-wider rounded transition duration-300 disabled:opacity-50 flex items-center justify-center gap-1"
                       >
-                        <X className="w-3.5 h-3.5" /> Dismiss
+                        <X className="w-3.5 h-3.5" />
+                        <span>Dismiss</span>
                       </button>
                       <Link
                         href={`/chat?opportunity=${opp.id}`}
-                        className="px-3 py-1.5 border border-primary/20 hover:border-primary/40 text-primary text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1 bg-primary/5 hover:bg-primary/10"
+                        className="px-3.5 py-1.5 border border-primary/25 hover:border-primary/50 text-primary bg-primary/5 hover:bg-primary/10 font-mono text-[10px] uppercase tracking-wider rounded transition duration-300 flex items-center justify-center gap-1"
                       >
-                        Brief Swarm <ArrowRight className="w-3.5 h-3.5" />
+                        <span>Brief Swarm</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
                       <button
                         onClick={() => handleApprove(opp.id, opp.title)}
                         disabled={isActioning}
-                        className="px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1 shadow-md"
+                        className="px-4.5 py-1.5 bg-primary hover:bg-primary/95 text-primary-foreground font-mono text-[10px] uppercase tracking-wider rounded transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md hover:scale-[1.01] active:scale-100"
                       >
                         {isActioning ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : (
                           <Check className="w-3.5 h-3.5" />
                         )}
-                        {isActioning ? "Approving..." : "Approve Action"}
+                        <span>{isActioning ? "Approving..." : "Approve Action"}</span>
                       </button>
                     </div>
                   </div>

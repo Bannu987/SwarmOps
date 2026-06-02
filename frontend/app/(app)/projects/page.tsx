@@ -129,12 +129,14 @@ function ProjectsList() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-8">
+    <div className="flex-1 overflow-y-auto px-8 py-8 animate-fade-in">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-2xl font-semibold mb-1">Workspaces</h1>
-            <p className="text-sm text-muted-foreground">Create one workspace per brand, client, or business.</p>
+            <h1 className="text-2xl font-serif font-normal tracking-tight text-foreground mb-1">
+              Workspaces
+            </h1>
+            <p className="text-xs text-muted-foreground">Manage your strategic brands, campaigns, and machine networks.</p>
           </div>
           <button
             onClick={() => {
@@ -142,21 +144,22 @@ function ProjectsList() {
               setSuccess(null)
               setShowCreate(true)
             }}
-            className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-lg transition flex items-center gap-2"
+            className="px-3.5 py-1.5 bg-primary hover:bg-primary/95 text-primary-foreground font-mono text-[10px] uppercase tracking-wider rounded transition-all duration-300 flex items-center gap-1.5 shadow-md border border-primary/20"
           >
-            <Plus className="w-4 h-4" /> New Workspace
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Workspace</span>
           </button>
         </div>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <Loader2 className="w-5 h-5 text-primary animate-spin" />
-            <div className="text-xs text-muted-foreground">Loading workspaces...</div>
+            <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">SYNCING WORKSPACES...</div>
           </div>
         ) : projects.length === 0 ? (
           <WelcomeOnboarding onCreateProjectClick={() => setShowCreate(true)} />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-fade-in">
             {projects.map((p) => (
               <div
                 key={p.id}
@@ -164,17 +167,19 @@ function ProjectsList() {
                   selectProject(p.id)
                   router.push("/dashboard")
                 }}
-                className="bg-card border border-border rounded-xl p-5 hover:border-primary/50 transition cursor-pointer"
+                className="bg-card/65 border border-border/40 rounded-xl p-5 hover:border-primary/45 hover:bg-card/90 transition-all duration-300 shadow-sm cursor-pointer relative group flex flex-col justify-between"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <FolderKanban className="w-5 h-5 text-primary" />
-                  {p.pinned && <Pin className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />}
+                <div>
+                  <div className="flex items-start justify-between mb-3 border-b border-border/30 pb-2.5">
+                    <FolderKanban className="w-4 h-4 text-primary" />
+                    {p.pinned && <Pin className="w-3 h-3 text-primary fill-primary/20" />}
+                  </div>
+                  <h3 className="font-serif font-normal text-base text-foreground mb-1 group-hover:text-primary transition duration-300">{p.name}</h3>
                 </div>
-                <h3 className="font-semibold mb-1 text-foreground">{p.name}</h3>
                 {p.website_url ? (
-                  <p className="text-xs text-muted-foreground truncate">{p.website_url}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground truncate bg-muted/40 px-2 py-0.5 rounded border border-border/20 mt-3">{p.website_url}</p>
                 ) : (
-                  <p className="text-xs text-muted-foreground/40 italic">No website URL</p>
+                  <p className="text-[10px] font-mono text-muted-foreground/40 italic mt-3">NO_URL_DECLARED</p>
                 )}
               </div>
             ))}
@@ -182,9 +187,9 @@ function ProjectsList() {
         )}
 
         {showCreate && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 animate-slide-up shadow-2xl">
-              <h3 className="text-lg font-semibold mb-4 text-foreground">Create Workspace</h3>
+          <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4 backdrop-blur-[2px]">
+            <div className="bg-card border border-border/60 rounded-xl max-w-md w-full p-6 animate-slide-up shadow-2xl">
+              <h3 className="text-lg font-serif text-foreground mb-4">Create Workspace</h3>
               
               {error && (
                 <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-xs text-destructive">
@@ -197,49 +202,49 @@ function ProjectsList() {
                 </div>
               )}
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                    Workspace name
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5 block">
+                    Workspace Name
                   </label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="My Brand"
+                    placeholder="e.g. Acme Marketing"
                     disabled={creating || success !== null}
-                    className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-50 transition"
+                    className="w-full px-3 py-2 bg-card/75 border border-border/80 rounded text-xs text-foreground outline-none focus:border-primary/80 disabled:opacity-50 transition"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-muted-foreground mb-1.5 block">
                     Website URL (optional)
                   </label>
                   <input
                     type="url"
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
-                    placeholder="https://yoursite.com"
+                    placeholder="https://acme.com"
                     disabled={creating || success !== null}
-                    className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-50 transition"
+                    className="w-full px-3 py-2 bg-card/75 border border-border/80 rounded text-xs text-foreground outline-none focus:border-primary/80 disabled:opacity-50 transition"
                   />
                 </div>
               </div>
-              <div className="flex gap-2 mt-5">
-                <button
-                  onClick={handleCreate}
-                  disabled={creating || !name.trim() || success !== null}
-                  className="flex-1 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
-                >
-                  {creating && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {creating ? "Creating..." : "Create"}
-                </button>
+              <div className="flex gap-2.5 mt-6 border-t border-border/30 pt-4 justify-end">
                 <button
                   onClick={() => setShowCreate(false)}
                   disabled={creating}
-                  className="px-4 py-2 bg-muted text-sm rounded-lg hover:bg-muted/80 text-foreground transition disabled:opacity-50"
+                  className="px-4 py-2 bg-card border border-border hover:bg-muted text-xs text-foreground transition disabled:opacity-50"
                 >
                   Cancel
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={creating || !name.trim() || success !== null}
+                  className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-mono text-[10px] uppercase tracking-wider rounded transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md border border-primary/20"
+                >
+                  {creating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{creating ? "Creating..." : "Confirm Workspace"}</span>
                 </button>
               </div>
             </div>

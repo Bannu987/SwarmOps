@@ -399,11 +399,14 @@ export function ChatInterface() {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="px-6 py-3 border-b border-border flex items-center justify-between bg-card">
+      <div className="px-6 py-4 border-b border-border/60 bg-card/15 flex items-center justify-between">
         <div>
-          <h1 className="font-semibold text-sm text-foreground">AI Brief Room</h1>
-          <p className="text-[10px] text-muted-foreground mt-0.5 max-w-lg leading-tight">
-            Ask Nexus and specialist agents to analyze campaigns, SEO, content, and growth opportunities.
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-xl font-serif font-normal tracking-tight text-foreground">AI Brief Room</h1>
+            <span className="text-[10px] font-mono text-primary/70 uppercase tracking-widest">[DECISION_WAR_ROOM]</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1 max-w-lg leading-snug">
+            Engage Nexus and specialized marketing intelligence agents to analyze campaign telemetry, SEO anomalies, and strategic roadmaps.
           </p>
         </div>
 
@@ -412,43 +415,43 @@ export function ChatInterface() {
           {activeProject && (
             <button
               onClick={() => setShowBriefs(!showBriefs)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary font-semibold rounded-lg text-xs transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/25 hover:bg-primary hover:text-primary-foreground text-primary font-mono text-[10px] uppercase tracking-wider rounded transition-all duration-300 shadow-sm"
             >
-              <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
+              <Sparkles className="w-3 h-3 animate-pulse" />
               <span>Strategy Briefs</span>
             </button>
           )}
 
           {/* Dynamic Status Indicator */}
-          <div>
+          <div className="font-mono text-[10px]">
             {backendStatus === "checking" && (
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin text-primary" />
-                Checking...
+                <span>SYNCING</span>
               </div>
             )}
             {backendStatus === "online" && (
-              <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Online
+              <div className="flex items-center gap-1.5 text-[#a3b899] bg-[#a3b899]/5 px-2 py-0.5 rounded border border-[#a3b899]/20 uppercase font-medium">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#a3b899] animate-pulse" />
+                <span>ONLINE</span>
               </div>
             )}
             {backendStatus === "waking" && (
-              <div className="flex items-center gap-1.5 text-[10px] text-amber-500 font-medium">
+              <div className="flex items-center gap-1.5 text-amber-500 bg-amber-500/5 px-2 py-0.5 rounded border border-amber-500/20 uppercase font-medium">
                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                Waking ({retryCount}/6)
+                <span>WAKING ({retryCount}/6)</span>
               </div>
             )}
             {backendStatus === "offline" && (
-              <div className="flex items-center gap-1.5 text-[10px] text-destructive font-medium">
+              <div className="flex items-center gap-1.5 text-destructive bg-destructive/5 px-2 py-0.5 rounded border border-destructive/20 uppercase font-medium">
                 <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
-                Offline
+                <span>OFFLINE</span>
               </div>
             )}
             {backendStatus === "misconfigured" && (
-              <div className="flex items-center gap-1.5 text-[10px] text-destructive font-medium">
+              <div className="flex items-center gap-1.5 text-destructive bg-destructive/5 px-2 py-0.5 rounded border border-destructive/20 uppercase font-medium">
                 <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
-                Config Error
+                <span>CONFIG ERROR</span>
               </div>
             )}
           </div>

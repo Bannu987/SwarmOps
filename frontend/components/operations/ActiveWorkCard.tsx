@@ -21,9 +21,9 @@ export function ActiveWorkCard({ item, onClick }: Props) {
   const cfg = getAgentConfig(item.agentId)
 
   const statusConfig = {
-    thinking: { dot: "#22D3EE", icon: <Loader2 className="w-3 h-3 animate-spin" />, label: cfg.name },
-    complete:  { dot: "#22C55E", icon: <CheckCircle2 className="w-3 h-3" />, label: "Ready" },
-    waiting:   { dot: "#FB923C", icon: <AlertCircle className="w-3 h-3" />, label: "Awaiting input" },
+    thinking: { dot: "#c5a880", icon: <Loader2 className="w-3 h-3 animate-spin text-brass" />, label: cfg.name },
+    complete:  { dot: "#a3b899", icon: <CheckCircle2 className="w-3 h-3 text-emerald-500/80" />, label: "Ready" },
+    waiting:   { dot: "#d76f57", icon: <AlertCircle className="w-3 h-3 text-clay" />, label: "Awaiting input" },
   }
 
   const sc = statusConfig[item.status]
@@ -31,14 +31,14 @@ export function ActiveWorkCard({ item, onClick }: Props) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-card border border-border rounded-lg p-3 hover:border-primary/30 transition"
+      className="w-full text-left bg-card/65 border border-border/50 rounded-lg p-3.5 hover:border-primary/35 hover:bg-card/90 hover:-translate-y-0.5 transition-all duration-300 shadow-sm"
     >
       <div className="flex items-center gap-2 mb-2">
         <div
           className={`w-1.5 h-1.5 rounded-full ${item.status === "thinking" ? "animate-pulse" : ""}`}
           style={{ background: sc.dot }}
         />
-        <span className="text-[11px] font-medium" style={{ color: sc.dot }}>
+        <span className="text-[11px] font-medium tracking-tight" style={{ color: sc.dot }}>
           {sc.label}
         </span>
         {item.durationSec !== undefined && (

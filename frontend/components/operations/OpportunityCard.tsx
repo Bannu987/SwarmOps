@@ -21,10 +21,10 @@ export function OpportunityCard({ opportunity: opp, onClick, rank }: Props) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-card border rounded-lg p-3 transition-all hover:border-primary/30 hover:bg-card/80 group"
+      className="w-full text-left bg-card/65 border border-border/50 rounded-lg p-3.5 transition-all duration-300 hover:border-primary/35 hover:bg-card/90 hover:-translate-y-0.5 shadow-sm group"
       style={
         isTopRank
-          ? { borderColor: "rgba(123,110,251,0.3)", borderLeftWidth: "2px", borderLeftColor: "#7B6EFB" }
+          ? { borderColor: "rgba(197, 168, 128, 0.3)", borderLeftWidth: "3px", borderLeftColor: "var(--primary)" }
           : {}
       }
     >

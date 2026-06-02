@@ -99,7 +99,7 @@ export function ChatInput({ onSend, onFileUpload, loading, uploading }: Props) {
   }
 
   return (
-    <div className="px-6 py-4 border-t border-border">
+    <div className="px-6 py-4 border-t border-border/50 bg-card/5">
       <div className="max-w-3xl mx-auto relative">
         {showSlash && (
           <SlashPopup
@@ -109,15 +109,15 @@ export function ChatInput({ onSend, onFileUpload, loading, uploading }: Props) {
           />
         )}
 
-        <div className="flex items-end gap-2 bg-card border border-border rounded-2xl p-2 focus-within:border-primary transition">
+        <div className="flex items-end gap-2 bg-card/65 border border-border/50 rounded-xl p-2 focus-within:border-primary/55 transition-all duration-300 shadow-sm">
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading || loading}
-            className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition disabled:opacity-50"
+            className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-lg transition disabled:opacity-50"
             title="Upload any file"
           >
             {uploading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
             ) : (
               <Paperclip className="w-4 h-4" />
             )}
@@ -135,29 +135,29 @@ export function ChatInput({ onSend, onFileUpload, loading, uploading }: Props) {
             value={input}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
-            placeholder="Ask SwarmOps anything... (type / for commands)"
+            placeholder="Instruct SwarmOps or trigger slash command /..."
             rows={1}
             disabled={loading}
-            className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground text-sm py-2 px-2 outline-none resize-none disabled:opacity-50 min-h-[36px]"
+            className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground/60 text-xs py-2 px-2.5 outline-none resize-none disabled:opacity-50 min-h-[36px] font-sans leading-relaxed"
           />
 
           <button
             onClick={handleSend}
             disabled={!input.trim() || loading}
-            className="w-9 h-9 flex items-center justify-center bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-9 h-9 flex items-center justify-center bg-primary hover:bg-primary/95 text-primary-foreground rounded-lg transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed shadow-md"
           >
             {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin text-primary-foreground/95" />
             ) : (
-              <Send className="w-4 h-4" />
+              <Send className="w-4 h-4 text-primary-foreground/95" />
             )}
           </button>
         </div>
 
-        <div className="mt-2 text-[11px] text-muted-foreground text-center">
-          <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px]">Enter</kbd> send ·{" "}
-          <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px]">Shift+Enter</kbd> new line ·{" "}
-          <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px]">/</kbd> commands
+        <div className="mt-2 text-[9px] font-mono uppercase tracking-wider text-muted-foreground/80 text-center">
+          <kbd className="px-1.5 py-0.5 bg-muted/65 border border-border/50 rounded text-[9px]">Enter</kbd> send brief ·{" "}
+          <kbd className="px-1.5 py-0.5 bg-muted/65 border border-border/50 rounded text-[9px]">Shift+Enter</kbd> line break ·{" "}
+          <kbd className="px-1.5 py-0.5 bg-muted/65 border border-border/50 rounded text-[9px]">/</kbd> command swarm
         </div>
       </div>
     </div>

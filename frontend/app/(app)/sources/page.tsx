@@ -85,51 +85,58 @@ export default function SourcesPage() {
   const selectedSource = INTEGRATIONS.find((s) => s.id === openModal)
 
   return (
-    <div className="flex-grow overflow-y-auto px-8 py-8 bg-background">
+    <div className="flex-grow overflow-y-auto px-8 py-8 bg-background animate-fade-in">
       <div className="max-w-5xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold mb-1 text-foreground">Integrations</h1>
-          <p className="text-sm text-muted-foreground">
-            Connect marketing tools to unlock real performance analysis. Manual setup is available now; OAuth connectors are coming soon.
+        <div className="mb-8 border-b border-border/60 pb-5">
+          <div className="flex items-baseline gap-2 mb-1">
+            <h1 className="text-2xl font-serif font-normal tracking-tight text-foreground">
+              Integrations
+            </h1>
+            <span className="text-[10px] font-mono text-primary/70 uppercase tracking-widest">
+              [TELEMETRY_INGEST]
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Connect search engines, CRM, and tracking pipelines to compile swarm memory. Follow manual import guidelines to scan raw reports.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {INTEGRATIONS.map((source) => (
-            <div key={source.id} className="bg-card border border-border rounded-xl p-5 hover:border-primary/20 transition flex flex-col justify-between shadow-sm">
+            <div key={source.id} className="bg-card/65 border border-border/40 rounded-xl p-5 hover:border-primary/45 hover:bg-card/90 transition-all duration-300 flex flex-col justify-between shadow-sm relative group">
               <div>
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between mb-4 border-b border-border/30 pb-3">
                   <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg font-bold"
+                    className="w-8 h-8 rounded flex items-center justify-center text-black text-xs font-bold shadow-sm"
                     style={{
-                      background: `linear-gradient(135deg, ${source.color}, ${source.color}99)`,
+                      background: `linear-gradient(135deg, ${source.color}, ${source.color}bb)`,
                     }}
                   >
                     ◎
                   </div>
-                  <span className="px-2 py-0.5 bg-muted text-muted-foreground text-[10px] font-medium rounded uppercase tracking-wider">
-                    ● Not connected
+                  <span className="px-2 py-0.5 bg-card/60 text-muted-foreground/80 text-[9px] font-mono uppercase tracking-wider rounded border border-border/30">
+                    PENDING
                   </span>
                 </div>
-                <h3 className="font-semibold text-sm mb-1 text-foreground">{source.name}</h3>
-                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">{source.desc}</p>
+                <h3 className="font-serif font-normal text-base text-foreground mb-1">{source.name}</h3>
+                <p className="text-xs text-muted-foreground/90 mb-4 leading-relaxed">{source.desc}</p>
               </div>
               <button
                 onClick={() => {
                   setShowInstructions(false)
                   setOpenModal(source.id)
                 }}
-                className="w-full py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-lg transition"
+                className="w-full py-1.5 bg-primary hover:bg-primary/95 text-primary-foreground font-mono text-[10px] uppercase tracking-wider rounded transition shadow-md border border-primary/20"
               >
-                Connect Data
+                Configure Link
               </button>
             </div>
           ))}
         </div>
 
         {openModal && selectedSource && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 animate-slide-up shadow-2xl relative">
+          <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4 backdrop-blur-[2px]">
+            <div className="bg-card border border-border/60 rounded-xl max-w-md w-full p-6 animate-slide-up shadow-2xl relative">
               <button
                 onClick={() => setOpenModal(null)}
                 className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition"
@@ -137,35 +144,35 @@ export default function SourcesPage() {
                 <X className="w-4 h-4" />
               </button>
 
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 border-b border-border/30 pb-3">
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+                  className="w-8 h-8 rounded flex items-center justify-center text-black text-xs font-bold"
                   style={{
-                    background: `linear-gradient(135deg, ${selectedSource.color}, ${selectedSource.color}99)`,
+                    background: `linear-gradient(135deg, ${selectedSource.color}, ${selectedSource.color}bb)`,
                   }}
                 >
                   ◎
                 </div>
-                <h3 className="text-lg font-semibold text-foreground">
+                <h3 className="text-lg font-serif text-foreground">
                   Connect {selectedSource.name}
                 </h3>
               </div>
 
-              <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-xl text-xs text-primary flex gap-2">
+              <div className="mb-4 p-3 bg-primary/10 border border-primary/25 rounded-lg text-xs text-primary flex gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-medium">OAuth Integration coming soon.</span> Automatic API connection is in development. Follow instructions below to import reports manually today.
+                <div className="leading-relaxed">
+                  <span className="font-medium">OAuth Integration in progress.</span> Follow step instructions to manually download and import raw reports into Swarm Brief Room today.
                 </div>
               </div>
 
               {/* Unlocked Features */}
               <div className="mb-4">
-                <h4 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" /> Unlocks Capabilities
+                <h4 className="text-[10px] font-mono uppercase tracking-wider text-foreground mb-2 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" /> Unlocks Swarm Capabilities
                 </h4>
-                <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside bg-muted/30 p-3 rounded-lg border border-border/50">
+                <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside bg-card/45 p-3 rounded-lg border border-border/40">
                   {selectedSource.unlocks.map((item, idx) => (
-                    <li key={idx} className="leading-relaxed">{item}</li>
+                    <li key={idx} className="leading-relaxed font-sans">{item}</li>
                   ))}
                 </ul>
               </div>
@@ -174,17 +181,17 @@ export default function SourcesPage() {
               <div className="mb-5">
                 <button
                   onClick={() => setShowInstructions(!showInstructions)}
-                  className="w-full text-left py-2 px-3 bg-muted border border-border rounded-lg text-xs font-medium text-foreground transition hover:bg-muted/80 flex items-center justify-between"
+                  className="w-full text-left py-2 px-3 bg-muted border border-border rounded text-[10px] font-mono uppercase tracking-wider text-foreground transition hover:bg-muted/80 flex items-center justify-between"
                 >
                   <span className="flex items-center gap-1.5">
-                    <BookOpen className="w-3.5 h-3.5 text-primary" />
-                    {showInstructions ? "Hide Instructions" : "View Setup Instructions"}
+                    <BookOpen className="w-3.5 h-3.5 text-primary/80" />
+                    {showInstructions ? "Hide Manual setup" : "Setup Steps"}
                   </span>
                   <span>{showInstructions ? "▲" : "▼"}</span>
                 </button>
 
                 {showInstructions && (
-                  <div className="mt-2 bg-muted/20 border border-border p-3.5 rounded-lg text-xs text-muted-foreground space-y-2 max-h-48 overflow-y-auto animate-fade-in">
+                  <div className="mt-2 bg-card/45 border border-border/40 p-3.5 rounded-lg text-xs text-muted-foreground space-y-2.5 max-h-48 overflow-y-auto animate-fade-in font-sans">
                     {selectedSource.instructions.map((step, idx) => (
                       <div key={idx} className="flex gap-2">
                         <span className="font-bold text-primary flex-shrink-0">{idx + 1}.</span>
@@ -196,19 +203,20 @@ export default function SourcesPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2">
+              <div className="flex gap-2.5 border-t border-border/30 pt-4">
                 <Link
                   href="/chat"
                   onClick={() => setOpenModal(null)}
-                  className="flex-1 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5 shadow-md"
+                  className="flex-grow py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-mono text-[10px] uppercase tracking-wider rounded transition-all duration-300 flex items-center justify-center gap-1.5 shadow-md border border-primary/20"
                 >
-                  <FileText className="w-3.5 h-3.5" /> Upload report instead
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Upload Report</span>
                 </Link>
                 <button
                   onClick={() => setOpenModal(null)}
-                  className="px-4 py-2 bg-muted hover:bg-muted/80 text-xs text-foreground font-medium rounded-lg transition"
+                  className="px-4 py-2 bg-card border border-border hover:bg-muted text-xs text-foreground font-medium rounded transition duration-300"
                 >
-                  Close
+                  Cancel
                 </button>
               </div>
             </div>

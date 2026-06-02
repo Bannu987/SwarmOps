@@ -112,18 +112,25 @@ export function OperationsFloor() {
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
       {/* Header */}
-      <div className="px-6 py-3 border-b border-border flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-border/60 bg-card/15 flex items-center justify-between">
         <div>
-          <h1 className="text-base font-semibold tracking-tight text-foreground">Command Center</h1>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-xl font-serif font-normal tracking-tight text-foreground">
+              Command Center
+            </h1>
+            <span className="text-[10px] font-mono text-primary/70 uppercase tracking-widest">
+              [OPS_DECK_V2]
+            </span>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
             Live marketing signals, opportunities, and next actions for your active workspace.
           </p>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-2 mt-1.5">
             {projects.length > 1 ? (
               <select
                 value={activeProject?.id || ""}
                 onChange={(e) => selectProject(e.target.value)}
-                className="bg-card hover:bg-muted border border-border rounded px-2 py-0.5 text-xs text-foreground font-medium outline-none cursor-pointer focus:border-primary transition"
+                className="bg-card/85 hover:bg-card border border-border/80 rounded px-2 py-0.5 text-[11px] text-foreground font-medium outline-none cursor-pointer focus:border-primary/80 transition font-sans"
               >
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -132,12 +139,12 @@ export function OperationsFloor() {
                 ))}
               </select>
             ) : (
-              <p className="text-[11px] text-muted-foreground font-medium">
+              <p className="text-sm font-serif text-primary italic leading-none">
                 {activeProject?.name}
               </p>
             )}
-            <span className="text-[11px] text-muted-foreground/60">·</span>
-            <p className="text-[11px] text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground/40">·</span>
+            <p className="text-[10px] font-mono text-muted-foreground/80 bg-muted/30 px-1.5 py-0.5 rounded border border-border/30">
               {activeProject?.website_url || "no URL"}
             </p>
           </div>
@@ -146,18 +153,18 @@ export function OperationsFloor() {
           <button
             onClick={handleScan}
             disabled={scanning}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-card hover:bg-muted border border-border rounded-md text-xs text-foreground transition disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-card/85 hover:bg-card border border-border/80 hover:border-primary/45 rounded-md text-xs text-foreground transition duration-300 disabled:opacity-50 font-sans shadow-sm"
             title="Trigger immediate scan"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${scanning ? "animate-spin" : ""}`} />
-            {scanning ? "Scanning..." : "Refresh"}
+            <RefreshCw className={`w-3.5 h-3.5 text-primary/95 ${scanning ? "animate-spin" : ""}`} />
+            <span className="font-medium">{scanning ? "Scanning..." : "Scan Workspace"}</span>
           </button>
           <Link
             href="/chat"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-xs font-medium transition"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-md text-xs transition duration-300 shadow-md border border-primary/20 hover:scale-[1.01] active:scale-100"
           >
-            <MessageSquarePlus className="w-3.5 h-3.5" />
-            Brief the swarm
+            <MessageSquarePlus className="w-3.5 h-3.5 text-primary-foreground/90" />
+            <span>Brief the Swarm</span>
           </Link>
         </div>
       </div>
@@ -191,7 +198,7 @@ export function OperationsFloor() {
         {/* Column 2: Active Work */}
         <Column
           title="Active Work"
-          status={activeWork.length > 0 ? { dot: "#22C55E", label: "Live" } : undefined}
+          status={activeWork.length > 0 ? { dot: "#a3b899", label: "Live" } : undefined}
         >
           {activeWork.length === 0 ? (
             <div className="text-center py-8 text-[11px] text-muted-foreground">
@@ -199,7 +206,7 @@ export function OperationsFloor() {
               <button
                 onClick={handleScan}
                 disabled={scanning}
-                className="text-primary hover:underline disabled:opacity-50"
+                className="text-primary hover:underline font-mono text-[10px] uppercase tracking-wider disabled:opacity-50"
               >
                 Trigger a scan
               </button>
@@ -215,7 +222,7 @@ export function OperationsFloor() {
         <Column
           title="Signals"
           badge={unseen > 0 ? `${unseen} new` : `${signals.length} total`}
-          badgeColor={unseen > 0 ? "#22D3EE" : undefined}
+          badgeColor={unseen > 0 ? "#c5a880" : undefined}
         >
           {signals.length === 0 ? (
             <div className="text-center py-8 text-[11px] text-muted-foreground">

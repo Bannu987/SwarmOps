@@ -14,6 +14,8 @@ import { WelcomeOnboarding } from "@/components/shared/WelcomeOnboarding"
 import { Loader2, Sparkles } from "lucide-react"
 import { AGENTS } from "@/lib/constants/agents"
 import { StrategyBriefPanel } from "./StrategyBriefPanel"
+import { StatusPulse } from "@/components/shared/MotionPrimitives"
+
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://swarmops.onrender.com"
 
@@ -455,6 +457,41 @@ export function ChatInterface() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Specialist Agent Boardroom Activity Timeline Rail */}
+      <div className="px-6 py-2.5 bg-card/10 border-b border-border/40 flex items-center gap-4 overflow-x-auto whitespace-nowrap">
+        <span className="text-[9px] font-mono tracking-widest text-primary/80 uppercase">Boardroom Swarm Status:</span>
+        <div className="flex items-center gap-3">
+          {Object.values(AGENTS).map((agent) => {
+            const activeInChat = Array.from(new Set(messages.flatMap((m) => m.agents_used || [])))
+            const isActive = activeInChat.includes(agent.id) || (agent.id === "nexus" && messages.length > 0)
+            return (
+              <div
+                key={agent.id}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded border transition-all duration-300 ${
+                  isActive
+                    ? "bg-primary/5 border-primary/30 text-parchment font-semibold"
+                    : "bg-transparent border-transparent opacity-45"
+                }`}
+              >
+                <div
+                  className="w-4 h-4 rounded-sm flex items-center justify-center text-black text-[9px] font-bold"
+                  style={{ backgroundColor: agent.color }}
+                >
+                  {agent.icon}
+                </div>
+                <span className="text-[10px] font-sans font-medium tracking-tight">
+                  {agent.name}
+                </span>
+                <StatusPulse
+                  type={isActive ? "success" : "info"}
+                  label={isActive ? "Swarmed" : "Idle"}
+                />
+              </div>
+            )
+          })}
         </div>
       </div>
 

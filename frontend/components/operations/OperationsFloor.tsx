@@ -115,7 +115,7 @@ export function OperationsFloor() {
       <div className="px-6 py-4 border-b border-border/60 bg-card/15 flex items-center justify-between">
         <div>
           <div className="flex items-baseline gap-2">
-            <h1 className="text-xl font-serif font-normal tracking-tight text-foreground">
+            <h1 className="text-2xl md:text-3xl font-serif font-normal tracking-tight text-foreground">
               Command Center
             </h1>
             <span className="text-[10px] font-mono text-primary/70 uppercase tracking-widest">
@@ -139,7 +139,7 @@ export function OperationsFloor() {
                 ))}
               </select>
             ) : (
-              <p className="text-sm font-serif text-primary italic leading-none">
+              <p className="text-sm font-serif text-primary leading-none">
                 {activeProject?.name}
               </p>
             )}

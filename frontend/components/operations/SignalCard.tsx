@@ -25,7 +25,7 @@ export function SignalCard({ signal, onClick }: Props) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-card/40 border border-border/40 hover:border-primary/40 rounded-xl p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:bg-card/75 group shadow-sm flex flex-col gap-2.5 relative overflow-hidden"
+      className="w-full text-left bg-card/40 border border-border/40 hover:border-primary/40 rounded-lg p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:bg-card/75 group shadow-sm flex flex-col gap-2.5 relative overflow-hidden"
     >
       {/* Editorial side accent border */}
       <span className="absolute left-0 top-0 bottom-0 w-0.75" style={{ backgroundColor: severityColor }} />

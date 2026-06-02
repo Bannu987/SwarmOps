@@ -89,7 +89,7 @@ export default function SourcesPage() {
       <div className="max-w-5xl mx-auto">
         <div className="mb-8 border-b border-border/60 pb-5">
           <div className="flex items-baseline gap-2 mb-1">
-            <h1 className="text-2xl font-serif font-normal tracking-tight text-foreground">
+            <h1 className="text-2xl md:text-3xl font-serif font-normal tracking-tight text-foreground">
               Integrations
             </h1>
             <span className="text-[10px] font-mono text-primary/70 uppercase tracking-widest">
@@ -103,7 +103,7 @@ export default function SourcesPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {INTEGRATIONS.map((source) => (
-            <div key={source.id} className="bg-card/65 border border-border/40 rounded-xl p-5 hover:border-primary/45 hover:bg-card/90 transition-all duration-300 flex flex-col justify-between shadow-sm relative group">
+            <div key={source.id} className="bg-card/65 border border-border/40 rounded-lg p-5 hover:border-primary/45 hover:bg-card/90 transition-all duration-300 flex flex-col justify-between shadow-sm relative group">
               <div>
                 <div className="flex items-start justify-between mb-4 border-b border-border/30 pb-3">
                   <div
@@ -118,7 +118,7 @@ export default function SourcesPage() {
                     PENDING
                   </span>
                 </div>
-                <h3 className="font-serif font-normal text-base text-foreground mb-1">{source.name}</h3>
+                <h3 className="font-sans font-semibold text-sm text-foreground mb-1">{source.name}</h3>
                 <p className="text-xs text-muted-foreground/90 mb-4 leading-relaxed">{source.desc}</p>
               </div>
               <button
@@ -136,7 +136,7 @@ export default function SourcesPage() {
 
         {openModal && selectedSource && (
           <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4 backdrop-blur-[2px]">
-            <div className="bg-card border border-border/60 rounded-xl max-w-md w-full p-6 animate-slide-up shadow-2xl relative">
+            <div className="bg-card border border-border/60 rounded-lg max-w-md w-full p-6 animate-slide-up shadow-2xl relative">
               <button
                 onClick={() => setOpenModal(null)}
                 className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition"
@@ -153,7 +153,7 @@ export default function SourcesPage() {
                 >
                   ◎
                 </div>
-                <h3 className="text-lg font-serif text-foreground">
+                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
                   Connect {selectedSource.name}
                 </h3>
               </div>

@@ -402,7 +402,7 @@ export function ChatInterface() {
       <div className="px-6 py-4 border-b border-border/60 bg-card/15 flex items-center justify-between">
         <div>
           <div className="flex items-baseline gap-2">
-            <h1 className="text-xl font-serif font-normal tracking-tight text-foreground">AI Brief Room</h1>
+            <h1 className="text-2xl md:text-3xl font-serif font-normal tracking-tight text-foreground">AI Brief Room</h1>
             <span className="text-[10px] font-mono text-primary/70 uppercase tracking-widest">[DECISION_WAR_ROOM]</span>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1 max-w-lg leading-snug">
@@ -415,9 +415,9 @@ export function ChatInterface() {
           {activeProject && (
             <button
               onClick={() => setShowBriefs(!showBriefs)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/25 hover:bg-primary hover:text-primary-foreground text-primary font-mono text-[10px] uppercase tracking-wider rounded transition-all duration-300 shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/20 hover:bg-accent/40 border border-border/80 text-foreground font-mono text-[10px] uppercase tracking-wider rounded transition-all duration-300 shadow-sm"
             >
-              <Sparkles className="w-3 h-3 animate-pulse" />
+              <Sparkles className="w-3 h-3 text-primary" />
               <span>Strategy Briefs</span>
             </button>
           )}

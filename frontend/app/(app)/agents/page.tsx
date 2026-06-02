@@ -19,7 +19,7 @@ export default function AgentsPage() {
       <div className="max-w-5xl mx-auto">
         <div className="mb-8 border-b border-border/60 pb-5">
           <div className="flex items-baseline gap-2 mb-1">
-            <h1 className="text-2xl font-serif font-normal tracking-tight text-foreground">
+            <h1 className="text-2xl md:text-3xl font-serif font-normal tracking-tight text-foreground">
               Agent Network
             </h1>
             <span className="text-[10px] font-mono text-primary/70 uppercase tracking-widest">
@@ -37,7 +37,7 @@ export default function AgentsPage() {
             return (
               <div
                 key={agent.id}
-                className="bg-card/65 border border-border/40 rounded-xl p-5 hover:border-primary/45 hover:bg-card/90 transition-all duration-300 group flex flex-col justify-between shadow-sm"
+                className="bg-card/65 border border-border/40 rounded-lg p-5 hover:border-primary/45 hover:bg-card/90 transition-all duration-300 group flex flex-col justify-between shadow-sm"
                 style={{
                   background: `linear-gradient(180deg, ${agent.color}08 0%, transparent 100%)`,
                 }}
@@ -57,7 +57,7 @@ export default function AgentsPage() {
                       READY
                     </span>
                   </div>
-                  <h3 className="font-serif font-normal text-base text-foreground mb-0.5">{agent.name} Specialist</h3>
+                  <h3 className="font-sans font-semibold text-sm text-foreground mb-0.5">{agent.name} Specialist</h3>
                   <p className="text-[9px] font-mono text-primary uppercase tracking-widest mb-3">{agent.role}</p>
                   <p className="text-xs text-muted-foreground/90 leading-relaxed mb-4">{desc}</p>
                 </div>

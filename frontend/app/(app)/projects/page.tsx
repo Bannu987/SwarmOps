@@ -133,7 +133,7 @@ function ProjectsList() {
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8 border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-2xl font-serif font-normal tracking-tight text-foreground mb-1">
+            <h1 className="text-2xl md:text-3xl font-serif font-normal tracking-tight text-foreground mb-1">
               Workspaces
             </h1>
             <p className="text-xs text-muted-foreground">Manage your strategic brands, campaigns, and machine networks.</p>
@@ -167,14 +167,14 @@ function ProjectsList() {
                   selectProject(p.id)
                   router.push("/dashboard")
                 }}
-                className="bg-card/65 border border-border/40 rounded-xl p-5 hover:border-primary/45 hover:bg-card/90 transition-all duration-300 shadow-sm cursor-pointer relative group flex flex-col justify-between"
+                className="bg-card/65 border border-border/40 rounded-lg p-5 hover:border-primary/45 hover:bg-card/90 transition-all duration-300 shadow-sm cursor-pointer relative group flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-start justify-between mb-3 border-b border-border/30 pb-2.5">
                     <FolderKanban className="w-4 h-4 text-primary" />
                     {p.pinned && <Pin className="w-3 h-3 text-primary fill-primary/20" />}
                   </div>
-                  <h3 className="font-serif font-normal text-base text-foreground mb-1 group-hover:text-primary transition duration-300">{p.name}</h3>
+                  <h3 className="font-sans font-semibold text-sm text-foreground mb-1 group-hover:text-primary transition duration-300">{p.name}</h3>
                 </div>
                 {p.website_url ? (
                   <p className="text-[10px] font-mono text-muted-foreground truncate bg-muted/40 px-2 py-0.5 rounded border border-border/20 mt-3">{p.website_url}</p>
@@ -188,8 +188,8 @@ function ProjectsList() {
 
         {showCreate && (
           <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4 backdrop-blur-[2px]">
-            <div className="bg-card border border-border/60 rounded-xl max-w-md w-full p-6 animate-slide-up shadow-2xl">
-              <h3 className="text-lg font-serif text-foreground mb-4">Create Workspace</h3>
+            <div className="bg-card border border-border/60 rounded-lg max-w-md w-full p-6 animate-slide-up shadow-2xl">
+              <h3 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wider">Create Workspace</h3>
               
               {error && (
                 <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-xs text-destructive">

@@ -4,75 +4,114 @@
 
 @layer base {
   :root {
-    --background: 300 12% 3.5%;
-    --foreground: 45 20% 90%;
-    --card: 300 10% 5.5%;
-    --card-foreground: 45 15% 85%;
-    --popover: 300 12% 5%;
-    --popover-foreground: 45 15% 85%;
-    --primary: 35 38% 64%;
-    --primary-foreground: 35 25% 6%;
-    --secondary: 300 8% 8%;
-    --secondary-foreground: 43 12% 70%;
-    --muted: 300 8% 8%;
-    --muted-foreground: 43 12% 65%;
-    --accent: 356 72% 17%;
-    --accent-foreground: 45 23% 94%;
-    --destructive: 11 63% 59%;
-    --destructive-foreground: 45 23% 94%;
-    --border: 300 8% 10%;
-    --input: 300 8% 6.5%;
-    --ring: 35 38% 64%;
-    --radius: 0.75rem;
+    /* Muted Apple Dark Palette (Graphite / Charcoal / Soft Black) */
+    --background: 240 6% 6.5%;         /* Soft Graphite Near-Black */
+    --foreground: 40 8% 92%;           /* Warm Apple Off-White */
+    --card: 240 5% 10.5%;              /* Soft Charcoal Panels */
+    --card-foreground: 40 6% 88%;      /* Warm Off-White Body */
+    --popover: 240 6% 8%;
+    --popover-foreground: 40 6% 88%;
+    --primary: 36 28% 54%;             /* Calm Muted Brass/Gold Accent */
+    --primary-foreground: 240 6% 5%;
+    --secondary: 240 5% 9%;
+    --secondary-foreground: 240 4% 65%;
+    --muted: 240 5% 8.5%;
+    --muted-foreground: 240 4% 60%;
+    --accent: 240 5% 13%;              /* Subtle Charcoal Highlight */
+    --accent-foreground: 40 8% 92%;
+    --destructive: 11 50% 55%;         /* Restrained Clay Red */
+    --destructive-foreground: 40 8% 95%;
+    --border: 240 5% 14%;              /* Very subtle gray border */
+    --input: 240 5% 8.5%;
+    --ring: 36 28% 54%;
+    --radius: 0.5rem;                  /* 8px Apple corner radius for precise UI */
   }
 }
 
 @layer base {
-  * { @apply border-border; }
+  * { 
+    @apply border-border; 
+  }
   body {
     @apply bg-background text-foreground antialiased font-sans;
     font-feature-settings: "rlig" 1, "calt" 1;
-    background-image: radial-gradient(circle at 50% 0%, hsl(356 72% 17% / 0.08) 0%, transparent 60%);
+    /* Soft top-graphite lighting mask */
+    background-image: radial-gradient(circle at 50% 0%, hsl(240 5% 15% / 0.12) 0%, transparent 60%);
     background-attachment: fixed;
   }
-  h1, h2, h3, h4, .font-serif-display {
+  
+  /* Restrict serif ONLY to high-value moments */
+  .font-serif-display {
     @apply font-serif;
   }
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(35 38% 64% / 0.15); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: hsl(35 38% 64% / 0.3); }
+::-webkit-scrollbar { 
+  width: 5px; 
+  height: 5px; 
+}
+::-webkit-scrollbar-track { 
+  background: transparent; 
+}
+::-webkit-scrollbar-thumb { 
+  background: hsl(240 4% 30% / 0.3); 
+  border-radius: 9999px; 
+}
+::-webkit-scrollbar-thumb:hover { 
+  background: hsl(240 4% 30% / 0.5); 
+}
 
-/* Markdown rendering */
+/* Markdown rendering in AI Brief Room */
 .prose-swarm {
   color: hsl(var(--foreground));
-  line-height: 1.7;
+  line-height: 1.625;
 }
-.prose-swarm h1 { @apply text-2xl font-serif text-foreground mt-6 mb-3 tracking-tight border-b border-border/40 pb-2; }
-.prose-swarm h2 { @apply text-lg font-serif mt-5 mb-2.5 text-foreground tracking-tight; }
-.prose-swarm h3 { @apply text-sm font-semibold mt-4 mb-2 text-foreground tracking-wide uppercase font-sans; }
-.prose-swarm p { @apply text-xs leading-relaxed mb-3.5 text-muted-foreground/90; }
-.prose-swarm ul { @apply list-disc list-outside ml-5 mb-4 space-y-1.5; }
-.prose-swarm ol { @apply list-decimal list-outside ml-5 mb-4 space-y-1.5; }
-.prose-swarm li { @apply text-xs leading-relaxed text-muted-foreground/90; }
-.prose-swarm strong { @apply font-semibold text-foreground; }
-.prose-swarm code { @apply bg-muted px-1.5 py-0.5 rounded text-[11px] font-mono text-primary; }
-.prose-swarm pre { @apply bg-muted/60 border border-border/80 rounded-xl p-4 my-4 overflow-x-auto shadow-inner; }
-.prose-swarm pre code { @apply bg-transparent p-0 text-[11px] text-foreground font-mono; }
-.prose-swarm blockquote { @apply border-l-2 border-primary/50 bg-primary/5 pl-4 py-2 italic text-xs text-muted-foreground my-4 rounded-r-lg; }
+.prose-swarm h1 { 
+  @apply text-xl font-sans font-semibold text-foreground mt-5 mb-2.5 tracking-tight border-b border-border/40 pb-1.5; 
+}
+.prose-swarm h2 { 
+  @apply text-base font-sans font-semibold mt-4 mb-2 text-foreground tracking-tight; 
+}
+.prose-swarm h3 { 
+  @apply text-xs font-semibold mt-3.5 mb-1.5 text-foreground tracking-wide uppercase font-sans; 
+}
+.prose-swarm p { 
+  @apply text-xs leading-relaxed mb-3 text-card-foreground/90 font-sans; 
+}
+.prose-swarm ul { 
+  @apply list-disc list-outside ml-4 mb-3 space-y-1 font-sans; 
+}
+.prose-swarm ol { 
+  @apply list-decimal list-outside ml-4 mb-3 space-y-1 font-sans; 
+}
+.prose-swarm li { 
+  @apply text-xs leading-relaxed text-card-foreground/90 font-sans; 
+}
+.prose-swarm strong { 
+  @apply font-semibold text-foreground; 
+}
+.prose-swarm code { 
+  @apply bg-accent px-1.5 py-0.5 rounded text-[10px] font-mono text-primary; 
+}
+.prose-swarm pre { 
+  @apply bg-background/50 border border-border/50 rounded-lg p-3.5 my-3 overflow-x-auto shadow-inner; 
+}
+.prose-swarm pre code { 
+  @apply bg-transparent p-0 text-[10px] text-foreground font-mono; 
+}
+.prose-swarm blockquote { 
+  @apply border-l-2 border-primary/50 bg-primary/5 pl-3.5 py-1.5 italic text-xs text-muted-foreground my-3 rounded-r-lg; 
+}
 
 /* Custom theme helpers */
-.bg-void { background-color: hsl(300 12% 3.5%); }
-.bg-plum { background-color: hsl(300 20% 5%); }
-.bg-oxblood { background-color: hsl(356 72% 17%); }
-.text-parchment { color: hsl(45 23% 94%); }
-.text-sand { color: hsl(43 17% 84%); }
-.text-brass { color: hsl(35 38% 64%); }
-.text-clay { color: hsl(11 63% 59%); }
-.border-subtle { border-color: hsl(300 8% 10% / 0.6); }
-.panel-base { background-color: hsl(300 10% 5.5%); border: 1px solid hsl(300 8% 10% / 0.5); }
-.panel-elevated { background-color: hsl(300 12% 7.5%); border: 1px solid hsl(300 8% 12% / 0.6); }
-
+.bg-void { background-color: hsl(240 6% 6.5%); }
+.bg-plum { background-color: hsl(240 5% 10.5%); }
+.bg-oxblood { background-color: hsl(240 5% 12%); }
+.text-parchment { color: hsl(40 8% 92%); }
+.text-sand { color: hsl(240 4% 65%); }
+.text-brass { color: hsl(36 28% 54%); }
+.text-clay { color: hsl(11 50% 55%); }
+.border-subtle { border-color: hsl(240 5% 14% / 0.7); }
+.panel-base { background-color: hsl(240 5% 10.5%); border: 1px solid hsl(240 5% 14% / 0.7); }
+.panel-elevated { background-color: hsl(240 5% 12.5%); border: 1px solid hsl(240 5% 16% / 0.7); }

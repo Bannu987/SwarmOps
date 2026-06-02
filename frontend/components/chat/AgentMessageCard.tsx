@@ -26,7 +26,7 @@ export function AgentMessageCard({ message }: Props) {
 
   return (
     <div
-      className="bg-card/65 border border-border/40 rounded-xl overflow-hidden shadow-sm animate-slide-up"
+      className="bg-card/65 border border-border/40 rounded-lg overflow-hidden shadow-sm animate-slide-up"
       style={{ borderTop: `2px solid ${agentCfg.color}` }}
     >
       {/* Header */}

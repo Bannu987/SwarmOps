@@ -102,7 +102,7 @@ export default function ApprovalPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <CheckSquare className="w-5 h-5 text-primary" />
-              <h1 className="text-2xl font-serif font-normal tracking-tight text-foreground">
+              <h1 className="text-2xl md:text-3xl font-serif font-normal tracking-tight text-foreground">
                 Approvals Board
               </h1>
             </div>
@@ -178,7 +178,7 @@ export default function ApprovalPage() {
               return (
                 <div
                   key={opp.id}
-                  className="bg-card/65 border border-border/40 rounded-xl p-6 hover:border-primary/35 transition-all duration-300 flex flex-col justify-between shadow-sm relative group"
+                  className="bg-card/65 border border-border/40 rounded-lg p-6 hover:border-primary/35 transition-all duration-300 flex flex-col justify-between shadow-sm relative group"
                 >
                   {/* Top Header */}
                   <div className="flex items-center justify-between mb-3 border-b border-border/30 pb-3">

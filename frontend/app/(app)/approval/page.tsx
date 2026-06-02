@@ -20,7 +20,6 @@ export default function ApprovalPage() {
   const [dataLoading, setDataLoading] = useState(true)
   const [actioningId, setActioningId] = useState<string | null>(null)
   const [feedbackMsg, setFeedbackMsg] = useState<{ id: string; type: "success" | "dismissed"; text: string } | null>(null)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const loadOpportunities = useCallback(async () => {
     if (!activeProject) {
@@ -214,20 +213,6 @@ export default function ApprovalPage() {
                     </p>
                   </div>
 
-                  {/* Visual Confidence Gauge */}
-                  <div className="mb-4 border border-border/30 rounded px-3 py-2 bg-card/25 flex items-center justify-between">
-                    <div className="flex-grow flex items-center gap-3">
-                      <span className="text-[9px] font-mono text-muted-foreground/75 uppercase leading-none">Swarm Align Confidence:</span>
-                      <div className="flex-grow max-w-[140px] bg-border/40 h-1.5 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-primary h-full rounded-full transition-all duration-500" 
-                          style={{ width: `${Math.round(opp.confidence * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-mono font-semibold text-primary">{(opp.confidence * 100).toFixed(0)}%</span>
-                  </div>
-
                   {/* Badges and Metrics */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 bg-card/45 p-3 rounded-lg border border-border/35 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/80">
                     <div className="flex items-center gap-1.5">
@@ -247,36 +232,12 @@ export default function ApprovalPage() {
                       <span>TIMEFRAME:</span>
                       <span className="text-foreground font-semibold">{opp.timeframe}</span>
                     </div>
-                  </div>
-
-                  {/* Expandable Rationale Details Panel */}
-                  {expandedId === opp.id && (
-                    <div className="mb-4 border-t border-border/30 pt-4 space-y-3 animate-slide-up text-xs">
-                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-3.5 leading-relaxed text-muted-foreground/90 italic">
-                        <span className="font-serif font-semibold text-primary block not-italic mb-1 leading-none">🤖 Swarm Debate Decision Rationale:</span>
-                        "{opp.recommended_action || "Debated by specialist swarm cores, this action addresses detected SEO and conversion leakages immediately."} CMO Orchestrator Nexus calculated local SERPs, crawl anomalies, and campaign budget constraints to guarantee maximum ROI efficiency."
-                      </div>
-                      
-                      {/* Checklists preview */}
-                      <div className="space-y-1.5">
-                        <span className="text-[9px] font-mono uppercase tracking-widest text-primary block">Swarm checklist preview:</span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] font-mono text-muted-foreground/75">
-                          <div className="flex items-center gap-1.5 bg-card p-2 border border-border/40 rounded">
-                            <span className="text-primary">✓</span> Core telemetry audits
-                          </div>
-                          <div className="flex items-center gap-1.5 bg-card p-2 border border-border/40 rounded">
-                            <span className="text-primary">✓</span> Copy variations generation
-                          </div>
-                          <div className="flex items-center gap-1.5 bg-card p-2 border border-border/40 rounded">
-                            <span className="text-primary">✓</span> Execution deployment
-                          </div>
-                          <div className="flex items-center gap-1.5 bg-card p-2 border border-border/40 rounded">
-                            <span className="text-primary">✓</span> Channel KPI attribution
-                          </div>
-                        </div>
-                      </div>
+                    <span className="text-muted-foreground/30 font-mono">·</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>CONFIDENCE:</span>
+                      <span className="text-foreground font-semibold">{(opp.confidence * 100).toFixed(0)}%</span>
                     </div>
-                  )}
+                  </div>
 
                   {/* Action Bar */}
                   <div className="flex flex-col sm:flex-row gap-4 mt-2 pt-4 border-t border-border/30 justify-between items-stretch sm:items-center">
@@ -285,12 +246,6 @@ export default function ApprovalPage() {
                     </div>
                     
                     <div className="flex gap-2.5">
-                      <button
-                        onClick={() => setExpandedId(expandedId === opp.id ? null : opp.id)}
-                        className="px-3.5 py-1.5 border border-border/80 hover:bg-card text-muted-foreground font-mono text-[10px] uppercase tracking-wider rounded transition duration-300 flex items-center justify-center gap-1"
-                      >
-                        <span>{expandedId === opp.id ? "Hide details" : "Swarm Rationale"}</span>
-                      </button>
                       <button
                         onClick={() => handleDismiss(opp.id, opp.title)}
                         disabled={isActioning}

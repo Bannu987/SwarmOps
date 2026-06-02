@@ -57,11 +57,24 @@ function ProjectsList() {
     }
 
     const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
+    let { data: { session } } = await supabase.auth.getSession()
+    
     if (!session) {
-      setError("Your session has expired. Please log in again.")
+      // Try fallback to getUser which can restore the session from cookies/refresh tokens
+      console.info("[PROJECT CREATION] Active session not found via getSession. Attempting getUser recovery fallback...")
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        console.info("[PROJECT CREATION] User recovered via getUser. Fetching fresh session...")
+        const fresh = await supabase.auth.getSession()
+        session = fresh.data.session
+      }
+    }
+    
+    if (!session) {
+      setError("Your session has expired or is invalid. Please sign in again.")
       return
     }
+
 
     setCreating(true)
     setError(null)

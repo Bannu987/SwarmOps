@@ -17,6 +17,10 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY") or ""
 
+# Fallback SUPABASE_ANON_KEY to SUPABASE_SERVICE_KEY in backend if anon key is not set
+if not SUPABASE_ANON_KEY and SUPABASE_SERVICE_KEY:
+    SUPABASE_ANON_KEY = SUPABASE_SERVICE_KEY
+
 # Helper to safely mask keys for startup diagnostics
 def _mask_key(key: str) -> str:
     if not key:
@@ -75,9 +79,6 @@ def get_user_from_token(token: str):
     
     logger.info(f"[AUTH DIAGNOSTICS] Validating token (len: {token_len}) against Supabase host: {url_host}")
     
-    if not _public:
-        logger.error("[AUTH DIAGNOSTICS] Public Supabase Client is not initialized! Check SUPABASE_URL and SUPABASE_ANON_KEY variables.")
-        return None
     if not token:
         logger.error("[AUTH DIAGNOSTICS] Bearer token is empty/missing.")
         return None
@@ -87,13 +88,35 @@ def get_user_from_token(token: str):
         preview = f"{token[:8]}...{token[-8:]}" if token_len > 16 else "TOO_SHORT"
         logger.info(f"[AUTH DIAGNOSTICS] Token preview: {preview}")
         
-        result = _public.auth.get_user(token)
-        if result and result.user:
-            logger.info(f"[AUTH DIAGNOSTICS] Token validation SUCCESS for user ID: {result.user.id}")
-            return result.user
-        else:
-            logger.warning("[AUTH DIAGNOSTICS] Token validation succeeded but returned no user/session result.")
-            return None
-    except Exception as e:
-        logger.warning(f"[AUTH DIAGNOSTICS] Token validation FAILED with exception: {e}")
+        # 1. Try public client (using Anon Key or service role fallback)
+        if _public:
+            try:
+                logger.info("[AUTH DIAGNOSTICS] Trying validation using Public client...")
+                result = _public.auth.get_user(token)
+                if result and result.user:
+                    logger.info(f"[AUTH DIAGNOSTICS] Public client validation SUCCESS for user ID: {result.user.id}")
+                    return result.user
+                else:
+                    logger.warning("[AUTH DIAGNOSTICS] Public client validation returned no user/session result.")
+            except Exception as e:
+                logger.warning(f"[AUTH DIAGNOSTICS] Public client validation failed: {e}")
+
+        # 2. Try admin client (using Service Role Key) as a robust fallback
+        if _admin:
+            try:
+                logger.info("[AUTH DIAGNOSTICS] Trying validation fallback using Admin client...")
+                result = _admin.auth.get_user(token)
+                if result and result.user:
+                    logger.info(f"[AUTH DIAGNOSTICS] Admin client validation SUCCESS for user ID: {result.user.id}")
+                    return result.user
+                else:
+                    logger.warning("[AUTH DIAGNOSTICS] Admin client validation returned no user/session result.")
+            except Exception as e:
+                logger.warning(f"[AUTH DIAGNOSTICS] Admin client validation failed: {e}")
+
+        logger.error("[AUTH DIAGNOSTICS] All token validation attempts failed.")
         return None
+    except Exception as e:
+        logger.error(f"[AUTH DIAGNOSTICS] Token validation crashed with exception: {e}")
+        return None
+

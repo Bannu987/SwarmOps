@@ -3,12 +3,45 @@ import { createClient } from "@/lib/supabase/client"
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://swarmops.onrender.com"
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token
-    ? { Authorization: `Bearer ${session.access_token}` }
-    : {}
+  try {
+    const supabase = createClient()
+    let { data: { session } } = await supabase.auth.getSession()
+    
+    if (session) {
+      // Check if session token is expired or close to expiry (e.g. less than 2 minutes left)
+      const expiresAt = session.expires_at // unix timestamp
+      const now = Math.floor(Date.now() / 1000)
+      if (expiresAt && expiresAt - now < 120) {
+        console.info("[AUTH CLIENT] Session is close to expiring. Attempting proactive token refresh...")
+        const { data: { session: refreshed }, error } = await supabase.auth.refreshSession()
+        if (refreshed) {
+          session = refreshed
+          console.info("[AUTH CLIENT] Proactive token refresh succeeded.")
+        } else if (error) {
+          console.warn("[AUTH CLIENT] Proactive session refresh failed:", error)
+        }
+      }
+    } else {
+      // No active session found via getSession. Let's check getUser() which is more authoritative
+      // and can restore sessions from cookies or local storage.
+      console.info("[AUTH CLIENT] No session found via getSession(). Checking getUser() fallback...")
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        console.info("[AUTH CLIENT] User found via getUser(). Re-fetching refreshed session...")
+        const fresh = await supabase.auth.getSession()
+        session = fresh.data.session
+      }
+    }
+    
+    return session?.access_token
+      ? { Authorization: `Bearer ${session.access_token}` }
+      : {}
+  } catch (err) {
+    console.error("[AUTH CLIENT] Failed to construct authorization headers:", err)
+    return {}
+  }
 }
+
 
 export async function sendChat(message: string, conversationId?: string, projectId?: string) {
   const headers = await authHeaders()

@@ -96,12 +96,12 @@ export function ScanlineSkeleton() {
       <div className="h-7 w-full bg-muted/30 rounded animate-pulse" />
       <div className="h-4 w-5/6 bg-muted/30 rounded animate-pulse" />
       
-      <style dangerouslySetInnerHTML={{__html: `
+      <style jsx global>{`
         @keyframes scan {
           0% { transform: translateY(0); }
           100% { transform: translateY(120px); }
         }
-      `}} />
+      `}</style>
     </div>
   )
 }

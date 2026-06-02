@@ -13,15 +13,15 @@ from typing import Optional
 
 # Models per tier — easy to swap
 TIER_1_MODELS = {
-    "primary":  "google/gemma-4-31b-it:free",
-    "fast":     "openai/gpt-oss-120b:free",
-    "fallback": "nvidia/nemotron-3-super-120b-a12b:free",
+    "primary":  "meta-llama/llama-3-8b-instruct:free",
+    "fast":     "meta-llama/llama-3-8b-instruct:free",
+    "fallback": "qwen/qwen-2-7b-instruct:free",
 }
 
 TIER_2_MODELS = {
-    "primary":   "openai/gpt-oss-120b:free",
-    "reasoning": "google/gemma-4-31b-it:free",
-    "fallback":  "nvidia/nemotron-3-super-120b-a12b:free",
+    "primary":   "meta-llama/llama-3-8b-instruct:free",
+    "reasoning": "google/gemma-2-9b-it:free",
+    "fallback":  "qwen/qwen-2-7b-instruct:free",
 }
 
 TIER_3_MODELS = {
@@ -92,7 +92,11 @@ def classify_task(
 
 
 def select_model(tier: int) -> str:
-    """Pick the primary model for a given tier."""
+    """Pick the primary model for a given tier. Support env override."""
+    env_model = os.environ.get("OPENROUTER_MODEL")
+    if env_model:
+        return env_model
+
     if tier == 3:
         # Only use paid Claude if user explicitly opted in via env var
         # (avoids surprise bills during dev)
@@ -104,6 +108,7 @@ def select_model(tier: int) -> str:
         return TIER_2_MODELS["primary"]
 
     return TIER_1_MODELS["primary"]
+
 
 
 def fallback_chain(tier: int) -> list:

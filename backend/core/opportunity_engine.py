@@ -116,10 +116,35 @@ recommendations[] array becomes one opportunity."""
                 }
 
                 try:
+                    # Robust duplicate active opportunity check
+                    existing = admin.table("opportunities") \
+                        .select("id") \
+                        .eq("project_id", project.get("id")) \
+                        .eq("title", rec.action[:200]) \
+                        .in_("status", ["active", "in_progress"]) \
+                        .execute()
+                    
+                    if existing.data:
+                        opp_id = existing.data[0]["id"]
+                        logger.info(f"[opportunity_engine] Deduplication matched active opportunity '{rec.action[:200]}' (ID: {opp_id}). Updating in-place...")
+                        admin.table("opportunities").update({
+                            "description": rec.rationale,
+                            "recommended_action": rec.action,
+                            "expected_impact": rec.expected_impact,
+                            "effort": rec.effort,
+                            "timeframe": rec.timeframe,
+                            "rice_score": rice,
+                            "confidence": output.confidence,
+                            "expires_at": (datetime.now(timezone.utc) + timedelta(days=14)).isoformat(),
+                        }).eq("id", opp_id).execute()
+                        continue
+
+                    # Insert new opportunity if no active duplicate was found
                     admin.table("opportunities").insert(opportunity).execute()
                     opportunities_created += 1
                 except Exception as e:
-                    logger.warning(f"Failed to persist opportunity: {e}")
+                    logger.warning(f"Failed to persist/update opportunity: {e}")
+
 
         except Exception as e:
             logger.error(f"[{agent_id}] opportunity generation failed: {e}")

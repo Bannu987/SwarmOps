@@ -151,7 +151,7 @@ class BaseScanner(ABC):
         return signals_created
 
     def _persist_signal(self, user_id: str, project_id: Optional[str], signal: Signal):
-        """Save a signal to Supabase."""
+        """Save a signal to Supabase with robust active signal deduplication."""
         admin = get_admin_client()
         if not admin:
             return
@@ -161,6 +161,33 @@ class BaseScanner(ABC):
         if signal.expires_in_hours:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=signal.expires_in_hours)
 
+        # Resilient duplicate active signal check
+        try:
+            if project_id:
+                existing = admin.table("signals") \
+                    .select("id") \
+                    .eq("project_id", project_id) \
+                    .eq("signal_type", signal.signal_type) \
+                    .eq("title", signal.title) \
+                    .eq("status", "active") \
+                    .execute()
+                
+                if existing.data:
+                    sig_id = existing.data[0]["id"]
+                    logger.info(f"[signals.base] Deduplication matched active signal '{signal.title}' (ID: {sig_id}). Updating in-place...")
+                    admin.table("signals").update({
+                        "detected_at": datetime.now(timezone.utc).isoformat(),
+                        "description": signal.description,
+                        "severity": signal.severity,
+                        "evidence": signal.evidence,
+                        "raw_data": signal.raw_data,
+                        "expires_at": expires_at.isoformat() if expires_at else None,
+                    }).eq("id", sig_id).execute()
+                    return
+        except Exception as dup_err:
+            logger.warning(f"[signals.base] Error during signal deduplication check: {dup_err}")
+
+        # Insert new signal if no active duplicate was found
         admin.table("signals").insert({
             "user_id": user_id,
             "project_id": project_id,
@@ -175,3 +202,4 @@ class BaseScanner(ABC):
             "raw_data": signal.raw_data,
             "expires_at": expires_at.isoformat() if expires_at else None,
         }).execute()
+

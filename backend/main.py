@@ -857,6 +857,85 @@ Return ONLY the raw JSON object. No markdown code fences, no introductory or tra
         return {}
 
 
+def get_deterministic_action_plan_fallback(opportunity: dict, project: dict) -> dict:
+    """Provides a high-quality, specific, and structure-conformant backup Action Plan
+    when the AI model is offline or rate-limited.
+    """
+    category = (opportunity.get("category") or "general_strategy").lower()
+    
+    # Map opportunity categories to action plan types
+    plan_type = "general_strategy"
+    if "seo" in category:
+        plan_type = "seo_growth"
+    elif "ads" in category or "paid" in category:
+        plan_type = "paid_ads"
+    elif "lead" in category or "nurture" in category:
+        plan_type = "lead_generation"
+    elif "content" in category or "calendar" in category:
+        plan_type = "content_calendar"
+    elif "crm" in category or "lifecycle" in category:
+        plan_type = "crm_lifecycle"
+    elif "cro" in category or "conversion" in category:
+        plan_type = "conversion_rate_optimization"
+        
+    title = f"Execution Plan: {opportunity.get('title', 'Marketing Swarm')}"
+    objective = f"Successfully implement the approved swarm opportunity: {opportunity.get('title', 'General optimization')}."
+    
+    # Generate high-fidelity default tasks based on plan_type
+    tasks = []
+    if plan_type == "seo_growth":
+        tasks = [
+            {"id": "task_1", "title": "Perform search console query audit & map topical keyword gaps", "status": "pending", "owner": "nexus"},
+            {"id": "task_2", "title": "Draft structured JSON-LD schema markup code for core marketing pages", "status": "pending", "owner": "nexus"},
+            {"id": "task_3", "title": "Audit and rewrite meta descriptions, header hierarchy, and title tags", "status": "pending", "owner": "nexus"},
+            {"id": "task_4", "title": "Convert images to WebP format and configure browser page caching", "status": "pending", "owner": "nexus"},
+            {"id": "task_5", "title": "Submit the sitemap XML directly to Google Search Console for indexing", "status": "pending", "owner": "nexus"}
+        ]
+    elif plan_type == "paid_ads":
+        tasks = [
+            {"id": "task_1", "title": "Draft 3 high-impact ad copywriting hooks and select platform creative dimensions", "status": "pending", "owner": "nexus"},
+            {"id": "task_2", "title": "Audit pixel tracking setups and verify GA4 custom conversion events", "status": "pending", "owner": "nexus"},
+            {"id": "task_3", "title": "Configure detailed targeting rules, custom lists, and split-test ad-sets", "status": "pending", "owner": "nexus"},
+            {"id": "task_4", "title": "De-allocate budget from poor-performing ads into top-producing assets", "status": "pending", "owner": "nexus"}
+        ]
+    elif plan_type == "conversion_rate_optimization":
+        tasks = [
+            {"id": "task_1", "title": "Audit page structure using MECLABS Conversion Heuristic (Motivation, Value, Friction, Anxiety)", "status": "pending", "owner": "nexus"},
+            {"id": "task_2", "title": "Design A/B test variant with highly motivational value-driven headline", "status": "pending", "owner": "nexus"},
+            {"id": "task_3", "title": "Simplify checkout or lead form fields to reduce friction points", "status": "pending", "owner": "nexus"},
+            {"id": "task_4", "title": "Embed dynamic social proof elements and customer testimonials near CTAs", "status": "pending", "owner": "nexus"}
+        ]
+    else:
+        tasks = [
+            {"id": "task_1", "title": "Gather baseline entry-channel metrics and funnel drop-off logs", "status": "pending", "owner": "nexus"},
+            {"id": "task_2", "title": "Draft core target positioning, creative hooks, and copy angles", "status": "pending", "owner": "nexus"},
+            {"id": "task_3", "title": "Deploy GA4 custom events tracking and activate marketing campaigns", "status": "pending", "owner": "nexus"},
+            {"id": "task_4", "title": "Conduct 7-day conversion statistics review and execute bid adjustments", "status": "pending", "owner": "nexus"}
+        ]
+        
+    return {
+        "title": title,
+        "objective": objective,
+        "plan_type": plan_type,
+        "priority": opportunity.get("priority", "high") or "high",
+        "estimated_effort": opportunity.get("effort", "medium") or "medium",
+        "expected_impact": opportunity.get("expected_impact", "high") or "high",
+        "confidence": opportunity.get("confidence", 0.8) or 0.8,
+        "tasks": tasks,
+        "kpis": [
+            {"metric": "Action Implementation Progress", "target": "100% Tasks Checked", "timeframe": "next 14 days"},
+            {"metric": "Primary Conversion Metric", "target": "+15% Conversion Rate", "timeframe": "next 30 days"}
+        ],
+        "dependencies": [
+            "Access to web platform administration console",
+            "GA4 and Google Search Console integrations linked in workspace"
+        ],
+        "risks": [
+            {"risk": "Ad-hoc technical implementation bottlenecks", "mitigation": "Follow step-by-step checklist precisely"}
+        ]
+    }
+
+
 def generate_and_save_action_plan_background(opportunity_id: str, user_id: str, project_id: str):
     import threading
     
@@ -892,47 +971,55 @@ def generate_and_save_action_plan_background(opportunity_id: str, user_id: str, 
             signals = sigs_res.data or []
             
             # 4. Generate structured action plan
-            plan_data = generate_action_plan_from_opportunity(opportunity, project, memories, signals)
-            
-            if plan_data:
-                # Insert into DB
-                admin.table("action_plans").insert({
-                    "user_id": user_id,
-                    "project_id": project_id,
-                    "opportunity_id": opportunity_id,
-                    "source_type": "opportunity",
-                    "source_id": opportunity_id,
-                    "title": plan_data.get("title", f"Action Plan: {opportunity.get('title')}"),
-                    "objective": plan_data.get("objective", opportunity.get("description", "")),
-                    "plan_type": plan_data.get("plan_type", "general_strategy"),
-                    "priority": plan_data.get("priority", "medium"),
-                    "status": "pending",
-                    "owner_label": "nexus",
-                    "estimated_effort": plan_data.get("estimated_effort", "medium"),
-                    "expected_impact": plan_data.get("expected_impact", "medium"),
-                    "confidence": plan_data.get("confidence", 0.5),
-                    "tasks": plan_data.get("tasks", []),
-                    "kpis": plan_data.get("kpis", []),
-                    "dependencies": plan_data.get("dependencies", []),
-                    "risks": plan_data.get("risks", [])
-                }).execute()
+            try:
+                plan_data = generate_action_plan_from_opportunity(opportunity, project, memories, signals)
+            except Exception as e:
+                logger.error(f"Error in generate_action_plan_from_opportunity: {e}")
+                plan_data = {}
                 
-                # Persist as project memory
-                create_project_memory(
-                    user_id=user_id,
-                    project_id=project_id,
-                    memory_type="approved_action",
-                    title=f"Approved Action Plan: {plan_data.get('title')}",
-                    summary=f"Objective: {plan_data.get('objective')}. Plan Type: {plan_data.get('plan_type')}.",
-                    source="swarm_decision",
-                    confidence=0.9,
-                    tags=["approved_action", plan_data.get("plan_type")]
-                )
-                logger.info(f"Action plan generated successfully for opportunity {opportunity_id}")
+            if not plan_data or not isinstance(plan_data, dict) or not plan_data.get("tasks"):
+                logger.warning(f"Structured plan generation was empty or failed. Triggering deterministic fallback plan for opportunity {opportunity_id}")
+                plan_data = get_deterministic_action_plan_fallback(opportunity, project)
+            
+            # Insert into DB
+            admin.table("action_plans").insert({
+                "user_id": user_id,
+                "project_id": project_id,
+                "opportunity_id": opportunity_id,
+                "source_type": "opportunity",
+                "source_id": opportunity_id,
+                "title": plan_data.get("title", f"Action Plan: {opportunity.get('title')}"),
+                "objective": plan_data.get("objective", opportunity.get("description", "")),
+                "plan_type": plan_data.get("plan_type", "general_strategy"),
+                "priority": plan_data.get("priority", "medium"),
+                "status": "pending",
+                "owner_label": "nexus",
+                "estimated_effort": plan_data.get("estimated_effort", "medium"),
+                "expected_impact": plan_data.get("expected_impact", "medium"),
+                "confidence": plan_data.get("confidence", 0.5),
+                "tasks": plan_data.get("tasks", []),
+                "kpis": plan_data.get("kpis", []),
+                "dependencies": plan_data.get("dependencies", []),
+                "risks": plan_data.get("risks", [])
+            }).execute()
+            
+            # Persist as project memory
+            create_project_memory(
+                user_id=user_id,
+                project_id=project_id,
+                memory_type="approved_action",
+                title=f"Approved Action Plan: {plan_data.get('title')}",
+                summary=f"Objective: {plan_data.get('objective')}. Plan Type: {plan_data.get('plan_type')}.",
+                source="swarm_decision",
+                confidence=0.9,
+                tags=["approved_action", plan_data.get("plan_type")]
+            )
+            logger.info(f"Action plan generated successfully for opportunity {opportunity_id}")
         except Exception as e:
             logger.error(f"Failed in background action plan generation: {e}")
             
     threading.Thread(target=worker).start()
+
 
 
 @app.patch("/api/opportunities/{opportunity_id}")
@@ -955,22 +1042,28 @@ async def update_opportunity(
         updates["user_action"] = request["user_action"][:500]
 
     try:
-        admin.table("opportunities") \
+        logger.info(f"[APPROVAL DIAGNOSTICS] Patching opportunity {opportunity_id} with updates: {updates}")
+        db_res = admin.table("opportunities") \
             .update(updates) \
             .eq("id", opportunity_id) \
             .eq("user_id", str(user.id)) \
             .execute()
             
+        logger.info(f"[APPROVAL DIAGNOSTICS] Database opportunities update response status: {'SUCCESS' if db_res.data else 'NO_ROWS_AFFECTED'}")
+        
         # Get opportunity project_id to scope background generation
         opp_res = admin.table("opportunities").select("project_id").eq("id", opportunity_id).execute()
         if opp_res.data:
             project_id = opp_res.data[0].get("project_id")
             if project_id and updates.get("status") == "completed":
+                logger.info(f"[APPROVAL DIAGNOSTICS] Opportunity {opportunity_id} approved. Triggering background action plan generation for Project {project_id}...")
                 generate_and_save_action_plan_background(opportunity_id, str(user.id), str(project_id))
                 
         return {"success": True}
     except Exception as e:
+        logger.error(f"[APPROVAL DIAGNOSTICS] Failed to update opportunity {opportunity_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ============================================================
@@ -1427,6 +1520,35 @@ async def list_action_plans_endpoint(
         return {"action_plans": []}
         
     try:
+        # Proactive Recovery: Find all completed (approved) opportunities that do not have an action plan
+        try:
+            completed_opps = admin.table("opportunities") \
+                .select("id") \
+                .eq("project_id", project_id) \
+                .eq("status", "completed") \
+                .execute()
+                
+            if completed_opps.data:
+                completed_ids = [opp["id"] for opp in completed_opps.data]
+                
+                # Fetch existing action plans opportunity_ids
+                existing_plans = admin.table("action_plans") \
+                    .select("opportunity_id") \
+                    .eq("project_id", project_id) \
+                    .in_("opportunity_id", completed_ids) \
+                    .execute()
+                    
+                existing_opp_ids = {plan["opportunity_id"] for plan in existing_plans.data if plan.get("opportunity_id")}
+                
+                missing_ids = [opp_id for opp_id in completed_ids if opp_id not in existing_opp_ids]
+                
+                if missing_ids:
+                    logger.info(f"[ACTION PLAN RECOVERY] Found {len(missing_ids)} missing action plans. Triggering background generation...")
+                    for missing_id in missing_ids:
+                        generate_and_save_action_plan_background(missing_id, str(user.id), project_id)
+        except Exception as recovery_err:
+            logger.warning(f"[ACTION PLAN RECOVERY] Error during active recovery check for missing action plans: {recovery_err}")
+
         query = admin.table("action_plans").select("*").eq("project_id", project_id)
         if status and status != "all":
             query = query.eq("status", status)
@@ -1436,6 +1558,7 @@ async def list_action_plans_endpoint(
     except Exception as e:
         logger.error(f"Failed to list action plans: {e}")
         return {"action_plans": []}
+
 
 @app.post("/api/projects/{project_id}/action-plans")
 async def create_action_plan_endpoint(

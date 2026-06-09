@@ -1,7 +1,6 @@
 -- ============================================================
 -- SWARMOPS PART F: SIGNAL INTELLIGENCE ENGINE V1
--- Run this in Supabase Dashboard → SQL Editor
--- Run AFTER Part E schema
+-- Optimized for Supabase Dashboard → SQL Editor Execution
 -- ============================================================
 
 -- 1. Alter existing signals table to add fingerprinting & tracking
@@ -10,7 +9,6 @@ ALTER TABLE signals ADD COLUMN IF NOT EXISTS occurrence_count INTEGER DEFAULT 1;
 ALTER TABLE signals ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE signals ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
 
--- Add index on fingerprint for fast lookups
 CREATE INDEX IF NOT EXISTS idx_signals_fingerprint ON signals(fingerprint);
 
 -- 2. Scan runs table
@@ -153,7 +151,7 @@ CREATE TABLE IF NOT EXISTS health_score_factors (
 );
 
 -- ============================================================
--- ROW LEVEL SECURITY (RLS)
+-- ROW LEVEL SECURITY (RLS) & SCOPED POLICIES
 -- ============================================================
 
 ALTER TABLE scan_runs ENABLE ROW LEVEL SECURITY;
@@ -168,7 +166,6 @@ ALTER TABLE project_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE health_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE health_score_factors ENABLE ROW LEVEL SECURITY;
 
--- Scoped policies by user_id
 CREATE POLICY "Users CRUD own scan_runs" ON scan_runs FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users CRUD own scan_pages" ON scan_pages FOR ALL USING (
   scan_run_id IN (SELECT id FROM scan_runs WHERE user_id = auth.uid())
@@ -191,28 +188,8 @@ CREATE POLICY "Users CRUD own health_score_factors" ON health_score_factors FOR 
   health_score_id IN (SELECT id FROM health_scores WHERE user_id = auth.uid())
 );
 
--- Service role bypass policies (backend pings)
-CREATE POLICY "Service role insert scan_runs" ON scan_runs FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role update scan_runs" ON scan_runs FOR UPDATE USING (true);
-CREATE POLICY "Service role insert scan_pages" ON scan_pages FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role insert signal_occurrences" ON signal_occurrences FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role insert signal_evidence" ON signal_evidence FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role insert agent_runs" ON agent_runs FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role update agent_runs" ON agent_runs FOR UPDATE USING (true);
-CREATE POLICY "Service role insert action_items" ON action_items FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role update action_items" ON action_items FOR UPDATE USING (true);
-CREATE POLICY "Service role insert approvals" ON approvals FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role update approvals" ON approvals FOR UPDATE USING (true);
-CREATE POLICY "Service role insert rescans" ON rescans FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role update rescans" ON rescans FOR UPDATE USING (true);
-CREATE POLICY "Service role insert project_snapshots" ON project_snapshots FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role insert health_scores" ON health_scores FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role update health_scores" ON health_scores FOR UPDATE USING (true);
-CREATE POLICY "Service role insert health_score_factors" ON health_score_factors FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role delete health_score_factors" ON health_score_factors FOR DELETE USING (true);
-
 -- ============================================================
--- INDEXES
+-- PERFORMANCE INDEXES
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_scan_runs_project ON scan_runs(project_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_scan_pages_run ON scan_pages(scan_run_id);
@@ -225,6 +202,17 @@ CREATE INDEX IF NOT EXISTS idx_rescans_sig ON rescans(signal_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_project ON project_snapshots(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_factors_score ON health_score_factors(health_score_id);
 
--- Auto-update health scores timestamp
+-- ============================================================
+-- DYNAMIC TELEMETRY TRIGGERS
+-- ============================================================
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_health_scores_updated_at ON health_scores;
 CREATE TRIGGER update_health_scores_updated_at BEFORE UPDATE ON health_scores
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();

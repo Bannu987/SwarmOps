@@ -91,6 +91,7 @@ class ChatRequest(BaseModel):
     message: str
     conversation_id: Optional[str] = None
     project_id: Optional[str] = None
+    clicked_signal: Optional[dict] = None
 
 
 class CredentialsRequest(BaseModel):
@@ -205,8 +206,13 @@ async def chat(
     if request.project_id:
         ctx.project_id = request.project_id
 
+    # Check if clicked_signal is present
+    clicked_signal = request.clicked_signal
+
+    if clicked_signal:
+        result = run_single_agent("nexus", msg, conversation_id, clicked_signal=clicked_signal)
     # Slash command handling
-    if msg.startswith("/"):
+    elif msg.startswith("/"):
         parts = msg.split(maxsplit=1)
         cmd = parts[0][1:]
         remainder = parts[1] if len(parts) > 1 else ""
@@ -305,7 +311,12 @@ async def chat_stream(
 
         def workflow_thread():
             try:
-                if msg.startswith("/"):
+                # Check if clicked_signal is present
+                clicked_signal = request.clicked_signal
+
+                if clicked_signal:
+                    result = run_single_agent_streaming("nexus", msg, conversation_id, bus, clicked_signal=clicked_signal)
+                elif msg.startswith("/"):
                     parts = msg.split(maxsplit=1)
                     cmd = parts[0][1:]
                     remainder = parts[1] if len(parts) > 1 else ""

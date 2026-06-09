@@ -120,14 +120,13 @@ class WebsiteHealthScanner(BaseScanner):
             signals.append(Signal(
                 signal_type="opportunity_window",
                 title="Missing meta description on homepage",
-                description="Adding a 150-160 character meta description improves CTR from search results by ~30%.",
+                description="A clear meta description may improve snippet quality and click appeal when search engines choose to display it.",
                 severity="medium",
                 category="opportunity",
                 source_agent="seo",
                 source_detail=url,
                 evidence=[
                     {"claim": "No meta description", "source": "scanner", "value": "missing"},
-                    {"claim": "CTR uplift benchmark", "source": "benchmark", "value": "+30%"},
                 ],
                 expires_in_hours=168,
             ))
@@ -137,10 +136,7 @@ class WebsiteHealthScanner(BaseScanner):
             signals.append(Signal(
                 signal_type="opportunity_window",
                 title="No JSON-LD schema detected",
-                description=(
-                    "Your site has no structured data markup. "
-                    "Schema is critical for AI search (ChatGPT, Perplexity, Gemini) citation."
-                ),
+                description="Structured data gives search engines explicit clues about the meaning of a page and can support machine understanding.",
                 severity="medium",
                 category="opportunity",
                 source_agent="aeo",

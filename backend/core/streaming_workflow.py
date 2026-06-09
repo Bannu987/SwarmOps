@@ -5,7 +5,7 @@ events at every step so the frontend can show the swarm working.
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List
+from typing import List, Optional, Dict
 
 from .agent_runner import run_agent_structured
 from .schemas import AgentOutput, SwarmDecision
@@ -254,6 +254,7 @@ def run_single_agent_streaming(
     message: str,
     conversation_id: str,
     bus: EventBus,
+    clicked_signal: Optional[Dict] = None,
 ) -> dict:
     """Single-agent streaming (slash commands)."""
     memory = get_memory(conversation_id)
@@ -263,7 +264,7 @@ def run_single_agent_streaming(
     bus.emit("agent.started", {"agent_id": agent_id}, agent_id=agent_id)
 
     start = time.time()
-    output = run_agent_structured(agent_id, message, conversation_id)
+    output = run_agent_structured(agent_id, message, conversation_id, clicked_signal=clicked_signal)
     elapsed_ms = int((time.time() - start) * 1000)
 
     bus.emit("agent.responded", {

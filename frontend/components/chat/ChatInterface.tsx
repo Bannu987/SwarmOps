@@ -33,6 +33,7 @@ export function ChatInterface() {
   
   const searchParams = useSearchParams()
   const [initiated, setInitiated] = useState(false)
+  const [clickedSignalContext, setClickedSignalContext] = useState<any>(null)
 
   // Backend connection checking states
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "waking" | "offline" | "misconfigured">("checking")
@@ -140,7 +141,24 @@ export function ChatInterface() {
       listSignals("active").then((res) => {
         const sig = res.signals?.find((s) => s.id === sigId)
         if (sig) {
-          handleSend(`Analyze and address this signal: "${sig.title}"\nDescription: ${sig.description}\nDetected by: ${sig.source_agent}`)
+          const signalObj = {
+            signal_id: sig.id,
+            signal_type: sig.signal_type || sig.category,
+            title: sig.title,
+            description: sig.description,
+            detector: sig.source_agent || "seo",
+            category: sig.category,
+            severity: sig.severity,
+            url: sig.source_detail || null,
+            evidence: sig.evidence,
+            project_id: activeProject?.id,
+            workspace_id: activeProject?.id
+          }
+          setClickedSignalContext(signalObj)
+          handleSend(
+            `Analyze and address this signal: "${sig.title}"\nDescription: ${sig.description}\nDetected by: ${sig.source_agent}`,
+            signalObj
+          )
         }
       })
     } else if (agentId) {
@@ -152,7 +170,9 @@ export function ChatInterface() {
     }
   }, [searchParams, initiated])
 
-  const handleSend = async (text: string) => {
+  const handleSend = async (text: string, signalContextOverride?: any) => {
+    const currentSignalContext = signalContextOverride || clickedSignalContext
+    setClickedSignalContext(null)
     const assistantMsgId = Math.random().toString(36).substring(7)
     
     const userMsg: Message = {
@@ -270,7 +290,7 @@ export function ChatInterface() {
             )
           )
         }
-      }, activeProject?.id)
+      }, activeProject?.id, currentSignalContext)
     } catch (err: any) {
 
       console.error("SSE stream failed:", err)
@@ -295,7 +315,7 @@ export function ChatInterface() {
       if (isOnline) {
         // Fallback to standard HTTP POST request
         try {
-          const res = await sendChat(text, "default", activeProject?.id)
+          const res = await sendChat(text, "default", activeProject?.id, currentSignalContext)
           setMessages((prev) =>
 
             prev.map((msg) =>

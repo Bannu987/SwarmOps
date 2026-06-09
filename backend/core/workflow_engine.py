@@ -171,7 +171,7 @@ def run_workflow(workflow_name: str, message: str, conversation_id: str = "defau
     }
 
 
-def run_single_agent(agent_id: str, message: str, conversation_id: str = "default") -> Dict:
+def run_single_agent(agent_id: str, message: str, conversation_id: str = "default", clicked_signal: Optional[Dict] = None) -> Dict:
     """Run a single specific agent with structured output."""
     from .agent_runner import run_agent_structured
 
@@ -180,7 +180,7 @@ def run_single_agent(agent_id: str, message: str, conversation_id: str = "defaul
     memory.store(message, role="user", mem_type="conversation")
 
     start = time.time()
-    output = run_agent_structured(agent_id, message, conversation_id)
+    output = run_agent_structured(agent_id, message, conversation_id, clicked_signal=clicked_signal)
     elapsed = time.time() - start
 
     memory.store(output.conclusion[:500], role="assistant", mem_type="conversation", importance=0.5)

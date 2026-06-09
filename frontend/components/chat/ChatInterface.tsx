@@ -215,7 +215,7 @@ export function ChatInterface() {
         )
         setLoading(false)
       }
-    }, 15000)
+    }, 60000)
 
     try {
       await streamChat(text, "default", (event) => {

@@ -29,7 +29,7 @@ class SwarmEvent:
             "event_id": self.event_id,
             **self.payload,
         })
-        return f"data: {data}\n\n"
+        return f"event: {self.event_type}\ndata: {data}\n\n"
 
 
 class EventBus:
@@ -68,10 +68,27 @@ class EventBus:
 
     async def stream(self) -> AsyncIterator[str]:
         """Async generator yielding SSE-formatted events."""
+        event_seq = 0
         while not self._closed:
             try:
                 event = await asyncio.wait_for(self.queue.get(), timeout=30.0)
-                yield event.to_sse()
+                event_seq += 1
+                
+                sse_data = event.to_sse()
+                
+                payload_keys = list(event.payload.keys())
+                ans_len = len(event.payload.get("answer", "")) if event.payload.get("answer") else None
+                dec_len = len(event.payload.get("decision", "")) if event.payload.get("decision") else None
+                workflow_name = event.payload.get("workflow", "")
+                
+                logger.info(
+                    f"[DIAGNOSTIC EVENT YIELD] seq={event_seq} | type={event.event_type} | "
+                    f"workflow={workflow_name} | keys={payload_keys} | "
+                    f"answer_len={ans_len} | decision_len={dec_len} | "
+                    f"serialized_len={len(sse_data)}"
+                )
+                
+                yield sse_data
                 if event.event_type in ("error", "stream.end"):
                     break
             except asyncio.TimeoutError:

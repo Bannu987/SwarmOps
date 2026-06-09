@@ -275,21 +275,23 @@ export function ChatInterface() {
           confidence = event.confidence
           latencyMs = event.latency_ms
           
-          if (event.workflow === "signal_analysis" || event.is_signal_analysis) {
-            if (event.decision && event.decision.length > 200) {
-              accumulatedContent = event.decision;
-            } else if (event.final_answer && event.final_answer.length > 200) {
-              accumulatedContent = event.final_answer;
-            } else if (event.message && event.message.length > 200) {
-              accumulatedContent = event.message;
-            } else if (event.content && event.content.length > 200) {
-              accumulatedContent = event.content;
-            } else {
-              accumulatedContent = event.decision || event.rationale || "";
-            }
-          } else {
-            accumulatedContent = event.rationale || event.decision || "";
-          }
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    content: (event.workflow === "signal_analysis" || event.is_signal_analysis)
+                      ? msg.content
+                      : (event.rationale || event.decision || msg.content),
+                    confidence: confidence,
+                    latency_ms: latencyMs,
+                    agents_used: event.agents_consulted || msg.agents_used,
+                  }
+                : msg
+            )
+          )
+        } else if (event.type === "final.answer") {
+          accumulatedContent = event.answer || event.decision || event.final_answer || event.message || event.content || "";
           
           setMessages((prev) =>
             prev.map((msg) =>
@@ -297,9 +299,6 @@ export function ChatInterface() {
                 ? {
                     ...msg,
                     content: accumulatedContent,
-                    confidence: confidence,
-                    latency_ms: latencyMs,
-                    agents_used: event.agents_consulted || msg.agents_used,
                   }
                 : msg
             )

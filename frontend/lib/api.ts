@@ -287,21 +287,38 @@ export async function streamChat(
     if (done) break
 
     buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split("\n\n")
-    buffer = lines.pop() || ""
+    const blocks = buffer.split("\n\n")
+    buffer = blocks.pop() || ""
 
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
+    for (const block of blocks) {
+      const trimmedBlock = block.trim()
+      if (!trimmedBlock) continue
 
-      if (trimmed.startsWith("data: ")) {
-        try {
-          const rawJson = trimmed.substring(6)
-          const data = JSON.parse(rawJson)
-          onEvent(data)
-        } catch (e) {
-          console.error("Failed to parse SSE line:", trimmed, e)
+      try {
+        let eventName = ""
+        let dataBuffer = ""
+        const blockLines = trimmedBlock.split("\n")
+        
+        for (const blockLine of blockLines) {
+          const lineTrimmed = blockLine.trim()
+          if (lineTrimmed.startsWith("event: ")) {
+            eventName = lineTrimmed.substring(7).trim()
+          } else if (lineTrimmed.startsWith("data: ")) {
+            dataBuffer += lineTrimmed.substring(6).trim()
+          } else if (lineTrimmed.startsWith("data:")) {
+            dataBuffer += lineTrimmed.substring(5).trim()
+          }
         }
+
+        if (dataBuffer) {
+          const parsedData = JSON.parse(dataBuffer)
+          if (eventName) {
+            parsedData.type = eventName
+          }
+          onEvent(parsedData)
+        }
+      } catch (e) {
+        console.error("Failed to parse SSE block:", trimmedBlock, e)
       }
     }
   }

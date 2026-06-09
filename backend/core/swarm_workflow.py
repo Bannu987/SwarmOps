@@ -528,7 +528,6 @@ Sitemap: https://shravanpayyavula.me/sitemap.xml
     # If streaming, output decision and close out bus
     if bus:
         bus.emit("decision.reached", {
-            "decision": final_markdown,
             "rationale": boardroom_json.get("executive_summary", ""),
             "confidence": boardroom_json.get("final_confidence", 9.0) / 10.0,
             "agents_consulted": specialist_ids,
@@ -544,6 +543,13 @@ Sitemap: https://shravanpayyavula.me/sitemap.xml
                 "effort": map_to_text(boardroom_json.get("final_effort", 3.0)),
                 "timeframe": "this week"
             }
+        })
+        bus.emit("final.answer", {
+            "workflow": "signal_analysis",
+            "decision_id": str(uuid.uuid4())[:8],
+            "message_id": str(uuid.uuid4())[:8],
+            "answer": final_markdown,
+            "answer_len": len(final_markdown)
         })
         bus.emit("stream.end", {})
 

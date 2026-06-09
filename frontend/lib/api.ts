@@ -287,7 +287,8 @@ export async function streamChat(
     if (done) break
 
     buffer += decoder.decode(value, { stream: true })
-    const blocks = buffer.split("\n\n")
+    const normalized = buffer.replace(/\r\n/g, "\n")
+    const blocks = normalized.split("\n\n")
     buffer = blocks.pop() || ""
 
     for (const block of blocks) {
@@ -310,8 +311,19 @@ export async function streamChat(
           }
         }
 
+        let parsedData = null
         if (dataBuffer) {
-          const parsedData = JSON.parse(dataBuffer)
+          parsedData = JSON.parse(dataBuffer)
+        } else {
+          // Format C legacy fallback: try to parse the entire block as raw JSON
+          try {
+            parsedData = JSON.parse(trimmedBlock)
+          } catch (jsonErr) {
+            // Not a raw JSON block
+          }
+        }
+
+        if (parsedData) {
           if (eventName) {
             parsedData.type = eventName
           }

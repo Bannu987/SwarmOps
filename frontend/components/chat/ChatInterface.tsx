@@ -200,8 +200,34 @@ export function ChatInterface() {
     let confidence: number | undefined = undefined
     let latencyMs: number | undefined = undefined
 
+    let eventReceived = false
+    const timeoutId = setTimeout(() => {
+      if (!eventReceived) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId && msg.content === "SwarmOps is preparing the brief..."
+              ? {
+                  ...msg,
+                  content: "Signal analysis stream did not return events. Please retry.",
+                }
+              : msg
+          )
+        )
+        setLoading(false)
+      }
+    }, 15000)
+
     try {
       await streamChat(text, "default", (event) => {
+        eventReceived = true
+        console.log("[FRONTEND SSE EVENT]", {
+          type: event.type,
+          keys: Object.keys(event),
+          answer_len: event.answer?.length,
+          decision_len: event.decision?.length,
+          rationale_len: event.rationale?.length
+        })
+
         if (event.type === "workflow.started") {
           workflowName = event.workflow
           if (event.agents) {
@@ -305,7 +331,9 @@ export function ChatInterface() {
           )
         }
       }, activeProject?.id, currentSignalContext)
+      clearTimeout(timeoutId)
     } catch (err: any) {
+      clearTimeout(timeoutId)
 
       console.error("SSE stream failed:", err)
       const isOnline = backendStatus === "online"

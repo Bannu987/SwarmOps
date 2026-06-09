@@ -274,7 +274,9 @@ export function ChatInterface() {
         } else if (event.type === "decision.reached") {
           confidence = event.confidence
           latencyMs = event.latency_ms
-          accumulatedContent = event.rationale || event.decision
+          accumulatedContent = (event.workflow === "signal_analysis" || event.is_signal_analysis)
+            ? (event.decision || event.rationale || "")
+            : (event.rationale || event.decision || "")
           
           setMessages((prev) =>
             prev.map((msg) =>

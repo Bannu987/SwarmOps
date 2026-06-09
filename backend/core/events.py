@@ -61,7 +61,7 @@ class EventBus:
             try:
                 event = await asyncio.wait_for(self.queue.get(), timeout=30.0)
                 yield event.to_sse()
-                if event.event_type in ("decision.reached", "error", "stream.end"):
+                if event.event_type in ("error", "stream.end"):
                     break
             except asyncio.TimeoutError:
                 # Heartbeat to keep connection alive

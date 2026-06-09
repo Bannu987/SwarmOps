@@ -523,6 +523,7 @@ Sitemap: https://shravanpayyavula.me/sitemap.xml
             "agents_dissented": [],
             "debate_happened": False,
             "latency_ms": total_latency,
+            "workflow": "signal_analysis",
             "next_action": {
                 "action": boardroom_json.get("action_title", f"Resolve: {title}"),
                 "rationale": boardroom_json.get("action_description", description),

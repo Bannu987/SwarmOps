@@ -1,7 +1,10 @@
 import sys
 import os
 import asyncio
+import logging
 from unittest import mock
+
+logging.basicConfig(level=logging.INFO)
 
 # Append backend path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

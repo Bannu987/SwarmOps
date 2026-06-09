@@ -512,6 +512,19 @@ Sitemap: https://shravanpayyavula.me/sitemap.xml
 
     total_latency = int((time.time() - start_time) * 1000)
 
+    decision_val = final_markdown
+    rationale_val = boardroom_json.get("executive_summary", "")
+    logger.info(
+        f"[DIAGNOSTIC] Emitting decision.reached: "
+        f"event_type=decision.reached, "
+        f"workflow=signal_analysis, "
+        f"decision_exists={bool(decision_val)}, "
+        f"decision_len={len(decision_val) if decision_val else 0}, "
+        f"rationale_exists={bool(rationale_val)}, "
+        f"rationale_len={len(rationale_val) if rationale_val else 0}, "
+        f"payload_keys={['decision', 'rationale', 'confidence', 'agents_consulted', 'agents_agreed', 'agents_dissented', 'debate_happened', 'latency_ms', 'workflow', 'next_action']}"
+    )
+
     # If streaming, output decision and close out bus
     if bus:
         bus.emit("decision.reached", {

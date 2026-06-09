@@ -274,9 +274,22 @@ export function ChatInterface() {
         } else if (event.type === "decision.reached") {
           confidence = event.confidence
           latencyMs = event.latency_ms
-          accumulatedContent = (event.workflow === "signal_analysis" || event.is_signal_analysis)
-            ? (event.decision || event.rationale || "")
-            : (event.rationale || event.decision || "")
+          
+          if (event.workflow === "signal_analysis" || event.is_signal_analysis) {
+            if (event.decision && event.decision.length > 200) {
+              accumulatedContent = event.decision;
+            } else if (event.final_answer && event.final_answer.length > 200) {
+              accumulatedContent = event.final_answer;
+            } else if (event.message && event.message.length > 200) {
+              accumulatedContent = event.message;
+            } else if (event.content && event.content.length > 200) {
+              accumulatedContent = event.content;
+            } else {
+              accumulatedContent = event.decision || event.rationale || "";
+            }
+          } else {
+            accumulatedContent = event.rationale || event.decision || "";
+          }
           
           setMessages((prev) =>
             prev.map((msg) =>

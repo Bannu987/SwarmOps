@@ -40,9 +40,13 @@ class EventBus:
     def __init__(self):
         self.queue: asyncio.Queue = asyncio.Queue()
         self._closed = False
+        try:
+            self.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.loop = asyncio.get_event_loop()
 
     def emit(self, event_type: str, payload: Optional[Dict] = None, agent_id: Optional[str] = None):
-        """Emit an event. Safe to call from sync code via put_nowait."""
+        """Emit an event. Thread-safe wrapper."""
         if self._closed:
             return
         event = SwarmEvent(
@@ -50,10 +54,17 @@ class EventBus:
             payload=payload or {},
             agent_id=agent_id,
         )
-        try:
-            self.queue.put_nowait(event)
-        except asyncio.QueueFull:
-            pass  # drop event if queue overflows
+        
+        def _put():
+            try:
+                self.queue.put_nowait(event)
+            except asyncio.QueueFull:
+                pass  # drop event if queue overflows
+
+        if self.loop and self.loop.is_running():
+            self.loop.call_soon_threadsafe(_put)
+        else:
+            _put()
 
     async def stream(self) -> AsyncIterator[str]:
         """Async generator yielding SSE-formatted events."""

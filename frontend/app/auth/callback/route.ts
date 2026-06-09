@@ -1,13 +1,43 @@
-import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { createServerClient } from "@supabase/ssr"
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
-  const code = searchParams.get("code")
-  const next = searchParams.get("next") ?? "/dashboard"
+export async function GET(request: NextRequest) {
+  const requestUrl = new URL(request.url)
+  const code = requestUrl.searchParams.get("code")
+  const next = requestUrl.searchParams.get("next") ?? "/dashboard"
+
+  // Construct absolute redirect URL respecting reverse proxies/load balancers (e.g., Vercel)
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https"
+  const forwardedHost = request.headers.get("x-forwarded-host") || requestUrl.host
+  const origin = `${forwardedProto}://${forwardedHost}`
 
   if (code) {
-    const supabase = createClient()
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+    // Create redirect response object first so we can attach session cookies to it
+    const response = NextResponse.redirect(`${origin}${next}`)
+
+    const supabase = createServerClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) =>
+              request.cookies.set(name, value)
+            )
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            )
+          },
+        },
+      }
+    )
+
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (!error && data?.user) {
@@ -45,7 +75,7 @@ export async function GET(request: Request) {
         console.error("Fail-safe profile check/creation error in auth callback:", profileErr)
       }
 
-      return NextResponse.redirect(`${origin}${next}`)
+      return response
     } else if (error) {
       console.error("Auth callback exchange error:", error)
       return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`)

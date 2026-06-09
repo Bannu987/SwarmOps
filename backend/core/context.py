@@ -14,6 +14,7 @@ class ContextAwareness:
         self.website_url: str = ""
         self.uploaded_files = []
         self.project_id: Optional[str] = None
+        self.user_id: Optional[str] = None
 
     def update_brand(self, brand: Dict, url: str = ""):
         if isinstance(brand, dict):

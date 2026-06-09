@@ -18,6 +18,7 @@ from core.supabase_client import get_user_from_token, get_admin_client, is_avail
 from core.workflow_engine import detect_workflow, run_workflow, run_single_agent
 from core.events import create_bus, remove_bus
 from core.streaming_workflow import run_workflow_streaming, run_single_agent_streaming
+from core.swarm_workflow import run_swarm_signal_workflow
 from core.context import get_context
 from core.memory import get_memory
 from integrations.file_processor import process_file
@@ -210,7 +211,7 @@ async def chat(
     clicked_signal = request.clicked_signal
 
     if clicked_signal:
-        result = run_single_agent("nexus", msg, conversation_id, clicked_signal=clicked_signal)
+        result = run_swarm_signal_workflow(clicked_signal, msg, conversation_id)
     # Slash command handling
     elif msg.startswith("/"):
         parts = msg.split(maxsplit=1)
@@ -315,7 +316,7 @@ async def chat_stream(
                 clicked_signal = request.clicked_signal
 
                 if clicked_signal:
-                    result = run_single_agent_streaming("nexus", msg, conversation_id, bus, clicked_signal=clicked_signal)
+                    result = run_swarm_signal_workflow(clicked_signal, msg, conversation_id, bus=bus)
                 elif msg.startswith("/"):
                     parts = msg.split(maxsplit=1)
                     cmd = parts[0][1:]

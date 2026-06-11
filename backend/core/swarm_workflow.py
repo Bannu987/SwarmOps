@@ -19,6 +19,17 @@ from .agent_runner import _safe_parse_json
 logger = logging.getLogger(__name__)
 
 
+def map_to_text(val: float) -> str:
+    """Map boardroom effort/impact to text limits (low, medium, high)"""
+    if val >= 7.0:
+        return "high"
+    elif val >= 4.0:
+        return "medium"
+    else:
+        return "low"
+
+
+
 def run_swarm_signal_workflow(
     clicked_signal: dict,
     message: str,
@@ -364,15 +375,6 @@ Respond ONLY with the JSON object. Do not include markdown code fences or other 
     admin = get_admin_client()
     if admin and project_id and user_id:
         try:
-            # Map boardroom effort/impact to text limits (low, medium, high)
-            def map_to_text(val: float) -> str:
-                if val >= 7.0:
-                    return "high"
-                elif val >= 4.0:
-                    return "medium"
-                else:
-                    return "low"
-
             est_effort = map_to_text(boardroom_json.get("final_effort", 3.0))
             exp_impact = map_to_text(boardroom_json.get("final_impact", 5.0))
 

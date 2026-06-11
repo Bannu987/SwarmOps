@@ -50,7 +50,9 @@ def test_crawl_safety():
     print("Crawl Safety Guard test passed!")
 
 async def test_workflow():
-    # Let's run a mock clicked signal for robots.txt
+    from core.events import EventBus
+    import concurrent.futures
+
     clicked_signal = {
         "signal_id": "test-sig-id",
         "signal_type": "missing_robots_txt",
@@ -65,17 +67,40 @@ async def test_workflow():
         "workspace_id": "test-project-id"
     }
 
-    print("Running supervisor workflow for No robots.txt file...")
-    result = run_swarm_signal_workflow(
-        clicked_signal=clicked_signal,
-        message="Analyze and address this signal: No robots.txt file",
-        conversation_id="test_conv"
-    )
+    print("Running supervisor workflow streaming for No robots.txt file...")
+    bus = EventBus()
+    loop = asyncio.get_running_loop()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    
+    # Run in thread executor
+    def run_thread():
+        return run_swarm_signal_workflow(
+            clicked_signal=clicked_signal,
+            message="Analyze and address this signal: No robots.txt file",
+            conversation_id="test_conv",
+            bus=bus
+        )
+    
+    future = loop.run_in_executor(executor, run_thread)
+    
+    events_received = []
+    async for sse in bus.stream():
+        events_received.append(sse)
+        print(f"[TEST SSE EVENT]: {sse.strip()}")
 
+    result = await future
     response = result["response"]
     print("\n--- WORKFLOW RESPONSE ---")
     print(response)
     print("-------------------------\n")
+
+    # Assertions on emitted SSE events
+    event_types = [e.split("\n")[0].replace("event: ", "").strip() for e in events_received if "event: " in e]
+    print(f"Emitted event types: {event_types}")
+    assert "workflow.started" in event_types, "Missing workflow.started event"
+    assert "decision.reached" in event_types, "Missing decision.reached event"
+    assert "final.answer" in event_types, "Missing final.answer event"
+    assert "stream.end" in event_types, "Missing stream.end event"
 
     # Assertions based on requirement 14
     assert "User-agent: *" in response, "Missing user-agent rule"

@@ -7,8 +7,11 @@ import asyncio
 import time
 import json
 import uuid
+import logging
 from typing import Optional, Dict, Any, AsyncIterator
 from dataclasses import dataclass, field, asdict
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

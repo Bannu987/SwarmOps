@@ -1,6 +1,6 @@
 "use client"
 
-import { Sparkles } from "lucide-react"
+import { Sparkles, Terminal } from "lucide-react"
 import { AGENTS } from "@/lib/constants/agents"
 
 interface Props {
@@ -16,54 +16,55 @@ const QUICK_ACTIONS = [
 
 export function EmptyState({ onQuickAction }: Props) {
   return (
-    <div className="max-w-2xl mx-auto pt-12 px-4 text-center">
-      <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-primary to-swarm-cyan flex items-center justify-center text-white mb-5">
-        <Sparkles className="w-6 h-6" />
+    <div className="max-w-2xl mx-auto pt-16 px-4 text-center select-none animate-fade-in">
+      <div className="w-12 h-12 mx-auto rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground mb-6 shadow-lg glow-blue">
+        <Sparkles className="w-5 h-5 animate-pulse" />
       </div>
 
-      <h2 className="text-2xl font-semibold mb-2">
-        How can your AI marketing team help?
+      <h2 className="text-xl md:text-2xl font-serif font-normal tracking-tight text-foreground mb-2">
+        How can the boardroom swarm help?
       </h2>
-      <p className="text-sm text-muted-foreground mb-8">
-        6 specialist agents · 6 workflows · Ready to execute
+      <p className="text-xs text-muted-foreground mb-8">
+        6 specialist intelligence cores · 6 coordinated workflows · Synced and ready to execute
       </p>
 
-      <div className="grid grid-cols-2 gap-2 mb-8">
+      {/* Quick Actions Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
         {QUICK_ACTIONS.map((action) => (
           <button
             key={action}
             onClick={() => onQuickAction(action)}
-            className="text-left px-4 py-3 bg-card hover:bg-muted border border-border rounded-lg text-sm text-muted-foreground hover:text-foreground transition"
+            className="text-left px-4.5 py-3.5 glass-panel glass-panel-hover rounded-xl text-xs text-muted-foreground hover:text-foreground transition duration-300"
           >
             {action}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-8">
+      {/* Agents Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 mb-8">
         {Object.values(AGENTS).map((agent) => (
           <div
             key={agent.id}
-            className="px-3 py-2 bg-card border border-border rounded-lg text-left"
+            className="px-3 py-2.5 glass-panel rounded-lg text-left relative overflow-hidden"
+            style={{
+              borderTop: `1px solid ${agent.color}30`
+            }}
           >
-            <div className="flex items-center gap-2">
-              <div
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: agent.color }}
-              />
-              <span className="text-xs font-medium">{agent.name}</span>
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-xs">{agent.icon}</span>
+              <span className="text-[10px] font-semibold text-foreground truncate">{agent.name}</span>
             </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+            <div className="text-[8px] font-mono text-muted-foreground uppercase tracking-wider truncate">
               {agent.role}
             </div>
           </div>
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Type{" "}
-        <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[10px]">/</kbd>{" "}
-        for commands · Click 📎 to upload files (any type)
+      <p className="text-[10px] font-mono text-muted-foreground/60 flex items-center justify-center gap-1.5">
+        <Terminal className="w-3.5 h-3.5 text-primary/80" />
+        <span>Type <kbd className="px-1.5 py-0.5 bg-card border border-border/80 rounded text-[9px] font-mono">/</kbd> for commands · Drag files to upload</span>
       </p>
     </div>
   )

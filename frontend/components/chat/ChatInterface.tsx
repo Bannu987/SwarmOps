@@ -459,13 +459,13 @@ export function ChatInterface() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-transparent">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-border/60 bg-card/15 flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
         <div>
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-2xl md:text-3xl font-serif font-normal tracking-tight text-foreground">AI Brief Room</h1>
-            <span className="text-[10px] font-mono text-primary/70 uppercase tracking-widest">[DECISION_WAR_ROOM]</span>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl md:text-2xl font-serif font-normal tracking-tight text-white">Boardroom Briefing</h1>
+            <span className="text-[9px] font-mono text-primary bg-primary/10 border border-primary/25 px-2 py-0.5 rounded-full uppercase tracking-wider">Decision Swarm</span>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1 max-w-lg leading-snug">
             Engage Nexus and specialized marketing intelligence agents to analyze campaign telemetry, SEO anomalies, and strategic roadmaps.
@@ -477,9 +477,9 @@ export function ChatInterface() {
           {activeProject && (
             <button
               onClick={() => setShowBriefs(!showBriefs)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/20 hover:bg-accent/40 border border-border/80 text-foreground font-mono text-[10px] uppercase tracking-wider rounded transition-all duration-300 shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-mono text-[10px] uppercase tracking-wider rounded-lg transition-all duration-300 shadow-sm"
             >
-              <Sparkles className="w-3 h-3 text-primary" />
+              <Sparkles className="w-3 h-3 text-primary animate-pulse" />
               <span>Strategy Briefs</span>
             </button>
           )}
@@ -493,26 +493,26 @@ export function ChatInterface() {
               </div>
             )}
             {backendStatus === "online" && (
-              <div className="flex items-center gap-1.5 text-[#a3b899] bg-[#a3b899]/5 px-2 py-0.5 rounded border border-[#a3b899]/20 uppercase font-medium">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#a3b899] animate-pulse" />
+              <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 uppercase font-semibold">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>ONLINE</span>
               </div>
             )}
             {backendStatus === "waking" && (
-              <div className="flex items-center gap-1.5 text-amber-500 bg-amber-500/5 px-2 py-0.5 rounded border border-amber-500/20 uppercase font-medium">
+              <div className="flex items-center gap-1.5 text-amber-500 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20 uppercase font-semibold">
                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
                 <span>WAKING ({retryCount}/6)</span>
               </div>
             )}
             {backendStatus === "offline" && (
-              <div className="flex items-center gap-1.5 text-destructive bg-destructive/5 px-2 py-0.5 rounded border border-destructive/20 uppercase font-medium">
-                <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+              <div className="flex items-center gap-1.5 text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/20 uppercase font-semibold">
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                 <span>OFFLINE</span>
               </div>
             )}
             {backendStatus === "misconfigured" && (
-              <div className="flex items-center gap-1.5 text-destructive bg-destructive/5 px-2 py-0.5 rounded border border-destructive/20 uppercase font-medium">
-                <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+              <div className="flex items-center gap-1.5 text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/20 uppercase font-semibold">
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                 <span>CONFIG ERROR</span>
               </div>
             )}
@@ -559,11 +559,11 @@ export function ChatInterface() {
       )}
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-grow overflow-y-auto px-6 py-6 bg-background">
+      <div ref={scrollRef} className="flex-grow overflow-y-auto px-6 py-6 bg-transparent">
         {messages.length === 0 ? (
           <EmptyState onQuickAction={handleSend} />
         ) : (
-          <div className="max-w-3xl mx-auto space-y-5">
+          <div className="max-w-4xl mx-auto space-y-6">
             {messages.map((msg, i) =>
               msg.role === "user" ? (
                 <UserMessage key={i} message={msg} />

@@ -16,32 +16,43 @@ export default function SettingsPage() {
   }, [supabase.auth])
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-8">
+    <div className="flex-1 overflow-y-auto px-8 py-8 bg-transparent text-white animate-fade-in">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-semibold mb-1">Settings</h1>
-        <p className="text-sm text-muted-foreground mb-8">
-          Manage your account preferences and strategic memories
-        </p>
+        
+        {/* Header */}
+        <div className="mb-8 border-b border-white/5 pb-5">
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-xl md:text-2xl font-serif font-normal tracking-tight text-white">
+              Settings
+            </h1>
+            <span className="text-[9px] font-mono text-primary bg-primary/10 border border-primary/25 px-2 py-0.5 rounded-full uppercase tracking-wider">
+              Swarm Control
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            Manage your account preferences and strategic boardroom memories.
+          </p>
+        </div>
 
         {/* Tab Selection */}
-        <div className="flex gap-2 border-b border-border pb-px mb-6">
+        <div className="flex gap-2 border-b border-white/5 pb-px mb-6">
           <button
             onClick={() => setActiveTab("memory")}
-            className={`px-4 py-2 text-xs font-semibold border-b-2 transition flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition flex items-center gap-2 ${
               activeTab === "memory"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                ? "border-primary text-primary font-bold"
+                : "border-transparent text-muted-foreground hover:text-white"
             }`}
           >
             <Brain className="w-3.5 h-3.5" />
-            Strategy Brain
+            Strategy Memory
           </button>
           <button
             onClick={() => setActiveTab("profile")}
-            className={`px-4 py-2 text-xs font-semibold border-b-2 transition flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition flex items-center gap-2 ${
               activeTab === "profile"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                ? "border-primary text-primary font-bold"
+                : "border-transparent text-muted-foreground hover:text-white"
             }`}
           >
             <UserIcon className="w-3.5 h-3.5" />
@@ -50,21 +61,27 @@ export default function SettingsPage() {
         </div>
 
         {activeTab === "profile" ? (
-          <div className="bg-card border border-border rounded-xl p-6 space-y-4 max-w-2xl">
-            <h2 className="font-semibold text-sm">Profile Details</h2>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Email</label>
-              <div className="text-sm">{user?.email}</div>
+          <div className="glass-panel border border-white/5 rounded-xl p-6 space-y-4 max-w-xl shadow-lg">
+            <h2 className="font-semibold text-sm border-b border-white/5 pb-2 text-white">Profile Details</h2>
+            
+            <div className="space-y-1">
+              <label className="text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Email</label>
+              <div className="text-xs text-white bg-white/5 border border-white/10 px-3 py-2.5 rounded-lg select-all">
+                {user?.email}
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Full name</label>
-              <div className="text-sm">
+            
+            <div className="space-y-1">
+              <label className="text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Full name</label>
+              <div className="text-xs text-white bg-white/5 border border-white/10 px-3 py-2.5 rounded-lg">
                 {user?.user_metadata?.full_name || "Not set"}
               </div>
             </div>
           </div>
         ) : (
-          <ProjectMemoryManager />
+          <div className="animate-fade-in">
+            <ProjectMemoryManager />
+          </div>
         )}
       </div>
     </div>

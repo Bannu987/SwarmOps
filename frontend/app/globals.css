@@ -4,114 +4,153 @@
 
 @layer base {
   :root {
-    /* Muted Apple Dark Palette (Graphite / Charcoal / Soft Black) */
-    --background: 240 6% 6.5%;         /* Soft Graphite Near-Black */
-    --foreground: 40 8% 92%;           /* Warm Apple Off-White */
-    --card: 240 5% 10.5%;              /* Soft Charcoal Panels */
-    --card-foreground: 40 6% 88%;      /* Warm Off-White Body */
-    --popover: 240 6% 8%;
-    --popover-foreground: 40 6% 88%;
-    --primary: 36 28% 54%;             /* Calm Muted Brass/Gold Accent */
-    --primary-foreground: 240 6% 5%;
-    --secondary: 240 5% 9%;
-    --secondary-foreground: 240 4% 65%;
-    --muted: 240 5% 8.5%;
-    --muted-foreground: 240 4% 60%;
-    --accent: 240 5% 13%;              /* Subtle Charcoal Highlight */
-    --accent-foreground: 40 8% 92%;
-    --destructive: 11 50% 55%;         /* Restrained Clay Red */
-    --destructive-foreground: 40 8% 95%;
-    --border: 240 5% 14%;              /* Very subtle gray border */
-    --input: 240 5% 8.5%;
-    --ring: 36 28% 54%;
-    --radius: 0.5rem;                  /* 8px Apple corner radius for precise UI */
+    /* Deep space void background and futuristic tech accent palette */
+    --background: 240 35% 3%;          /* Darkest Void Indigo-Navy (#040409) */
+    --foreground: 210 20% 96%;         /* Soft Slate Off-White */
+    --card: 240 25% 6%;                /* Deep Charcoal-Navy Panel (#08080f) */
+    --card-foreground: 210 15% 92%;
+    --popover: 240 30% 4%;
+    --popover-foreground: 210 15% 92%;
+    --primary: 217 91% 60%;            /* High-voltage Electric Blue (#3b82f6) */
+    --primary-foreground: 220 100% 98%;
+    --secondary: 240 20% 8%;
+    --secondary-foreground: 210 10% 70%;
+    --muted: 240 15% 7%;
+    --muted-foreground: 215 15% 55%;
+    --accent: 188 86% 53%;             /* Cyber Neon Cyan (#06b6d4) */
+    --accent-foreground: 220 100% 98%;
+    --destructive: 0 84% 60%;          /* Vivid Warning Crimson (#f43f5e) */
+    --destructive-foreground: 210 20% 98%;
+    --border: 240 20% 12%;             /* Very subtle navy-bordered edge (#11121d) */
+    --input: 240 20% 8%;
+    --ring: 217 91% 60%;
+    --radius: 0.75rem;                 /* 12px modern border radius */
   }
-}
 
-@layer base {
   * { 
     @apply border-border; 
   }
+  
   body {
     @apply bg-background text-foreground antialiased font-sans;
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* Soft top-graphite lighting mask */
-    background-image: radial-gradient(circle at 50% 0%, hsl(240 5% 15% / 0.12) 0%, transparent 60%);
+    /* Gradient overlay: Deep Radial dark indigo/navy glow at the center and top */
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 55%),
+      radial-gradient(circle at 10% 30%, rgba(6, 182, 212, 0.02) 0%, transparent 40%),
+      radial-gradient(circle at 90% 70%, rgba(59, 130, 246, 0.02) 0%, transparent 40%);
     background-attachment: fixed;
-  }
-  
-  /* Restrict serif ONLY to high-value moments */
-  .font-serif-display {
-    @apply font-serif;
   }
 }
 
-/* Scrollbar */
+/* Scrollbar styling */
 ::-webkit-scrollbar { 
-  width: 5px; 
-  height: 5px; 
+  width: 6px; 
+  height: 6px; 
 }
 ::-webkit-scrollbar-track { 
   background: transparent; 
 }
 ::-webkit-scrollbar-thumb { 
-  background: hsl(240 4% 30% / 0.3); 
+  background: hsl(240 20% 20% / 0.4); 
   border-radius: 9999px; 
 }
 ::-webkit-scrollbar-thumb:hover { 
-  background: hsl(240 4% 30% / 0.5); 
+  background: hsl(217 91% 60% / 0.4); 
 }
 
-/* Markdown rendering in AI Brief Room */
+/* Glassmorphism & Cyber Deck Card styles */
+.glass-panel {
+  background: linear-gradient(135deg, rgba(8, 8, 15, 0.7) 0%, rgba(4, 4, 9, 0.85) 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-panel-hover:hover {
+  border-color: rgba(59, 130, 246, 0.25);
+  box-shadow: 0 0 25px rgba(59, 130, 246, 0.08);
+  transform: translateY(-2px);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+}
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+}
+.glow-emerald {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+}
+.glow-amber {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
+}
+
+/* Markdown rendering in Boardroom */
 .prose-swarm {
   color: hsl(var(--foreground));
-  line-height: 1.625;
+  line-height: 1.75;
 }
 .prose-swarm h1 { 
-  @apply text-xl font-sans font-semibold text-foreground mt-5 mb-2.5 tracking-tight border-b border-border/40 pb-1.5; 
+  @apply text-base font-sans font-semibold text-white mt-6 mb-3 tracking-tight border-b border-white/5 pb-2 flex items-center gap-2; 
 }
 .prose-swarm h2 { 
-  @apply text-base font-sans font-semibold mt-4 mb-2 text-foreground tracking-tight; 
+  @apply text-sm font-sans font-semibold mt-5 mb-2 text-white tracking-tight flex items-center gap-1.5; 
 }
 .prose-swarm h3 { 
-  @apply text-xs font-semibold mt-3.5 mb-1.5 text-foreground tracking-wide uppercase font-sans; 
+  @apply text-[11px] font-semibold mt-4 mb-1.5 text-muted-foreground tracking-wider uppercase font-mono; 
 }
 .prose-swarm p { 
-  @apply text-xs leading-relaxed mb-3 text-card-foreground/90 font-sans; 
+  @apply text-sm leading-relaxed mb-3.5 text-foreground/90 font-sans; 
 }
 .prose-swarm ul { 
-  @apply list-disc list-outside ml-4 mb-3 space-y-1 font-sans; 
+  @apply list-disc list-outside ml-4 mb-4 space-y-1.5 font-sans; 
 }
 .prose-swarm ol { 
-  @apply list-decimal list-outside ml-4 mb-3 space-y-1 font-sans; 
+  @apply list-decimal list-outside ml-4 mb-4 space-y-1.5 font-sans; 
 }
 .prose-swarm li { 
-  @apply text-xs leading-relaxed text-card-foreground/90 font-sans; 
+  @apply text-sm leading-relaxed text-foreground/90 font-sans; 
 }
 .prose-swarm strong { 
-  @apply font-semibold text-foreground; 
+  @apply font-semibold text-white; 
 }
 .prose-swarm code { 
-  @apply bg-accent px-1.5 py-0.5 rounded text-[10px] font-mono text-primary; 
+  @apply bg-white/5 px-1.5 py-0.5 rounded text-xs font-mono text-primary border border-white/10; 
 }
 .prose-swarm pre { 
-  @apply bg-background/50 border border-border/50 rounded-lg p-3.5 my-3 overflow-x-auto shadow-inner; 
+  @apply bg-[#040409]/80 border border-white/5 rounded-lg p-4 my-4 overflow-x-auto shadow-inner; 
 }
 .prose-swarm pre code { 
-  @apply bg-transparent p-0 text-[10px] text-foreground font-mono; 
+  @apply bg-transparent p-0 text-xs text-white/90 font-mono border-0; 
 }
 .prose-swarm blockquote { 
-  @apply border-l-2 border-primary/50 bg-primary/5 pl-3.5 py-1.5 italic text-xs text-muted-foreground my-3 rounded-r-lg; 
+  @apply border-l-2 border-primary/50 bg-primary/5 pl-4 py-2 italic text-sm text-muted-foreground my-4 rounded-r-lg; 
 }
 
-/* Custom theme helpers */
-.bg-void { background-color: hsl(240 6% 6.5%); }
-.bg-plum { background-color: hsl(240 5% 10.5%); }
-.bg-oxblood { background-color: hsl(240 5% 12%); }
-.text-parchment { color: hsl(40 8% 92%); }
-.text-sand { color: hsl(240 4% 65%); }
-.text-brass { color: hsl(36 28% 54%); }
-.text-clay { color: hsl(11 50% 55%); }
-.border-subtle { border-color: hsl(240 5% 14% / 0.7); }
-.panel-base { background-color: hsl(240 5% 10.5%); border: 1px solid hsl(240 5% 14% / 0.7); }
-.panel-elevated { background-color: hsl(240 5% 12.5%); border: 1px solid hsl(240 5% 16% / 0.7); }
+/* Animations for Signal Radar and Radar sweeping */
+@keyframes radar-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-radar-sweep {
+  animation: radar-sweep 12s linear infinite;
+}
+
+@keyframes grid-glow {
+  0%, 100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.animate-grid-glow {
+  animation: grid-glow 4s ease-in-out infinite;
+}

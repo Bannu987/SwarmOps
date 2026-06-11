@@ -1,5 +1,6 @@
-import { OperationsFloor } from "@/components/operations/OperationsFloor"
+import { MissionControl } from "@/components/operations/MissionControl"
 
 export default function DashboardPage() {
-  return <OperationsFloor />
+  return <MissionControl />
 }
+

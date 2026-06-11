@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { Sidebar } from "@/components/sidebar/Sidebar"
+import { AppShell } from "@/components/shared/AppShell"
 
 export default async function AppLayout({
   children,
@@ -14,10 +14,6 @@ export default async function AppLayout({
     redirect("/login")
   }
 
-  return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar user={user} />
-      <main className="flex-1 flex flex-col overflow-hidden">{children}</main>
-    </div>
-  )
+  return <AppShell user={user}>{children}</AppShell>
 }
+

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Database, FileText, Sparkles, ExternalLink, X, BookOpen, AlertCircle } from "lucide-react"
+import { Database, FileText, Sparkles, X, BookOpen, AlertCircle, Cpu, Radio, Network } from "lucide-react"
 import Link from "next/link"
 
 const INTEGRATIONS = [
@@ -10,6 +10,7 @@ const INTEGRATIONS = [
     name: "Google Analytics 4",
     desc: "Traffic, conversions, and user behavior trends.",
     color: "#f59e0b",
+    status: "Telemetry Active",
     unlocks: [
       "Traffic source spikes and drops identification",
       "Audience conversion rate friction analysis",
@@ -27,6 +28,7 @@ const INTEGRATIONS = [
     name: "Search Console",
     desc: "Keyword queries, organic impressions, and CTR metrics.",
     color: "#06b6d4",
+    status: "Telemetry Active",
     unlocks: [
       "Click-Through Rate (CTR) optimization suggestions",
       "Search ranking drop alerts & content decay mapping",
@@ -45,6 +47,7 @@ const INTEGRATIONS = [
     name: "Google Ads",
     desc: "Campaign spend, conversion numbers, and ROAS optimization.",
     color: "#22c55e",
+    status: "Pending Link",
     unlocks: [
       "Return on Ad Spend (ROAS) optimization strategies",
       "Wasteful CPC keywords detection and exclusion lists",
@@ -63,6 +66,7 @@ const INTEGRATIONS = [
     name: "HubSpot CRM",
     desc: "Inbound leads, sales contacts, and deal pipeline status.",
     color: "#f97316",
+    status: "Pending Link",
     unlocks: [
       "Marketing-to-sales funnel leakage diagnostics",
       "High-intent lead segment strategy suggestions",
@@ -85,136 +89,153 @@ export default function SourcesPage() {
   const selectedSource = INTEGRATIONS.find((s) => s.id === openModal)
 
   return (
-    <div className="flex-grow overflow-y-auto px-8 py-8 bg-background animate-fade-in">
+    <div className="flex-grow overflow-y-auto px-8 py-8 bg-transparent animate-fade-in text-white">
       <div className="max-w-5xl mx-auto">
-        <div className="mb-8 border-b border-border/60 pb-5">
-          <div className="flex items-baseline gap-2 mb-1">
-            <h1 className="text-2xl md:text-3xl font-serif font-normal tracking-tight text-foreground">
+        
+        {/* Header */}
+        <div className="mb-8 border-b border-white/5 pb-5">
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-xl md:text-2xl font-serif font-normal tracking-tight text-white">
               Integrations
             </h1>
-            <span className="text-[10px] font-mono text-primary/70 uppercase tracking-widest">
-              [TELEMETRY_INGEST]
+            <span className="text-[9px] font-mono text-primary bg-primary/10 border border-primary/25 px-2 py-0.5 rounded-full uppercase tracking-wider">
+              Telemetry Ingest
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
             Connect search engines, CRM, and tracking pipelines to compile swarm memory. Follow manual import guidelines to scan raw reports.
           </p>
         </div>
 
+        {/* Integration Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {INTEGRATIONS.map((source) => (
-            <div key={source.id} className="bg-card/65 border border-border/40 rounded-lg p-5 hover:border-primary/45 hover:bg-card/90 transition-all duration-300 flex flex-col justify-between shadow-sm relative group">
+            <div 
+              key={source.id} 
+              className="glass-panel border border-white/5 rounded-xl p-5 hover:border-white/10 hover:bg-white/[0.02] transition-all duration-300 flex flex-col justify-between shadow-lg relative group"
+            >
               <div>
-                <div className="flex items-start justify-between mb-4 border-b border-border/30 pb-3">
-                  <div
-                    className="w-8 h-8 rounded flex items-center justify-center text-black text-xs font-bold shadow-sm"
-                    style={{
-                      background: `linear-gradient(135deg, ${source.color}, ${source.color}bb)`,
-                    }}
-                  >
-                    ◎
+                {/* Integration Header */}
+                <div className="flex items-start justify-between mb-4 border-b border-white/5 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-6 h-6 rounded flex items-center justify-center text-black text-[10px] font-bold shadow-sm"
+                      style={{
+                        background: `linear-gradient(135deg, ${source.color}, ${source.color}bb)`,
+                      }}
+                    >
+                      ◉
+                    </div>
+                    <h3 className="font-sans font-semibold text-xs text-white">{source.name}</h3>
                   </div>
-                  <span className="px-2 py-0.5 bg-card/60 text-muted-foreground/80 text-[9px] font-mono uppercase tracking-wider rounded border border-border/30">
-                    PENDING
+                  
+                  <span className={`px-2 py-0.5 text-[8px] font-mono uppercase tracking-wider rounded-full border ${
+                    source.status.includes("Active") 
+                      ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" 
+                      : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                  }`}>
+                    {source.status}
                   </span>
                 </div>
-                <h3 className="font-sans font-semibold text-sm text-foreground mb-1">{source.name}</h3>
-                <p className="text-xs text-muted-foreground/90 mb-4 leading-relaxed">{source.desc}</p>
+                
+                <p className="text-xs text-muted-foreground mb-5 leading-relaxed">{source.desc}</p>
               </div>
+
               <button
                 onClick={() => {
                   setShowInstructions(false)
                   setOpenModal(source.id)
                 }}
-                className="w-full py-1.5 bg-primary hover:bg-primary/95 text-primary-foreground font-mono text-[10px] uppercase tracking-wider rounded transition shadow-md border border-primary/20"
+                className="w-full py-1.5 border border-white/10 hover:border-white/25 hover:bg-white/5 text-white font-mono text-[9px] uppercase tracking-wider rounded-lg transition-all duration-300 shadow-sm"
               >
-                Configure Link
+                Configure Telemetry
               </button>
             </div>
           ))}
         </div>
 
+        {/* Configuration Modal */}
         {openModal && selectedSource && (
-          <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4 backdrop-blur-[2px]">
-            <div className="bg-card border border-border/60 rounded-lg max-w-md w-full p-6 animate-slide-up shadow-2xl relative">
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-[#08080f] border border-white/10 rounded-xl max-w-md w-full p-6 animate-slide-up shadow-2xl relative">
               <button
                 onClick={() => setOpenModal(null)}
-                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition"
+                className="absolute top-4 right-4 text-muted-foreground hover:text-white transition"
               >
                 <X className="w-4 h-4" />
               </button>
 
-              <div className="flex items-center gap-2 mb-3 border-b border-border/30 pb-3">
+              <div className="flex items-center gap-2 mb-4 border-b border-white/5 pb-3">
                 <div
-                  className="w-8 h-8 rounded flex items-center justify-center text-black text-xs font-bold"
+                  className="w-6 h-6 rounded flex items-center justify-center text-black text-[10px] font-bold"
                   style={{
                     background: `linear-gradient(135deg, ${selectedSource.color}, ${selectedSource.color}bb)`,
                   }}
                 >
-                  ◎
+                  ◉
                 </div>
-                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
-                  Connect {selectedSource.name}
+                <h3 className="text-xs font-semibold text-white uppercase tracking-wider font-mono">
+                  {selectedSource.name} setup
                 </h3>
               </div>
 
-              <div className="mb-4 p-3 bg-primary/10 border border-primary/25 rounded-lg text-xs text-primary flex gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  <span className="font-medium">OAuth Integration in progress.</span> Follow step instructions to manually download and import raw reports into Swarm Brief Room today.
+              <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg text-xs text-white flex gap-2.5 font-sans leading-relaxed">
+                <AlertCircle className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold text-white">Manual Export Sync.</span> SwarmOps uses secure local CSV parses for data sovereignty. Follow instructions below to sync.
                 </div>
               </div>
 
-              {/* Unlocked Features */}
-              <div className="mb-4">
-                <h4 className="text-[10px] font-mono uppercase tracking-wider text-foreground mb-2 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" /> Unlocks Swarm Capabilities
+              {/* Unlocked Capabilities */}
+              <div className="mb-4 space-y-2">
+                <h4 className="text-[9px] font-mono uppercase tracking-wider text-primary font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" /> Unlocks swarm intelligence
                 </h4>
-                <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside bg-card/45 p-3 rounded-lg border border-border/40">
+                <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside bg-white/[0.01] p-3 rounded-lg border border-white/5">
                   {selectedSource.unlocks.map((item, idx) => (
                     <li key={idx} className="leading-relaxed font-sans">{item}</li>
                   ))}
                 </ul>
               </div>
 
-              {/* Setup instructions */}
+              {/* Setup instructions toggle */}
               <div className="mb-5">
                 <button
                   onClick={() => setShowInstructions(!showInstructions)}
-                  className="w-full text-left py-2 px-3 bg-muted border border-border rounded text-[10px] font-mono uppercase tracking-wider text-foreground transition hover:bg-muted/80 flex items-center justify-between"
+                  className="w-full text-left py-2 px-3 bg-white/5 border border-white/10 rounded-lg text-[9px] font-mono uppercase tracking-wider text-white transition hover:bg-white/10 flex items-center justify-between"
                 >
                   <span className="flex items-center gap-1.5">
-                    <BookOpen className="w-3.5 h-3.5 text-primary/80" />
-                    {showInstructions ? "Hide Manual setup" : "Setup Steps"}
+                    <BookOpen className="w-3.5 h-3.5 text-primary" />
+                    {showInstructions ? "Hide instructions" : "Setup instructions"}
                   </span>
-                  <span>{showInstructions ? "▲" : "▼"}</span>
+                  <span className="text-[8px]">{showInstructions ? "▲" : "▼"}</span>
                 </button>
 
                 {showInstructions && (
-                  <div className="mt-2 bg-card/45 border border-border/40 p-3.5 rounded-lg text-xs text-muted-foreground space-y-2.5 max-h-48 overflow-y-auto animate-fade-in font-sans">
+                  <div className="mt-2 bg-black/60 border border-white/5 p-3 rounded-lg font-mono text-[10px] text-muted-foreground space-y-2 max-h-40 overflow-y-auto">
                     {selectedSource.instructions.map((step, idx) => (
                       <div key={idx} className="flex gap-2">
                         <span className="font-bold text-primary flex-shrink-0">{idx + 1}.</span>
-                        <p className="leading-relaxed">{step}</p>
+                        <p className="leading-relaxed font-sans text-xs">{step}</p>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-2.5 border-t border-border/30 pt-4">
+              {/* Action Buttons */}
+              <div className="flex gap-2.5 border-t border-white/5 pt-4">
                 <Link
                   href="/chat"
                   onClick={() => setOpenModal(null)}
-                  className="flex-grow py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-mono text-[10px] uppercase tracking-wider rounded transition-all duration-300 flex items-center justify-center gap-1.5 shadow-md border border-primary/20"
+                  className="flex-grow py-2 bg-primary hover:bg-primary/95 text-white font-mono text-[9px] uppercase tracking-wider rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 shadow-sm border border-primary/20"
                 >
                   <FileText className="w-3.5 h-3.5" />
-                  <span>Upload Report</span>
+                  <span>Upload telemetry CSV</span>
                 </Link>
                 <button
                   onClick={() => setOpenModal(null)}
-                  className="px-4 py-2 bg-card border border-border hover:bg-muted text-xs text-foreground font-medium rounded transition duration-300"
+                  className="px-4 py-2 border border-white/10 hover:bg-white/5 text-xs text-white font-medium rounded-lg transition duration-300"
                 >
                   Cancel
                 </button>

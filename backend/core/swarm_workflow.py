@@ -74,6 +74,8 @@ Sitemap: https://shravanpayyavula.me/sitemap.xml
 ```
 
 This file gives search engines and AI crawlers full access to crawl public pages, and specifies the correct location of your sitemap. Add this to your static assets directory and deploy."""
+        if any(k in msg for k in ["crawl budget", "monitor crawl budget", "budget allocation"]):
+            return "Crawl budget monitoring is not necessary for this small or personal website at this stage. Instead, we recommend adding a standard robots.txt file and referencing your sitemap, which ensures search engines and AI crawlers can discover your pages efficiently without overloading your server."
 
     # 2. Missing sitemap
     if reg_key == "missing_sitemap":

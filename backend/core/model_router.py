@@ -17,13 +17,12 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 NEXUS_MODEL = "anthropic/claude-sonnet-4-20250514"
 
 FREE_MODELS = {
-    "primary":   "google/gemma-4-31b-it:free",
-    "large":     "openai/gpt-oss-120b:free",
-    "fast":      "openai/gpt-oss-120b:free",
-    "reasoning": "google/gemma-4-31b-it:free",
-    "fallback":  "nvidia/nemotron-3-super-120b-a12b:free",
+    "primary":   "google/gemma-2-9b-it",
+    "large":     "meta-llama/llama-3-8b-instruct",
+    "fast":      "meta-llama/llama-3-8b-instruct",
+    "reasoning": "google/gemma-2-9b-it",
+    "fallback":  "qwen/qwen-2-7b-instruct",
 }
-
 
 
 class ModelRouter:
@@ -54,39 +53,28 @@ class ModelRouter:
 
         # Classify the task and pick the model
         tier = classify_task(user_message or prompt, agent_id, is_synthesis)
-        model = select_model(tier)
+        selected_model = select_model(tier)
         fallbacks = fallback_chain(tier)
+
+        # Build sequence of models to attempt defensively if 404 occurs
+        models_to_try = [selected_model]
+        for f in fallbacks:
+            if f not in models_to_try:
+                models_to_try.append(f)
 
         logger.info(
             f"[MODEL ROUTER DIAGNOSTICS] Provider: openrouter | Agent: {agent_id} | Tier: {tier} | "
-            f"Selected Model: {model} | API Key status: Present ({masked_key})"
+            f"Selected Model: {selected_model} | Fallback Chain: {models_to_try} | API Key status: Present ({masked_key})"
         )
 
         if not self.api_key:
             logger.error("[MODEL ROUTER DIAGNOSTICS] OpenRouter API key is missing or not configured!")
             return "[OpenRouter API key not configured]"
 
-        # Rate limit buffer
-        elapsed = time.time() - self._last_request
-        if elapsed < 3.5:
-            time.sleep(3.5 - elapsed)
-
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-
-        payload = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "models": fallbacks,
-            "route": "fallback",
-        }
-
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -95,9 +83,37 @@ class ModelRouter:
             "X-Title": "SwarmOps",
         }
 
-        for attempt in range(3):
+        current_model_index = 0
+        attempt = 0
+        max_attempts = 4  # Allow up to 4 total attempts to try different models in the chain
+
+        while attempt < max_attempts and current_model_index < len(models_to_try):
+            active_model = models_to_try[current_model_index]
+            remaining_fallbacks = models_to_try[current_model_index + 1:]
+
+            # Rate limit buffer (3.5s spacing between OpenRouter calls)
+            elapsed = time.time() - self._last_request
+            if elapsed < 3.5:
+                time.sleep(3.5 - elapsed)
+
+            payload = {
+                "model": active_model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            if remaining_fallbacks:
+                payload["models"] = remaining_fallbacks
+                payload["route"] = "fallback"
+
+            if json_mode:
+                payload["response_format"] = {"type": "json_object"}
+
             try:
-                logger.info(f"[MODEL ROUTER DIAGNOSTICS] Sending request to OpenRouter (Attempt {attempt+1}/3)...")
+                logger.info(
+                    f"[MODEL ROUTER DIAGNOSTICS] Sending request to OpenRouter (Attempt {attempt+1}/{max_attempts}) | "
+                    f"Active Model: {active_model} | Fallback Models Offered: {remaining_fallbacks}"
+                )
                 response = httpx.post(
                     OPENROUTER_URL,
                     json=payload,
@@ -107,19 +123,50 @@ class ModelRouter:
                 self._last_request = time.time()
 
                 status = response.status_code
-                logger.info(f"[MODEL ROUTER DIAGNOSTICS] OpenRouter HTTP status code: {status}")
+                logger.info(f"[MODEL ROUTER DIAGNOSTICS] OpenRouter HTTP status code: {status} for model: {active_model}")
 
                 if status == 429:
                     wait = int(response.headers.get("retry-after", 5))
-                    logger.warning(f"[MODEL ROUTER DIAGNOSTICS] Rate limited. Waiting {wait}s...")
+                    logger.warning(f"[MODEL ROUTER DIAGNOSTICS] Rate limited. Waiting {wait}s before retrying same model...")
                     time.sleep(wait)
+                    attempt += 1
                     continue
 
                 if status != 200:
                     err_preview = response.text[:200].replace("\n", " ")
-                    logger.error(f"[MODEL ROUTER DIAGNOSTICS] OpenRouter error body: {err_preview}")
-                    if attempt < 2:
-                        time.sleep(2 ** attempt)
+                    logger.error(
+                        f"[MODEL ROUTER DIAGNOSTICS] OpenRouter returned error {status} for model: {active_model} | "
+                        f"Error preview: {err_preview}"
+                    )
+
+                    # Check for 404 model not found or unavailable messages
+                    is_unavailable = (
+                        status == 404 or 
+                        "not found" in response.text.lower() or 
+                        "unavailable" in response.text.lower() or
+                        "slug" in response.text.lower()
+                    )
+                    
+                    if is_unavailable:
+                        current_model_index += 1
+                        if current_model_index < len(models_to_try):
+                            next_model = models_to_try[current_model_index]
+                            logger.warning(
+                                f"[MODEL ROUTER DIAGNOSTICS] Model '{active_model}' is unavailable/404. "
+                                f"Bypassing retries and falling back directly to: '{next_model}'"
+                            )
+                            attempt += 1
+                            continue
+                        else:
+                            logger.error("[MODEL ROUTER DIAGNOSTICS] Model unavailable and no further fallbacks exist.")
+                            return f"[Model unavailable {status}]"
+
+                    # For other errors (e.g. 500, 502), do standard exponential backoff retry
+                    if attempt < max_attempts - 1:
+                        sleep_time = 2 ** attempt
+                        logger.info(f"[MODEL ROUTER DIAGNOSTICS] Temporary server error. Retrying in {sleep_time}s...")
+                        time.sleep(sleep_time)
+                        attempt += 1
                         continue
                     return f"[Model error {status}]"
 
@@ -128,32 +175,39 @@ class ModelRouter:
 
                 if text:
                     usage = data.get("usage", {})
-                    actual_model = data.get("model", model).split("/")[-1]
+                    actual_model = data.get("model", active_model).split("/")[-1]
                     raw_preview = text[:150].replace("\n", " ") + "..." if len(text) > 150 else text
                     logger.info(
-                        f"[MODEL ROUTER DIAGNOSTICS] Successful response from model={actual_model} | "
-                        f"Tokens: {usage.get('total_tokens', 0)} | Response Preview: {raw_preview}"
+                        f"[MODEL ROUTER DIAGNOSTICS] Successful response! Final Model: {actual_model} "
+                        f"(Started as: {selected_model}) | Tokens: {usage.get('total_tokens', 0)} | "
+                        f"Response Preview: {raw_preview}"
                     )
                     return text
 
-                if attempt < 2:
+                if attempt < max_attempts - 1:
                     logger.warning("[MODEL ROUTER DIAGNOSTICS] Response content was empty. Retrying...")
                     time.sleep(1)
+                    attempt += 1
                     continue
                 return "[No response]"
 
             except httpx.TimeoutException:
-                logger.warning(f"[MODEL ROUTER DIAGNOSTICS] Timeout occurred on attempt {attempt+1}")
-                if attempt < 2:
+                logger.warning(f"[MODEL ROUTER DIAGNOSTICS] Timeout occurred on active model {active_model} (Attempt {attempt+1})")
+                if attempt < max_attempts - 1:
+                    attempt += 1
                     continue
                 return "[Request timed out]"
             except Exception as e:
-                logger.error(f"[MODEL ROUTER DIAGNOSTICS] Connection failed on attempt {attempt+1} with error: {e}")
-                if attempt < 2:
+                logger.error(
+                    f"[MODEL ROUTER DIAGNOSTICS] Connection failed on active model {active_model} "
+                    f"(Attempt {attempt+1}) with error: {e}"
+                )
+                if attempt < max_attempts - 1:
+                    attempt += 1
                     continue
                 return f"[Error: {str(e)[:80]}]"
 
-        return "[All retries failed]"
+        return "[All retries and model fallbacks failed]"
 
 
 

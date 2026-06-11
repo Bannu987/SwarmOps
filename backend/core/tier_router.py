@@ -13,15 +13,15 @@ from typing import Optional
 
 # Models per tier — easy to swap
 TIER_1_MODELS = {
-    "primary":  "meta-llama/llama-3-8b-instruct:free",
-    "fast":     "meta-llama/llama-3-8b-instruct:free",
-    "fallback": "qwen/qwen-2-7b-instruct:free",
+    "primary":  "meta-llama/llama-3-8b-instruct",
+    "fast":     "meta-llama/llama-3-8b-instruct",
+    "fallback": "qwen/qwen-2-7b-instruct",
 }
 
 TIER_2_MODELS = {
-    "primary":   "meta-llama/llama-3-8b-instruct:free",
-    "reasoning": "google/gemma-2-9b-it:free",
-    "fallback":  "qwen/qwen-2-7b-instruct:free",
+    "primary":   "meta-llama/llama-3-8b-instruct",
+    "reasoning": "google/gemma-2-9b-it",
+    "fallback":  "qwen/qwen-2-7b-instruct",
 }
 
 TIER_3_MODELS = {

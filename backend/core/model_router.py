@@ -52,9 +52,10 @@ class ModelRouter:
                 masked_key = f"{self.api_key[:6]}...{self.api_key[-4:]}"
 
         # Classify the task and pick the model
-        tier = classify_task(user_message or prompt, agent_id, is_synthesis)
-        selected_model = select_model(tier)
-        fallbacks = fallback_chain(tier)
+        text_context = user_message or prompt
+        tier = classify_task(text_context, agent_id, is_synthesis)
+        selected_model = select_model(tier, prompt_text=text_context)
+        fallbacks = fallback_chain(tier, prompt_text=text_context)
 
         # Build sequence of models to attempt defensively if 404 occurs
         models_to_try = [selected_model]

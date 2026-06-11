@@ -147,6 +147,22 @@ class WebsiteHealthScanner(BaseScanner):
                 expires_in_hours=168,
             ))
 
+        # Check 3b: Missing H1 Heading Tag
+        h1_tags = soup.find_all("h1")
+        has_h1 = len(h1_tags) > 0 and any(h1.get_text().strip() for h1 in h1_tags)
+        if not has_h1:
+            signals.append(Signal(
+                signal_type="opportunity_window",
+                title="Missing H1 heading tag",
+                description="The H1 tag is the primary heading of the page and is critical for both search engines and user accessibility.",
+                severity="medium",
+                category="opportunity",
+                source_agent="seo",
+                source_detail=url,
+                evidence=[{"claim": "Missing or empty H1 tag", "source": "html", "value": "missing"}],
+                expires_in_hours=168,
+            ))
+
         # Check 4: Missing Meta Description
         desc_meta = soup.find("meta", attrs={"name": "description"})
         if not desc_meta or not desc_meta.get("content", "").strip():

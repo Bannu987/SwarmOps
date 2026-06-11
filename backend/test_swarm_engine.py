@@ -102,12 +102,27 @@ async def test_workflow():
     assert "final.answer" in event_types, "Missing final.answer event"
     assert "stream.end" in event_types, "Missing stream.end event"
 
-    # Assertions based on requirement 14
+    # Assertions based on requirement 8 & 14
     assert "User-agent: *" in response, "Missing user-agent rule"
     assert "Allow: /" in response, "Missing allow rule"
     assert "Sitemap: https://shravanpayyavula.me/sitemap.xml" in response, "Missing sitemap rule"
     assert "controls crawler access, not indexing" in response, "Inaccurate robots.txt explanation"
-    assert "visit /robots.txt" in response.lower(), "Missing verification step"
+    assert "public/robots.txt" in response, "Missing public/robots.txt path recommendation"
+    assert "HTTP 200" in response or "http 200" in response.lower(), "Missing HTTP 200 verification check"
+    assert "crawl delay" not in response.lower() and "crawl-delay" not in response.lower(), "Crawl delay recommended by default"
+    
+    # Priority-language guard assertions
+    assert "immediately" not in response.lower(), "Low priority signal contains 'immediately'"
+    assert "urgent" not in response.lower(), "Low priority signal contains 'urgent'"
+    assert "critical" not in response.lower(), "Low priority signal contains 'critical'"
+    assert "ranking drops" not in response.lower(), "Low priority signal contains 'ranking drops'"
+    assert "crawl budget loss" not in response.lower(), "Low priority signal contains 'crawl budget loss'"
+    assert "severe" not in response.lower(), "Low priority signal contains 'severe'"
+    
+    # Generic placeholder assertions
+    assert "Standard technical opportunity detected." not in response, "Contains generic placeholder"
+    assert "Visit /robots.txt or inspect HTML head or check headers..." not in response, "Contains generic placeholder"
+    assert "Implement configuration fix." not in response, "Contains generic placeholder"
     
     # Verify no rate-limiting or backup alerts
     assert "rate limit" not in response.lower()
@@ -117,6 +132,18 @@ async def test_workflow():
     # Verify no inaccurate CTR or citations claims
     assert "30%" not in response
     assert "critical for chatgpt" not in response.lower()
+
+    # Test the follow-up handler
+    print("Testing follow-up handler for create robots.txt...")
+    follow_up_res = run_swarm_signal_workflow(
+        clicked_signal=clicked_signal,
+        message="create robots.txt file",
+        conversation_id="test_conv"
+    )
+    follow_up_out = follow_up_res["response"]
+    assert "public/robots.txt" in follow_up_out, "Follow-up failed to return file path"
+    assert "User-agent: *" in follow_up_out, "Follow-up failed to return file contents"
+    print("Follow-up handler test passed successfully!")
 
     print("Workflow validation test passed successfully!")
 

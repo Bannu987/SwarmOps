@@ -13,20 +13,21 @@ from typing import Optional
 
 # Models per tier — easy to swap
 TIER_1_MODELS = {
-    "primary":  "meta-llama/llama-3-8b-instruct",
-    "fast":     "meta-llama/llama-3-8b-instruct",
-    "fallback": "qwen/qwen-2-7b-instruct",
+    "primary":  "openai/gpt-oss-120b:free",
+    "fast":     "openai/gpt-oss-120b:free",
+    "fallback": "openrouter/free",
 }
 
 TIER_2_MODELS = {
-    "primary":   "meta-llama/llama-3-8b-instruct",
-    "reasoning": "google/gemma-2-9b-it",
-    "fallback":  "qwen/qwen-2-7b-instruct",
+    "primary":   "openai/gpt-oss-120b:free",
+    "reasoning": "openai/gpt-oss-120b:free",
+    "fallback":  "openrouter/free",
 }
 
 TIER_3_MODELS = {
-    "primary":  "anthropic/claude-sonnet-4-20250514",  # paid, premium
-    "fallback": "anthropic/claude-3.5-sonnet",         # cheaper backup
+    "primary":      "openai/gpt-oss-120b:free",
+    "experimental": "openrouter/owl-alpha",
+    "fallback":     "openrouter/free",
 }
 
 
@@ -91,50 +92,34 @@ def classify_task(
     return 1
 
 
-def select_model(tier: int) -> str:
+def select_model(tier: int, prompt_text: str = "") -> str:
     """Pick the primary model for a given tier. Support env override."""
     env_model = os.environ.get("OPENROUTER_MODEL")
     if env_model:
         return env_model
 
     if tier == 3:
-        # Only use paid Claude if user explicitly opted in via env var
-        # (avoids surprise bills during dev)
-        if os.environ.get("ENABLE_PAID_TIER", "false").lower() == "true":
-            return TIER_3_MODELS["primary"]
-        return TIER_2_MODELS["primary"]  # free fallback
-
-    if tier == 2:
-        return TIER_2_MODELS["primary"]
+        msg = (prompt_text or "").lower()
+        is_experimental = any(k in msg for k in ["long-context", "experimental strategy", "campaign planning", "nexus-style orchestration"])
+        has_sensitive_data = any(k in msg for k in ["password", "token", "secret", "private key", "api_key", "service_role"])
+        
+        if is_experimental and not has_sensitive_data:
+            return TIER_3_MODELS["experimental"]
 
     return TIER_1_MODELS["primary"]
 
 
-
-def fallback_chain(tier: int) -> list:
+def fallback_chain(tier: int, prompt_text: str = "") -> list:
     """Get the fallback chain for a tier (in order of preference)."""
+    chain = ["openai/gpt-oss-120b:free"]
+    
     if tier == 3:
-        chain = []
-        if os.environ.get("ENABLE_PAID_TIER", "false").lower() == "true":
-            chain.append(TIER_3_MODELS["primary"])
-            chain.append(TIER_3_MODELS["fallback"])
-        chain.extend([
-            TIER_2_MODELS["primary"],
-            TIER_2_MODELS["reasoning"],
-            TIER_1_MODELS["primary"],
-        ])
-        return chain
-
-    if tier == 2:
-        return [
-            TIER_2_MODELS["primary"],
-            TIER_2_MODELS["reasoning"],
-            TIER_2_MODELS["fallback"],
-            TIER_1_MODELS["primary"],
-        ]
-
-    return [
-        TIER_1_MODELS["primary"],
-        TIER_1_MODELS["fast"],
-        TIER_1_MODELS["fallback"],
-    ]
+        msg = (prompt_text or "").lower()
+        is_experimental = any(k in msg for k in ["long-context", "experimental strategy", "campaign planning", "nexus-style orchestration"])
+        has_sensitive_data = any(k in msg for k in ["password", "token", "secret", "private key", "api_key", "service_role"])
+        
+        if is_experimental and not has_sensitive_data:
+            chain.append("openrouter/owl-alpha")
+            
+    chain.append("openrouter/free")
+    return chain

@@ -50,11 +50,15 @@ def map_signal_to_registry_key(signal_title: str, signal_type_db: str) -> Option
         if "organization" in title_lower or "company" in title_lower:
             return "missing_organization_schema"
         return "missing_json_ld"
+    if "h1" in title_lower or "heading" in title_lower:
+        return "missing_h1"
+    if "slow" in title_lower or "page speed" in title_lower or "response time" in title_lower or "speed" in title_lower:
+        return "slow_page_speed"
     if "open graph" in title_lower or "og:" in title_lower:
         return "missing_open_graph"
-    if "analytics" in title_lower or "gtm" in title_lower or "ga4" in title_lower:
+    if "analytics" in title_lower or "gtm" in title_lower or "ga4" in title_lower or "missing_analytics" in title_lower:
         return "missing_ga4_or_gtm"
-    if "cta" in title_lower or "call to action" in title_lower:
+    if "cta" in title_lower or "call to action" in title_lower or "weak_cta" in title_lower:
         return "missing_primary_cta"
     if "lead capture" in title_lower or "form" in title_lower:
         return "missing_lead_capture"

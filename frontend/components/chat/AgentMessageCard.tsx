@@ -464,8 +464,8 @@ export function AgentMessageCard({ message }: Props) {
             </div>
             <div className="flex items-center justify-between gap-4">
               <span>STREAM STATUS:</span>
-              <span className={`uppercase font-semibold ${message.stream_status === "completed" ? "text-emerald-400" : message.stream_status === "failed" ? "text-rose-400" : "text-amber-400"}`}>
-                {message.stream_status || "UNKNOWN"}
+              <span className={`uppercase font-semibold ${message.stream_status === "completed" ? "text-emerald-400" : message.stream_status === "recovered" ? "text-sky-400" : message.stream_status === "recovering" ? "text-sky-300 animate-pulse" : message.stream_status === "failed" ? "text-rose-400" : "text-amber-400"}`}>
+                {message.stream_status === "recovered" ? "RECOVERED FROM SAVED RUN" : message.stream_status || "UNKNOWN"}
               </span>
             </div>
             <div className="flex items-center justify-between gap-4">

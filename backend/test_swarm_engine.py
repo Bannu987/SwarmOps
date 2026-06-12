@@ -412,6 +412,150 @@ def test_phase_2_5_observability():
          assert WORKFLOW_VERSION is not None
          print("Version constants validation passed!")
 
+def test_phase_2_6_recovery():
+    print("Running Phase 2.6 Run Trace Recovery tests...")
+    from fastapi.testclient import TestClient
+    from main import app
+    from unittest.mock import patch, MagicMock
+    import os
+
+    client = TestClient(app)
+
+    # Mock user object
+    mock_user = MagicMock()
+    mock_user.id = "test-user-id"
+
+    # 1. Test GET /api/runs/{trace_id} with completed trace
+    with patch("main.get_user_from_token", return_value=mock_user), \
+         patch("core.supabase_client.get_admin_client") as mock_admin:
+        
+        mock_client = MagicMock()
+        mock_admin.return_value = mock_client
+
+        # Mock a completed run trace with replay_snapshot
+        mock_trace_data = {
+            "trace_id": "test-trace-123",
+            "user_id": "test-user-id",
+            "status": "completed",
+            "run_type": "boardroom_signal",
+            "started_at": "2026-06-12T00:00:00Z",
+            "ended_at": "2026-06-12T00:01:48Z",
+            "created_at": "2026-06-12T00:00:00Z",
+            "workflow_version": "1.5.0",
+            "prompt_version": "1.1.0",
+            "model_name": "openai/gpt-oss-120b:free",
+            "provider": "openrouter",
+            "latency_ms": 108000,
+            "metadata": {
+                "replay_snapshot": {
+                    "final_structured_output": {
+                        "title": "Add robots.txt",
+                        "priority_bucket": "Low",
+                        "priority_score": 15,
+                        "recommended_fix": "Create a robots.txt file"
+                    },
+                    "scoring_inputs": {"impact": "low"},
+                    "action_plan_created": False,
+                    "final_answer_available": True,
+                    "agents_consulted": ["seo", "content", "nexus"],
+                    "confidence": 0.87,
+                    "latency_ms": 108000
+                }
+            }
+        }
+
+        mock_result = MagicMock()
+        mock_result.data = [mock_trace_data]
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_result
+
+        resp = client.get(
+            "/api/runs/test-trace-123",
+            headers={"Authorization": "Bearer test-token"}
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["trace_id"] == "test-trace-123"
+        assert data["status"] == "completed"
+        assert "replay_snapshot" in data
+        assert data["replay_snapshot"]["final_structured_output"]["title"] == "Add robots.txt"
+        assert data["replay_snapshot"]["agents_consulted"] == ["seo", "content", "nexus"]
+        assert data["replay_snapshot"]["confidence"] == 0.87
+        print("GET /api/runs/{trace_id} completed trace test passed!")
+
+    # 2. Test GET /api/runs/{trace_id} with running trace (no replay_snapshot)
+    with patch("main.get_user_from_token", return_value=mock_user), \
+         patch("core.supabase_client.get_admin_client") as mock_admin:
+
+        mock_client = MagicMock()
+        mock_admin.return_value = mock_client
+
+        mock_running_trace = {
+            "trace_id": "test-trace-running",
+            "user_id": "test-user-id",
+            "status": "running",
+            "run_type": "boardroom_signal",
+            "started_at": "2026-06-12T00:00:00Z",
+            "ended_at": None,
+            "created_at": "2026-06-12T00:00:00Z",
+            "workflow_version": "1.5.0",
+            "prompt_version": "1.1.0",
+            "model_name": "openai/gpt-oss-120b:free",
+            "provider": "openrouter",
+            "latency_ms": None,
+            "metadata": {}
+        }
+
+        mock_result = MagicMock()
+        mock_result.data = [mock_running_trace]
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_result
+
+        resp = client.get(
+            "/api/runs/test-trace-running",
+            headers={"Authorization": "Bearer test-token"}
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "running"
+        assert "replay_snapshot" not in data
+        print("GET /api/runs/{trace_id} running trace test passed!")
+
+    # 3. Test 404 when trace not found (ownership filter)
+    with patch("main.get_user_from_token", return_value=mock_user), \
+         patch("core.supabase_client.get_admin_client") as mock_admin:
+
+        mock_client = MagicMock()
+        mock_admin.return_value = mock_client
+
+        mock_result = MagicMock()
+        mock_result.data = []  # No matching trace
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_result
+
+        resp = client.get(
+            "/api/runs/nonexistent-trace",
+            headers={"Authorization": "Bearer test-token"}
+        )
+        assert resp.status_code == 404
+        print("GET /api/runs/{trace_id} 404 ownership test passed!")
+
+    # 4. Test 401 when no auth
+    resp = client.get("/api/runs/test-trace-123")
+    assert resp.status_code == 401
+    print("GET /api/runs/{trace_id} 401 no-auth test passed!")
+
+    # 5. Test ENABLE_TRACE_LOGGING=false
+    with patch("main.get_user_from_token", return_value=mock_user), \
+         patch.dict(os.environ, {"ENABLE_TRACE_LOGGING": "false"}):
+
+        resp = client.get(
+            "/api/runs/test-trace-123",
+            headers={"Authorization": "Bearer test-token"}
+        )
+        assert resp.status_code == 400
+        assert "disabled" in resp.json()["detail"].lower()
+        print("GET /api/runs/{trace_id} ENABLE_TRACE_LOGGING=false test passed!")
+
+    print("All Phase 2.6 tests passed!")
+
 if __name__ == "__main__":
     test_normalization()
     test_scoring()
@@ -419,4 +563,5 @@ if __name__ == "__main__":
     test_webhook_trigger()
     test_action_plans_api()
     test_phase_2_5_observability()
+    test_phase_2_6_recovery()
     asyncio.run(test_workflow())

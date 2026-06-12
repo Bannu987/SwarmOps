@@ -182,3 +182,30 @@ def log_agent_step_db(
         }).execute()
     except Exception as e:
         logger.debug(f"Defensive step logging failed: {e}")
+
+
+def get_run_trace_db(
+    trace_id: str,
+    user_id: Optional[str] = None
+) -> Optional[Dict]:
+    """Fetch a run trace by trace_id. Optionally filter by user_id for ownership."""
+    if not get_feature_flag("ENABLE_TRACE_LOGGING", True):
+        return None
+
+    try:
+        from .supabase_client import get_admin_client
+        admin = get_admin_client()
+        if not admin:
+            return None
+
+        query = admin.table("run_traces").select("*").eq("trace_id", trace_id)
+        if user_id:
+            query = query.eq("user_id", user_id)
+
+        res = query.execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+        return None
+    except Exception as e:
+        logger.debug(f"Defensive run trace fetch failed: {e}")
+        return None

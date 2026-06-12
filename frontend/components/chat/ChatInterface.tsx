@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { sendChat, uploadFile, streamChat, listSignals, listOpportunities } from "@/lib/api"
+import { sendChat, uploadFile, streamChat, listSignals, listOpportunities, getRunTrace } from "@/lib/api"
 import { UserMessage } from "./UserMessage"
 import { AgentMessageCard } from "./AgentMessageCard"
 import { ChatInput } from "./ChatInput"
@@ -34,6 +34,13 @@ export function ChatInterface() {
   const searchParams = useSearchParams()
   const [initiated, setInitiated] = useState(false)
   const [clickedSignalContext, setClickedSignalContext] = useState<any>(null)
+
+  // Phase 2.6: Recovery polling state
+  const [recoveryActive, setRecoveryActive] = useState(false)
+  const [recoveryTraceId, setRecoveryTraceId] = useState<string | null>(null)
+  const [recoveryMsgId, setRecoveryMsgId] = useState<string | null>(null)
+  const recoveryTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const recoveryStartRef = useRef<number>(0)
 
   // Backend connection checking states
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "waking" | "offline" | "misconfigured">("checking")
@@ -114,6 +121,163 @@ export function ChatInterface() {
     setRetryCount(0)
     checkHealth(0)
   }
+
+  // ============================================================
+  // Phase 2.6: Recovery Polling Logic
+  // ============================================================
+
+  const stopRecoveryPolling = () => {
+    if (recoveryTimerRef.current) {
+      clearInterval(recoveryTimerRef.current)
+      recoveryTimerRef.current = null
+    }
+    setRecoveryActive(false)
+    setRecoveryTraceId(null)
+    setRecoveryMsgId(null)
+  }
+
+  const reconstructFinalAnswer = (snapshot: Record<string, any>): string => {
+    const structured = snapshot.final_structured_output || {}
+    const parts: string[] = []
+
+    if (structured.title) parts.push(`## ${structured.title}`)
+    if (structured.priority_bucket) parts.push(`**Priority:** ${structured.priority_bucket}`)
+    if (structured.priority_score) parts.push(`**Priority Score:** ${structured.priority_score}/100`)
+    if (structured.recommended_fix) parts.push(`\n### Recommended Fix\n${structured.recommended_fix}`)
+    if (structured.implementation_steps) parts.push(`\n### Implementation Steps\n${structured.implementation_steps}`)
+    if (structured.verification_steps) parts.push(`\n### Verification Steps\n${structured.verification_steps}`)
+    if (structured.evidence) {
+      const evidenceStr = typeof structured.evidence === "string"
+        ? structured.evidence
+        : JSON.stringify(structured.evidence, null, 2)
+      parts.push(`\n### Evidence\n${evidenceStr}`)
+    }
+
+    if (parts.length === 0) {
+      // Fallback: try to render the whole structured output as markdown
+      return `## Boardroom Decision (Recovered)\n\n\`\`\`json\n${JSON.stringify(structured, null, 2)}\n\`\`\``
+    }
+
+    return parts.join("\n")
+  }
+
+  const pollTraceOnce = async (traceId: string, msgId: string) => {
+    const elapsed = Date.now() - recoveryStartRef.current
+    if (elapsed > 120000) {
+      // 120s max polling
+      console.warn("[RECOVERY] Max polling time exceeded, stopping.")
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === msgId
+            ? {
+                ...msg,
+                content: `${msg.content}\n\n⏱️ **Recovery timed out after 2 minutes.** The Boardroom may still be processing. You can try clicking "Check saved result" later.`,
+                stream_status: "failed" as const,
+              }
+            : msg
+        )
+      )
+      stopRecoveryPolling()
+      setLoading(false)
+      return
+    }
+
+    try {
+      const trace = await getRunTrace(traceId)
+      if (!trace) return // trace not found yet, keep polling
+
+      if (trace.status === "completed" && trace.replay_snapshot) {
+        // SUCCESS: Reconstruct the final answer
+        const finalContent = reconstructFinalAnswer(trace.replay_snapshot)
+        const snapshot = trace.replay_snapshot
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === msgId
+              ? {
+                  ...msg,
+                  content: finalContent,
+                  agents_used: snapshot.agents_consulted || msg.agents_used,
+                  confidence: snapshot.confidence || msg.confidence,
+                  latency_ms: snapshot.latency_ms || trace.latency_ms || msg.latency_ms,
+                  trace_id: traceId,
+                  workflow_version: trace.workflow_version || msg.workflow_version,
+                  prompt_version: trace.prompt_version || msg.prompt_version,
+                  model_name: trace.model_name || msg.model_name,
+                  last_event: "final.answer",
+                  stream_status: "recovered" as any,
+                }
+              : msg
+          )
+        )
+        stopRecoveryPolling()
+        setLoading(false)
+        console.info("[RECOVERY] Successfully recovered final answer from trace", traceId)
+      } else if (trace.status === "failed" || trace.status === "error") {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === msgId
+              ? {
+                  ...msg,
+                  content: `${msg.content}\n\n❌ **The background Boardroom run failed.** Please retry the analysis.`,
+                  stream_status: "failed" as const,
+                }
+              : msg
+          )
+        )
+        stopRecoveryPolling()
+        setLoading(false)
+      }
+      // If still "running", keep polling (no action needed)
+    } catch (err) {
+      console.warn("[RECOVERY] Poll error:", err)
+      // Keep polling on transient errors
+    }
+  }
+
+  const startRecoveryPolling = (traceId: string, msgId: string) => {
+    console.info("[RECOVERY] Starting recovery polling for trace", traceId)
+    setRecoveryActive(true)
+    setRecoveryTraceId(traceId)
+    setRecoveryMsgId(msgId)
+    recoveryStartRef.current = Date.now()
+
+    // Update message to show recovery state
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === msgId
+          ? {
+              ...msg,
+              content: "⏳ **The live stream was interrupted, but the Boardroom is still completing in the background.**\n\nAutomatically checking for the final result...",
+              stream_status: "recovering" as any,
+            }
+          : msg
+      )
+    )
+
+    // Start polling every 4 seconds
+    const timer = setInterval(() => {
+      pollTraceOnce(traceId, msgId)
+    }, 4000)
+    recoveryTimerRef.current = timer
+
+    // Also do an immediate first check
+    pollTraceOnce(traceId, msgId)
+  }
+
+  const handleManualRecoveryCheck = async () => {
+    if (!recoveryTraceId || !recoveryMsgId) return
+    await pollTraceOnce(recoveryTraceId, recoveryMsgId)
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recoveryTimerRef.current) {
+        clearInterval(recoveryTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -214,18 +378,8 @@ export function ChatInterface() {
     let eventReceived = false
     const timeoutId = setTimeout(() => {
       if (!eventReceived) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId && msg.content === "SwarmOps is preparing the brief..."
-              ? {
-                  ...msg,
-                  content: "Signal analysis stream did not return events. Please retry.",
-                  stream_status: "failed",
-                }
-              : msg
-          )
-        )
-        setLoading(false)
+        // Phase 2.6: Instead of hard fail, start recovery polling
+        startRecoveryPolling(traceId, assistantMsgId)
       }
     }, 60000)
 
@@ -304,62 +458,24 @@ export function ChatInterface() {
       clearTimeout(timeoutId)
 
       console.error("SSE stream failed:", err)
-      const isOnline = backendStatus === "online"
       const isCORS = err instanceof TypeError || (err.message && (err.message.toLowerCase().includes("fetch") || err.message.toLowerCase().includes("cors") || err.message.toLowerCase().includes("preflight")))
-      
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMsgId
-            ? {
-                ...msg,
-                content: isOnline 
-                  ? "Backend is online, but streaming failed. Falling back to non-streaming response..."
-                  : isCORS
-                    ? "Browser blocked the backend request. Check CORS configuration for this frontend domain or verify the backend is active."
-                    : "The Boardroom stream was interrupted. You can retry or load the final answer if available.",
-                stream_status: "failed",
-              }
-            : msg
+
+      if (isCORS) {
+        // Hard CORS failure — no recovery possible
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  ...msg,
+                  content: "Browser blocked the backend request. Check CORS configuration for this frontend domain or verify the backend is active.",
+                  stream_status: "failed",
+                }
+              : msg
+          )
         )
-      )
-
-      if (isOnline) {
-        // Fallback to standard HTTP POST request
-        try {
-          const res = await sendChat(text, "default", activeProject?.id, currentSignalContext, traceId)
-          setMessages((prev) =>
-
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    content: res.response || "No response received.",
-                    agents_used: res.agents_used || msg.agents_used,
-                    confidence: res.confidence,
-                    latency_ms: res.latency_ms,
-                    trace_id: res.trace_id || traceId,
-                    workflow_version: "1.5.0",
-                    prompt_version: "1.1.0",
-                    model_name: "openai/gpt-oss-120b:free",
-                    stream_status: "completed",
-                  }
-                : msg
-            )
-          )
-        } catch (fallbackErr: any) {
-          console.error("Fallback also failed:", fallbackErr)
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    content: "Fallback failed: Backend rejected the request. Check CORS/auth configuration.",
-                    stream_status: "failed",
-                  }
-                : msg
-            )
-          )
-        }
+      } else {
+        // Phase 2.6: Stream dropped — start recovery polling
+        startRecoveryPolling(traceId, assistantMsgId)
       }
     } finally {
       setLoading(false)
@@ -530,6 +646,22 @@ export function ChatInterface() {
         <div className="bg-destructive/10 border-b border-destructive/30 px-6 py-2.5 text-destructive text-[11px] flex items-center gap-2 animate-fade-in">
           <div className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />
           <span>{healthError || "Production API URL is not configured correctly. Check NEXT_PUBLIC_API_URL in Netlify."}</span>
+        </div>
+      )}
+
+      {/* Phase 2.6: Recovery Polling Banner */}
+      {recoveryActive && (
+        <div className="bg-sky-500/10 border-b border-sky-500/30 px-6 py-2.5 flex items-center justify-between text-sky-400 text-[11px] animate-fade-in">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-sky-400 animate-ping flex-shrink-0" />
+            <span>Boardroom is still finishing in the background. Checking for the final result every few seconds...</span>
+          </div>
+          <button
+            onClick={handleManualRecoveryCheck}
+            className="px-2 py-0.5 bg-sky-500 hover:bg-sky-400 text-white font-semibold rounded text-[10px] transition flex-shrink-0"
+          >
+            Check saved result
+          </button>
         </div>
       )}
 

@@ -2077,3 +2077,62 @@ async def verify_action_plan_completion(
         )
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================
+# RUN TRACE RECOVERY (Phase 2.6)
+# ============================================================
+
+@app.get("/api/runs/{trace_id}")
+async def get_run_trace(
+    trace_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Fetch a run trace by trace_id for frontend recovery polling.
+    If the Boardroom SSE stream dropped, the frontend can poll this endpoint
+    to check if the background worker completed and retrieve the final output.
+    """
+    from core.observability import get_feature_flag, get_run_trace_db
+
+    if not get_feature_flag("ENABLE_TRACE_LOGGING", True):
+        raise HTTPException(status_code=400, detail="Trace logging is disabled.")
+
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    trace = get_run_trace_db(trace_id, user_id=str(user.id))
+    if not trace:
+        raise HTTPException(status_code=404, detail="Run trace not found")
+
+    # Build safe response (no secrets)
+    response = {
+        "trace_id": trace.get("trace_id"),
+        "status": trace.get("status"),
+        "run_type": trace.get("run_type"),
+        "started_at": trace.get("started_at") or trace.get("created_at"),
+        "ended_at": trace.get("ended_at"),
+        "workflow_version": trace.get("workflow_version"),
+        "prompt_version": trace.get("prompt_version"),
+        "model_name": trace.get("model_name"),
+        "provider": trace.get("provider"),
+        "latency_ms": trace.get("latency_ms"),
+    }
+
+    # Include replay_snapshot only if the run completed
+    metadata = trace.get("metadata") or {}
+    if trace.get("status") == "completed" and metadata.get("replay_snapshot"):
+        snapshot = metadata["replay_snapshot"]
+        # Filter to safe fields only
+        response["replay_snapshot"] = {
+            "final_structured_output": snapshot.get("final_structured_output"),
+            "scoring_inputs": snapshot.get("scoring_inputs"),
+            "action_plan_created": snapshot.get("action_plan_created"),
+            "final_answer_available": snapshot.get("final_answer_available"),
+            "agents_consulted": snapshot.get("agents_consulted"),
+            "confidence": snapshot.get("confidence"),
+            "latency_ms": snapshot.get("latency_ms"),
+        }
+
+    return response
+

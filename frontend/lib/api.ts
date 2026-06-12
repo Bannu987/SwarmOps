@@ -555,3 +555,43 @@ export async function verifyActionPlanCompletion(planId: string) {
   return res.json() as Promise<{ success: boolean; message: string; status?: string }>
 }
 
+// ============================================================
+// RUN TRACE RECOVERY (Phase 2.6)
+// ============================================================
+
+export interface RunTraceResponse {
+  trace_id: string
+  status: "running" | "completed" | "failed" | "error"
+  run_type: string
+  started_at: string
+  ended_at: string | null
+  workflow_version: string
+  prompt_version: string
+  model_name: string
+  provider: string | null
+  latency_ms: number | null
+  replay_snapshot?: {
+    final_structured_output?: Record<string, any>
+    scoring_inputs?: Record<string, any>
+    action_plan_created?: boolean
+    final_answer_available?: boolean
+    agents_consulted?: string[]
+    confidence?: number
+    latency_ms?: number
+  }
+}
+
+export async function getRunTrace(traceId: string): Promise<RunTraceResponse | null> {
+  const headers = await authHeaders()
+  try {
+    const res = await fetch(`${API_URL}/api/runs/${traceId}`, { headers })
+    if (!res.ok) {
+      console.warn(`[RECOVERY] getRunTrace returned ${res.status}`)
+      return null
+    }
+    return res.json() as Promise<RunTraceResponse>
+  } catch (err) {
+    console.warn("[RECOVERY] getRunTrace network error:", err)
+    return null
+  }
+}

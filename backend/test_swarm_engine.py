@@ -147,8 +147,42 @@ async def test_workflow():
 
     print("Workflow validation test passed successfully!")
 
+def test_webhook_trigger():
+    from unittest.mock import patch
+    from core.webhooks import trigger_n8n_webhook
+    import os
+    import time
+    
+    mock_plan = {
+        "id": "test-plan-id",
+        "project_id": "test-proj-id",
+        "user_id": "test-user-id",
+        "title": "Test Plan Title",
+        "plan_type": "seo_growth",
+        "priority": "low",
+        "owner_label": "nexus",
+        "objective": "Test Objective",
+        "tasks": ["Task 1", "Task 2"],
+        "expected_impact": "medium",
+        "estimated_effort": "low"
+    }
+    
+    # Mock N8N_WEBHOOK_URL env variable
+    with patch.dict(os.environ, {"N8N_WEBHOOK_URL": "https://n8n.test.local/webhook", "N8N_WEBHOOK_SECRET": "testsecret"}):
+        with patch("httpx.post") as mock_post:
+            trigger_n8n_webhook(mock_plan)
+            # Webhook triggers in a thread, so let's sleep a short moment
+            time.sleep(0.5)
+            
+            assert mock_post.called, "httpx.post was not called"
+            args, kwargs = mock_post.call_args
+            assert args[0] == "https://n8n.test.local/webhook"
+            assert "X-SwarmOps-Signature" in kwargs["headers"]
+            print("Webhook trigger test passed successfully!")
+
 if __name__ == "__main__":
     test_normalization()
     test_scoring()
     test_crawl_safety()
+    test_webhook_trigger()
     asyncio.run(test_workflow())

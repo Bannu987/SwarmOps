@@ -994,7 +994,7 @@ def generate_and_save_action_plan_background(opportunity_id: str, user_id: str, 
                 plan_data = get_deterministic_action_plan_fallback(opportunity, project)
             
             # Insert into DB
-            admin.table("action_plans").insert({
+            plan_res = admin.table("action_plans").insert({
                 "user_id": user_id,
                 "project_id": project_id,
                 "opportunity_id": opportunity_id,
@@ -1014,6 +1014,13 @@ def generate_and_save_action_plan_background(opportunity_id: str, user_id: str, 
                 "dependencies": plan_data.get("dependencies", []),
                 "risks": plan_data.get("risks", [])
             }).execute()
+
+            if plan_res.data:
+                try:
+                    from core.webhooks import trigger_n8n_webhook
+                    trigger_n8n_webhook(plan_res.data[0])
+                except Exception as web_err:
+                    logger.warning(f"Could not trigger n8n webhook: {web_err}")
             
             # Persist as project memory
             create_project_memory(
@@ -1608,6 +1615,13 @@ async def create_action_plan_endpoint(
             "dependencies": request.dependencies or [],
             "risks": request.risks or []
         }).execute()
+
+        if res.data:
+            try:
+                from core.webhooks import trigger_n8n_webhook
+                trigger_n8n_webhook(res.data[0])
+            except Exception as web_err:
+                logger.warning(f"Could not trigger n8n webhook: {web_err}")
         
         # Persist a project memory for manual plans
         from core.memory import create_project_memory
@@ -1675,6 +1689,14 @@ async def update_action_plan_endpoint(
             .eq("id", plan_id) \
             .eq("user_id", str(user.id)) \
             .execute()
+
+        if res.data:
+            try:
+                from core.webhooks import trigger_n8n_webhook
+                trigger_n8n_webhook(res.data[0])
+            except Exception as web_err:
+                logger.warning(f"Could not trigger n8n webhook: {web_err}")
+
         return res.data[0] if res.data else {}
     except Exception as e:
         logger.error(f"Failed to update action plan: {e}")

@@ -1071,6 +1071,12 @@ Respond ONLY with the JSON object. Do not include markdown code fences or other 
 
             if plan_insert.data:
                 action_plan_id = plan_insert.data[0]["id"]
+                try:
+                    from .webhooks import trigger_n8n_webhook
+                    trigger_n8n_webhook(plan_insert.data[0])
+                except Exception as web_err:
+                    logger.warning(f"Could not trigger n8n webhook: {web_err}")
+                
                 # Insert checklist items into action_items
                 checklist_items = boardroom_json.get("checklist", [])
                 for idx, item in enumerate(checklist_items):

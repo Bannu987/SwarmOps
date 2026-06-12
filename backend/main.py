@@ -61,8 +61,39 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
+def validate_environment():
+    """Verify presence of critical environment variables on startup."""
+    critical_vars = {
+        "SUPABASE_URL": os.environ.get("SUPABASE_URL"),
+        "SUPABASE_ANON_KEY": os.environ.get("SUPABASE_ANON_KEY"),
+        "SUPABASE_SERVICE_ROLE_KEY": os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY"),
+        "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY"),
+    }
+    
+    logger.info("=== SWARMOPS STARTUP ENV VALIDATION ===")
+    missing_critical = []
+    for var, val in critical_vars.items():
+        if not val:
+            missing_critical.append(var)
+            logger.warning(f"CRITICAL CONFIGURATION WARNING: Environment variable '{var}' is missing!")
+        else:
+            masked = val[:6] + "..." + val[-4:] if len(val) > 10 else "****"
+            logger.info(f"Env Var Checked: {var} -> {masked}")
+            
+    if missing_critical:
+        logger.warning(
+            f"Startup validation: Missing {len(missing_critical)} critical variables. "
+            "Local development may function partially, but production deployment will fail."
+        )
+    else:
+        logger.info("Startup validation: All critical environment variables are set.")
+    logger.info("========================================")
+
+validate_environment()
+
 
 app = FastAPI(title="SwarmOps", version="2.1.0", lifespan=lifespan)
+
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 

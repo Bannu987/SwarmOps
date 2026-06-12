@@ -1,0 +1,28 @@
+# This file specifies files that should not be uploaded to Google Cloud.
+# Git details
+.git
+.gitignore
+
+# Node modules and build artifacts
+**/node_modules/
+**/.next/
+**/out/
+**/tsconfig.tsbuildinfo
+
+# Python cache and virtual environments
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.venv/
+**/venv/
+**/env/
+**/.pytest_cache/
+
+# Local configuration files and tokens
+**/.env
+**/.env.local
+**/token.txt
+**/scratch/
+**/*.db
+**/*.sqlite3

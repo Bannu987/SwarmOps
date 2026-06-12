@@ -1,0 +1,39 @@
+# Ignore Git details
+.git
+.gitignore
+
+# Ignore local environment variables and tokens
+.env
+.env.development
+.env.local
+.env.production
+token.txt
+
+# Ignore Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Ignore testing and linting
+.pytest_cache/
+.coverage
+htmlcov/
+nosetests.xml
+pylintrc
+.DS_Store
+
+# Ignore local Dockerfile and build directories
+Dockerfile
+.dockerignore
+.gcloudignore
+build_container.sh
+
+# Ignore scratch files
+scratch/
+*.db
+*.sqlite3

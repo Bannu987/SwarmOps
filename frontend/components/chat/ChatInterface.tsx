@@ -174,6 +174,10 @@ export function ChatInterface() {
     const currentSignalContext = signalContextOverride || clickedSignalContext
     setClickedSignalContext(null)
     const assistantMsgId = Math.random().toString(36).substring(7)
+
+    const traceId = currentSignalContext?.raw_data?.trace_id || 
+                    currentSignalContext?.trace_id || 
+                    (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tr-${Math.random().toString(36).substring(2, 15)}`);
     
     const userMsg: Message = {
       role: "user",
@@ -189,6 +193,12 @@ export function ChatInterface() {
       agents_used: ["nexus"],
       timestamp: Date.now(),
       clicked_signal: currentSignalContext || undefined,
+      trace_id: traceId,
+      workflow_version: "1.5.0",
+      prompt_version: "1.1.0",
+      model_name: "openai/gpt-oss-120b:free",
+      last_event: "init",
+      stream_status: "connecting",
     }
     
     setMessages((prev) => [...prev, userMsg, initialAssistantMsg])
@@ -210,6 +220,7 @@ export function ChatInterface() {
               ? {
                   ...msg,
                   content: "Signal analysis stream did not return events. Please retry.",
+                  stream_status: "failed",
                 }
               : msg
           )
@@ -229,109 +240,65 @@ export function ChatInterface() {
           rationale_len: event.rationale?.length
         })
 
-        if (event.type === "workflow.started") {
-          workflowName = event.workflow
-          if (event.agents) {
-            agentsUsed = event.agents
-          }
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    workflow: workflowName,
-                    agents_used: agentsUsed,
-                    content: `Swarm initiated: **${(workflowName || "single_agent").replace(/_/g, " ").toUpperCase()}**\n\nCoordinating specialized agents...`,
-                  }
-                : msg
-            )
-          )
-        } else if (event.type === "agent.started") {
-          const agentId = event.agent_id
-          if (!agentsUsed.includes(agentId)) {
-            agentsUsed = [...agentsUsed, agentId]
-          }
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    agents_used: agentsUsed,
-                    content: `${msg.content}\n\n🤖 **${agentId.toUpperCase()} specialist** is joining the workspace...`,
-                  }
-                : msg
-            )
-          )
-        } else if (event.type === "agent.responded") {
-          const agentId = event.agent_id
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    content: `${msg.content}\n\n✓ **${agentId.toUpperCase()} specialist** completed analysis:\n> *${event.conclusion}*`,
-                  }
-                : msg
-            )
-          )
-        } else if (event.type === "agent.challenged") {
-          const agentId = event.agent_id
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    content: `${msg.content}\n\n⚔️ **${agentId.toUpperCase()} specialist** challenged the consensus! Initiating debate...`,
-                  }
-                : msg
-            )
-          )
-        } else if (event.type === "confidence.shifted") {
-          const agentId = event.agent_id
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    content: `${msg.content}\n\n⚖️ Confidence alignment shift for **${agentId.toUpperCase()}**: **${(event.from * 100).toFixed(0)}%** → **${(event.to * 100).toFixed(0)}%** (${event.reason})`,
-                  }
-                : msg
-            )
-          )
-        } else if (event.type === "decision.reached") {
-          confidence = event.confidence
-          latencyMs = event.latency_ms
-          
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    content: (event.workflow === "signal_analysis" || event.is_signal_analysis)
-                      ? msg.content
-                      : (event.rationale || event.decision || msg.content),
-                    confidence: confidence,
-                    latency_ms: latencyMs,
-                    agents_used: event.agents_consulted || msg.agents_used,
-                  }
-                : msg
-            )
-          )
-        } else if (event.type === "final.answer") {
-          accumulatedContent = event.answer || event.decision || event.final_answer || event.message || event.content || "";
-          
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    content: accumulatedContent,
-                  }
-                : msg
-            )
-          )
-        }
-      }, activeProject?.id, currentSignalContext)
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id !== assistantMsgId) return msg;
+            
+            let content = msg.content;
+            let currentAgentsUsed = msg.agents_used || agentsUsed;
+            let currentConfidence = msg.confidence || confidence;
+            let currentLatency = msg.latency_ms || latencyMs;
+            let currentWorkflow = msg.workflow || workflowName;
+
+            if (event.type === "workflow.started") {
+              currentWorkflow = event.workflow;
+              if (event.agents) currentAgentsUsed = event.agents;
+              content = `Swarm initiated: **${(event.workflow || "single_agent").replace(/_/g, " ").toUpperCase()}**\n\nCoordinating specialized agents...`;
+            } else if (event.type === "agent.started") {
+              const agentId = event.agent_id;
+              if (!currentAgentsUsed.includes(agentId)) {
+                currentAgentsUsed = [...currentAgentsUsed, agentId];
+              }
+              content = `${content}\n\n🤖 **${agentId.toUpperCase()} specialist** is joining the workspace...`;
+            } else if (event.type === "agent.responded") {
+              const agentId = event.agent_id;
+              content = `${content}\n\n✓ **${agentId.toUpperCase()} specialist** completed analysis:\n> *${event.conclusion}*`;
+            } else if (event.type === "agent.challenged") {
+              const agentId = event.agent_id;
+              content = `${content}\n\n⚔️ **${agentId.toUpperCase()} specialist** challenged the consensus! Initiating debate...`;
+            } else if (event.type === "confidence.shifted") {
+              const agentId = event.agent_id;
+              content = `${content}\n\n⚖️ Confidence alignment shift for **${agentId.toUpperCase()}**: **${(event.from * 100).toFixed(0)}%** → **${(event.to * 100).toFixed(0)}%** (${event.reason})`;
+            } else if (event.type === "decision.reached") {
+              currentConfidence = event.confidence;
+              currentLatency = event.latency_ms;
+              content = (event.workflow === "signal_analysis" || event.is_signal_analysis)
+                ? content
+                : (event.rationale || event.decision || content);
+              if (event.agents_consulted) currentAgentsUsed = event.agents_consulted;
+            } else if (event.type === "final.answer") {
+              content = event.answer || event.decision || event.final_answer || event.message || event.content || "";
+            } else if (event.type === "stream.failed" || event.type === "error") {
+              content = `${content}\n\n❌ **The Boardroom stream was interrupted. You can retry or load the final answer if available.**`;
+            }
+
+            return {
+              ...msg,
+              content,
+              agents_used: currentAgentsUsed,
+              confidence: currentConfidence,
+              latency_ms: currentLatency,
+              workflow: currentWorkflow,
+              trace_id: event.trace_id || traceId,
+              last_event: event.type,
+              stream_status: (event.type === "stream.end" || event.type === "final.answer") ? "completed" : (event.type === "error" || event.type === "stream.failed") ? "failed" : "streaming",
+              workflow_version: event.workflow_version || msg.workflow_version || "1.5.0",
+              prompt_version: event.prompt_version || msg.prompt_version || "1.1.0",
+              model_name: event.model_name || msg.model_name || "openai/gpt-oss-120b:free",
+            };
+          })
+        )
+      }, activeProject?.id, currentSignalContext, traceId)
       clearTimeout(timeoutId)
     } catch (err: any) {
       clearTimeout(timeoutId)
@@ -349,7 +316,8 @@ export function ChatInterface() {
                   ? "Backend is online, but streaming failed. Falling back to non-streaming response..."
                   : isCORS
                     ? "Browser blocked the backend request. Check CORS configuration for this frontend domain or verify the backend is active."
-                    : "Connection error. The backend may be waking up (free tier sleeps after 15 min). Try again in 30 seconds.",
+                    : "The Boardroom stream was interrupted. You can retry or load the final answer if available.",
+                stream_status: "failed",
               }
             : msg
         )
@@ -358,7 +326,7 @@ export function ChatInterface() {
       if (isOnline) {
         // Fallback to standard HTTP POST request
         try {
-          const res = await sendChat(text, "default", activeProject?.id, currentSignalContext)
+          const res = await sendChat(text, "default", activeProject?.id, currentSignalContext, traceId)
           setMessages((prev) =>
 
             prev.map((msg) =>
@@ -369,6 +337,11 @@ export function ChatInterface() {
                     agents_used: res.agents_used || msg.agents_used,
                     confidence: res.confidence,
                     latency_ms: res.latency_ms,
+                    trace_id: res.trace_id || traceId,
+                    workflow_version: "1.5.0",
+                    prompt_version: "1.1.0",
+                    model_name: "openai/gpt-oss-120b:free",
+                    stream_status: "completed",
                   }
                 : msg
             )
@@ -381,6 +354,7 @@ export function ChatInterface() {
                 ? {
                     ...msg,
                     content: "Fallback failed: Backend rejected the request. Check CORS/auth configuration.",
+                    stream_status: "failed",
                   }
                 : msg
             )

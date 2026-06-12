@@ -349,10 +349,74 @@ def test_action_plans_api():
              
              print("POST /api/action-plans/{plan_id}/verify success test passed!")
 
+def test_phase_2_5_observability():
+    print("Running Phase 2.5 Observability & Feature Flags tests...")
+    from fastapi.testclient import TestClient
+    from main import app
+    from unittest.mock import patch, MagicMock
+    import os
+
+    client = TestClient(app)
+
+    # Mock user object
+    mock_user = MagicMock()
+    mock_user.id = "test-user-id"
+
+    with patch("main.get_user_from_token", return_value=mock_user) as mock_get_user, \
+         patch("main.get_admin_client") as mock_get_admin:
+         
+         # 1. Test ENABLE_ACTION_PLAN_CREATION feature flag = False
+         with patch.dict(os.environ, {"ENABLE_ACTION_PLAN_CREATION": "false"}):
+             payload = {
+                 "project_id": "test-project-id",
+                 "signal_id": "test-signal-id",
+                 "signal_key": "missing_robots_txt",
+                 "title": "Add robots.txt file",
+                 "priority_bucket": "Low",
+                 "priority_score": 1.5,
+                 "owner": "SEO Specialist",
+                 "recommended_fix": "Add robots.txt",
+                 "evidence": "404 not found",
+                 "implementation_steps": "Create file",
+                 "verification_steps": "Check /robots.txt",
+                 "checklist_items": ["Create file", "Deploy file"],
+                 "expected_impact": "low",
+                 "effort": "low",
+                 "trace_id": "test-trace-id-123"
+             }
+             resp = client.post(
+                 "/api/action-plans/from-boardroom",
+                 json=payload,
+                 headers={"Authorization": "Bearer test-token"}
+             )
+             assert resp.status_code == 400
+             assert "disabled" in resp.json()["detail"].lower()
+             print("Feature flag ENABLE_ACTION_PLAN_CREATION=false test passed!")
+
+         # 2. Test ENABLE_AUTO_VERIFICATION feature flag = False
+         with patch.dict(os.environ, {"ENABLE_AUTO_VERIFICATION": "false"}):
+             resp = client.post(
+                 "/api/action-plans/new-plan-id/verify",
+                 headers={"Authorization": "Bearer test-token"}
+             )
+             assert resp.status_code == 400
+             assert "disabled" in resp.json()["detail"].lower()
+             print("Feature flag ENABLE_AUTO_VERIFICATION=false test passed!")
+
+         # 3. Test version constants are present
+         from core.observability import BOARDROOM_PROMPT_VERSION, SIGNAL_RULES_VERSION, ACTION_PLAN_SCHEMA_VERSION, VERIFICATION_RULES_VERSION, WORKFLOW_VERSION
+         assert BOARDROOM_PROMPT_VERSION is not None
+         assert SIGNAL_RULES_VERSION is not None
+         assert ACTION_PLAN_SCHEMA_VERSION is not None
+         assert VERIFICATION_RULES_VERSION is not None
+         assert WORKFLOW_VERSION is not None
+         print("Version constants validation passed!")
+
 if __name__ == "__main__":
     test_normalization()
     test_scoring()
     test_crawl_safety()
     test_webhook_trigger()
     test_action_plans_api()
+    test_phase_2_5_observability()
     asyncio.run(test_workflow())

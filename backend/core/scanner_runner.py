@@ -50,10 +50,12 @@ def run_all_scans() -> Dict:
 
     for project in projects:
         user_id = project["user_id"]
+        import uuid
+        trace_id = str(uuid.uuid4())
 
         for scanner in ALL_SCANNERS:
             try:
-                signals_created = scanner.run_for_user(user_id, project)
+                signals_created = scanner.run_for_user(user_id, project, trace_id=trace_id)
                 total_signals += signals_created
                 scanners_run += 1
             except Exception as e:
@@ -76,11 +78,15 @@ def run_all_scans() -> Dict:
     return summary
 
 
-def run_scans_for_user(user_id: str, project_id: str = None, force: bool = False) -> Dict:
+def run_scans_for_user(user_id: str, project_id: str = None, force: bool = False, trace_id: str = None) -> Dict:
     """
     Run scanners for a specific user/project. Used by on-demand
     endpoint (e.g. when user adds website URL, scan immediately).
     """
+    if not trace_id:
+        import uuid
+        trace_id = str(uuid.uuid4())
+
     admin = get_admin_client()
     if not admin:
         return {"error": "Supabase not configured"}
@@ -100,7 +106,7 @@ def run_scans_for_user(user_id: str, project_id: str = None, force: bool = False
     for project in projects:
         for scanner in ALL_SCANNERS:
             try:
-                signals_created = scanner.run_for_user(user_id, project, force=force)
+                signals_created = scanner.run_for_user(user_id, project, force=force, trace_id=trace_id)
                 total_signals += signals_created
             except Exception as e:
                 logger.error(f"Scanner failed: {e}")
@@ -115,4 +121,5 @@ def run_scans_for_user(user_id: str, project_id: str = None, force: bool = False
         "status": "success",
         "signals_created": total_signals,
         "opportunities_created": total_opportunities,
+        "trace_id": trace_id
     }

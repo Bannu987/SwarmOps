@@ -240,11 +240,17 @@ class BaseScanner(ABC):
             logger.warning(f"[{self.name}] should_run check failed: {e}")
             return False
 
-    def run_for_user(self, user_id: str, project: Dict, force: bool = False) -> int:
+    def run_for_user(self, user_id: str, project: Dict, force: bool = False, trace_id: Optional[str] = None) -> int:
         """
         Run scanner and persist signals. Returns number of signals created.
         Wraps scan() with timing + history tracking.
         """
+        import uuid
+        if not trace_id:
+            trace_id = str(uuid.uuid4())
+
+        from core.observability import log_structured_event, create_run_trace_db, update_run_trace_db
+
         admin = get_admin_client()
         if not admin:
             return 0
@@ -256,6 +262,21 @@ class BaseScanner(ABC):
             return 0
 
         # Record scan start
+        log_structured_event(
+            event_name="scan.started",
+            trace_id=trace_id,
+            user_id=user_id,
+            project_id=project_id,
+            status="running",
+            metadata={"scanner_name": self.name}
+        )
+        create_run_trace_db(
+            trace_id=trace_id,
+            user_id=user_id,
+            project_id=project_id,
+            run_type="website_scan",
+            metadata={"scanner_name": self.name}
+        )
         scan_id = None
         try:
             scan_record = admin.table("scan_history").insert({
@@ -301,7 +322,7 @@ class BaseScanner(ABC):
                     if reg_key:
                         signal.raw_data["signal_key"] = reg_key
 
-                fingerprint = self._persist_signal(user_id, project_id, signal, scan_run_id)
+                fingerprint = self._persist_signal(user_id, project_id, signal, scan_run_id, trace_id=trace_id)
                 if fingerprint:
                     detected_fingerprints.append(fingerprint)
                 detected_titles.append(signal.title)
@@ -314,11 +335,43 @@ class BaseScanner(ABC):
                 status = "no_change"
 
             logger.info(f"[{self.name}] created/updated {signals_created} signals for {user_id}")
+            log_structured_event(
+                event_name="scan.completed",
+                trace_id=trace_id,
+                user_id=user_id,
+                project_id=project_id,
+                status="success",
+                latency_ms=int((time.time() - start) * 1000),
+                metadata={"signals_created": signals_created}
+            )
+            update_run_trace_db(
+                trace_id=trace_id,
+                status="completed",
+                latency_ms=int((time.time() - start) * 1000),
+                metadata={"signals_created": signals_created}
+            )
 
         except Exception as e:
             logger.error(f"[{self.name}] failed: {e}")
             status = "failed"
             error_msg = str(e)[:500]
+            log_structured_event(
+                event_name="scan.completed",
+                trace_id=trace_id,
+                user_id=user_id,
+                project_id=project_id,
+                status="failed",
+                error_type="ScannerError",
+                error_message=str(e),
+                latency_ms=int((time.time() - start) * 1000)
+            )
+            update_run_trace_db(
+                trace_id=trace_id,
+                status="failed",
+                latency_ms=int((time.time() - start) * 1000),
+                error_type="ScannerError",
+                error_message=str(e)
+            )
 
         # Update scan history
         if scan_id:
@@ -356,7 +409,7 @@ class BaseScanner(ABC):
 
         return signals_created
 
-    def _persist_signal(self, user_id: str, project_id: Optional[str], signal: Signal, scan_run_id: Optional[str] = None) -> Optional[str]:
+    def _persist_signal(self, user_id: str, project_id: Optional[str], signal: Signal, scan_run_id: Optional[str] = None, trace_id: Optional[str] = None) -> Optional[str]:
         """Save a signal to Supabase with robust active signal deduplication and fingerprinting."""
         admin = get_admin_client()
         if not admin:
@@ -366,6 +419,9 @@ class BaseScanner(ABC):
         expires_at = None
         if signal.expires_in_hours:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=signal.expires_in_hours)
+
+        if trace_id:
+            signal.raw_data["trace_id"] = trace_id
 
         # Calculate deterministic fingerprint: md5(project_id:normalized_url:signal_type_or_key)
         normalized_url = normalize_url(signal.source_detail or project_id or "")
@@ -408,6 +464,8 @@ class BaseScanner(ABC):
             except Exception as title_err:
                 logger.warning(f"[signals.base] Title fallback search failed: {title_err}")
 
+        from core.observability import log_structured_event
+
         # Update in-place if duplicate exists
         if existing_id:
             logger.info(f"[signals.base] Deduplication matched active signal '{signal.title}' (ID: {existing_id}). Updating...")
@@ -439,6 +497,16 @@ class BaseScanner(ABC):
 
             # Insert signal occurrence & evidence if scan_run_id and tables exist
             self._insert_occurrence_and_evidence(admin, existing_id, scan_run_id, signal)
+            
+            log_structured_event(
+                event_name="signal.detected",
+                trace_id=trace_id or "",
+                user_id=user_id,
+                project_id=project_id,
+                signal_id=existing_id,
+                status="success",
+                metadata={"signal_type": signal.signal_type, "severity": signal.severity, "is_update": True}
+            )
             return fingerprint
 
         # Insert new signal
@@ -478,6 +546,15 @@ class BaseScanner(ABC):
 
         if new_sig_id:
             self._insert_occurrence_and_evidence(admin, new_sig_id, scan_run_id, signal)
+            log_structured_event(
+                event_name="signal.detected",
+                trace_id=trace_id or "",
+                user_id=user_id,
+                project_id=project_id,
+                signal_id=new_sig_id,
+                status="success",
+                metadata={"signal_type": signal.signal_type, "severity": signal.severity, "is_update": False}
+            )
 
         return fingerprint
 

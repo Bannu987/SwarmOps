@@ -93,6 +93,7 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     project_id: Optional[str] = None
     clicked_signal: Optional[dict] = None
+    trace_id: Optional[str] = None
 
 
 class CredentialsRequest(BaseModel):
@@ -207,11 +208,16 @@ async def chat(
     if request.project_id:
         ctx.project_id = request.project_id
 
+    # Determine trace ID
+    trace_id = request.trace_id or (request.clicked_signal.get("raw_data", {}).get("trace_id") if request.clicked_signal else None)
+    if not trace_id:
+        trace_id = str(uuid.uuid4())
+
     # Check if clicked_signal is present
     clicked_signal = request.clicked_signal
 
     if clicked_signal:
-        result = run_swarm_signal_workflow(clicked_signal, msg, conversation_id)
+        result = run_swarm_signal_workflow(clicked_signal, msg, conversation_id, trace_id=trace_id)
     # Slash command handling
     elif msg.startswith("/"):
         parts = msg.split(maxsplit=1)
@@ -305,7 +311,12 @@ async def chat_stream(
 
     request_id = str(uuid.uuid4())
 
-    bus = create_bus(request_id)
+    # Determine trace ID
+    trace_id = request.trace_id or (request.clicked_signal.get("raw_data", {}).get("trace_id") if request.clicked_signal else None)
+    if not trace_id:
+        trace_id = str(uuid.uuid4())
+
+    bus = create_bus(request_id, trace_id=trace_id)
 
     async def event_generator():
         loop = asyncio.get_event_loop()
@@ -316,7 +327,7 @@ async def chat_stream(
                 clicked_signal = request.clicked_signal
 
                 if clicked_signal:
-                    result = run_swarm_signal_workflow(clicked_signal, msg, conversation_id, bus=bus)
+                    result = run_swarm_signal_workflow(clicked_signal, msg, conversation_id, bus=bus, trace_id=trace_id)
                 elif msg.startswith("/"):
                     parts = msg.split(maxsplit=1)
                     cmd = parts[0][1:]
@@ -1534,6 +1545,7 @@ class ActionPlanFromBoardroomRequest(BaseModel):
     checklist_items: List[str]
     expected_impact: str
     effort: str
+    trace_id: Optional[str] = None
 
 
 # ============================================================
@@ -1747,6 +1759,13 @@ async def create_action_plan_from_boardroom(
     request: ActionPlanFromBoardroomRequest,
     authorization: Optional[str] = Header(None)
 ):
+    from core.observability import get_feature_flag, log_structured_event, WORKFLOW_VERSION, BOARDROOM_PROMPT_VERSION, ACTION_PLAN_SCHEMA_VERSION
+    from datetime import datetime, timezone
+    
+    # Check feature flag
+    if not get_feature_flag("ENABLE_ACTION_PLAN_CREATION", True):
+        raise HTTPException(status_code=400, detail="Action plan creation is currently disabled by administrator flag.")
+
     user = await get_user(authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -1754,6 +1773,19 @@ async def create_action_plan_from_boardroom(
     admin = get_admin_client()
     if not admin:
         raise HTTPException(status_code=500, detail="Database not configured")
+
+    trace_id = request.trace_id or str(uuid.uuid4())
+
+    # Log action_plan.create_requested
+    log_structured_event(
+        event_name="action_plan.create_requested",
+        trace_id=trace_id,
+        user_id=str(user.id),
+        project_id=request.project_id,
+        signal_id=request.signal_id,
+        status="success",
+        metadata={"signal_key": request.signal_key}
+    )
 
     # 1. Enforce user/project ownership & check duplicate
     try:
@@ -1777,6 +1809,16 @@ async def create_action_plan_from_boardroom(
             has_duplicate = False
 
     if has_duplicate:
+        log_structured_event(
+            event_name="action_plan.duplicate_detected",
+            trace_id=trace_id,
+            user_id=str(user.id),
+            project_id=request.project_id,
+            signal_id=request.signal_id,
+            status="failed",
+            error_type="duplicate",
+            error_message="Action plan already exists for this signal"
+        )
         raise HTTPException(status_code=409, detail="Action plan already exists for this signal")
 
     # 2. Build tasks
@@ -1788,6 +1830,14 @@ async def create_action_plan_from_boardroom(
             "status": "pending",
             "owner": request.owner.lower()
         })
+
+    obs_metadata = {
+        "trace_id": trace_id,
+        "workflow_version": WORKFLOW_VERSION,
+        "prompt_version": BOARDROOM_PROMPT_VERSION,
+        "action_plan_schema_version": ACTION_PLAN_SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
 
     # Prepare insert payload compatible with both legacy and migrated schemas
     insert_data = {
@@ -1807,7 +1857,9 @@ async def create_action_plan_from_boardroom(
         "tasks": tasks,
         "kpis": [{"kpi": "Signal Cleared", "target": "Resolved"}],
         "dependencies": [request.implementation_steps],
-        "risks": [{"risk": "Implementation verification", "mitigation": request.verification_steps}]
+        "risks": [{"risk": "Implementation verification", "mitigation": request.verification_steps}],
+        "trace_id": trace_id,
+        "observability_metadata": obs_metadata
     }
 
     try:
@@ -1825,9 +1877,26 @@ async def create_action_plan_from_boardroom(
         res = admin.table("action_plans").insert(full_insert).execute()
     except Exception as db_err:
         logger.warning(f"Insert with new columns failed, falling back to legacy schema: {db_err}")
-        res = admin.table("action_plans").insert(insert_data).execute()
+        # Strip trace_id and observability_metadata if column does not exist on old table (legacy compatibility fallback)
+        fallback_insert = insert_data.copy()
+        fallback_insert.pop("trace_id", None)
+        fallback_insert.pop("observability_metadata", None)
+        res = admin.table("action_plans").insert(fallback_insert).execute()
 
     if res.data:
+        plan_id = res.data[0].get("id")
+        
+        # Log action_plan.created structured event
+        log_structured_event(
+            event_name="action_plan.created",
+            trace_id=trace_id,
+            user_id=str(user.id),
+            project_id=request.project_id,
+            signal_id=request.signal_id,
+            action_plan_id=plan_id,
+            status="success"
+        )
+        
         # Trigger webhook
         try:
             from core.webhooks import trigger_n8n_webhook
@@ -1869,6 +1938,12 @@ async def verify_action_plan_completion(
     plan_id: str,
     authorization: Optional[str] = Header(None)
 ):
+    from core.observability import get_feature_flag, log_structured_event
+
+    # Check feature flag
+    if not get_feature_flag("ENABLE_AUTO_VERIFICATION", True):
+        raise HTTPException(status_code=400, detail="Action plan verification is currently disabled by administrator flag.")
+
     user = await get_user(authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -1884,7 +1959,21 @@ async def verify_action_plan_completion(
             raise HTTPException(status_code=404, detail="Action plan not found")
         plan = plan_res.data[0]
         
+        trace_id = plan.get("trace_id") or str(uuid.uuid4())
         project_id = plan.get("project_id")
+        signal_id = plan.get("source_id") or plan.get("signal_id")
+
+        # Log action_plan.verify_requested structured event
+        log_structured_event(
+            event_name="action_plan.verify_requested",
+            trace_id=trace_id,
+            user_id=str(user.id),
+            project_id=project_id,
+            signal_id=signal_id,
+            action_plan_id=plan_id,
+            status="success"
+        )
+        
         # Fetch project url
         proj_res = admin.table("projects").select("website_url").eq("id", project_id).execute()
         if not proj_res.data:
@@ -1932,11 +2021,59 @@ async def verify_action_plan_completion(
                 "tasks": tasks
             }).eq("id", plan_id).execute()
             
+            # Log action_plan.verified structured event
+            log_structured_event(
+                event_name="action_plan.verified",
+                trace_id=trace_id,
+                user_id=str(user.id),
+                project_id=project_id,
+                signal_id=signal_id,
+                action_plan_id=plan_id,
+                status="success",
+                metadata={"verification_message": message}
+            )
+
+            # Log action_plan.status_updated structured event
+            log_structured_event(
+                event_name="action_plan.status_updated",
+                trace_id=trace_id,
+                user_id=str(user.id),
+                project_id=project_id,
+                signal_id=signal_id,
+                action_plan_id=plan_id,
+                status="success",
+                metadata={"old_status": plan.get("status"), "new_status": "verified"}
+            )
+            
             return {"success": True, "message": message, "status": "verified"}
         else:
+            # Log action_plan.verification_failed structured event
+            log_structured_event(
+                event_name="action_plan.verification_failed",
+                trace_id=trace_id,
+                user_id=str(user.id),
+                project_id=project_id,
+                signal_id=signal_id,
+                action_plan_id=plan_id,
+                status="failed",
+                error_type="verification_failed",
+                error_message=message
+            )
             return {"success": False, "message": message}
             
     except Exception as e:
         logger.error(f"Error verifying action plan completion: {e}")
+        # Log action_plan.verification_failed structured event on exception
+        log_structured_event(
+            event_name="action_plan.verification_failed",
+            trace_id=trace_id,
+            user_id=str(user.id),
+            project_id=project_id,
+            signal_id=signal_id,
+            action_plan_id=plan_id,
+            status="failed",
+            error_type=type(e).__name__,
+            error_message=str(e)
+        )
         raise HTTPException(status_code=500, detail=str(e))
 

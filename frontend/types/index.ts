@@ -11,6 +11,14 @@ export interface Message {
   created_at?: string
   timestamp?: number
   clicked_signal?: any
+  trace_id?: string
+  workflow_version?: string
+  prompt_version?: string
+  model_name?: string
+  last_event?: string
+  stream_status?: string
+  action_plan_status?: string
+  verification_status?: string
 }
 
 export interface FileAttachment {

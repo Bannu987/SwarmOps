@@ -577,24 +577,189 @@ def run_swarm_signal_workflow(
     clicked_signal: dict,
     message: str,
     conversation_id: str,
-    bus: Optional[EventBus] = None
+    bus: Optional[EventBus] = None,
+    trace_id: Optional[str] = None
 ) -> dict:
     """
-    LangGraph-inspired supervisor workflow:
-    clicked_signal
-    → context_builder
-    → specialist_router
-    → specialist_review_nodes (parallel execution with JSON contracts & repair)
-    → boardroom_decision (nexus synthesis with JSON contract & repair)
-    → action_plan_generation (write to Supabase action_plans/action_items)
-    → save_agent_run (log audit trail in agent_runs)
-    → return result / SSE stream
+    Supervisor wrapper that generates trace_id, logs start/end/failure trace details.
     """
+    import time
+    import uuid
+    from core.observability import log_structured_event, create_run_trace_db, update_run_trace_db
+
+    start_time = time.time()
+
+    if not trace_id:
+        trace_id = clicked_signal.get("raw_data", {}).get("trace_id") or str(uuid.uuid4())
+
+    signal_id = clicked_signal.get("signal_id")
+    project_id = clicked_signal.get("project_id")
+    user_id = clicked_signal.get("user_id")
+
+    if not user_id or not project_id:
+        try:
+            ctx = get_context(conversation_id)
+            if not project_id:
+                project_id = ctx.project_id
+            if not user_id:
+                user_id = getattr(ctx, "user_id", None)
+        except Exception:
+            pass
+
+    # Log boardroom.started
+    log_structured_event(
+        event_name="boardroom.started",
+        trace_id=trace_id,
+        user_id=user_id,
+        project_id=project_id,
+        signal_id=signal_id,
+        status="running",
+        metadata={"signal_type": clicked_signal.get("signal_type")}
+    )
+
+    create_run_trace_db(
+        trace_id=trace_id,
+        user_id=user_id,
+        project_id=project_id,
+        run_type="signal_analysis",
+        model_name="openai/gpt-oss-120b:free",
+        provider="openrouter",
+        metadata={"signal_type": clicked_signal.get("signal_type"), "conversation_id": conversation_id}
+    )
+
+    try:
+        # Execute the real workflow
+        res = _run_swarm_signal_workflow_impl(
+            clicked_signal=clicked_signal,
+            message=message,
+            conversation_id=conversation_id,
+            bus=bus,
+            trace_id=trace_id
+        )
+
+        total_latency = int((time.time() - start_time) * 1000)
+        
+        # Build replay snapshot
+        from core.observability import BOARDROOM_PROMPT_VERSION, WORKFLOW_VERSION
+        replay_snapshot = {
+            "trace_id": trace_id,
+            "prompt_version": BOARDROOM_PROMPT_VERSION,
+            "model_name": "openai/gpt-oss-120b:free",
+            "workflow_version": WORKFLOW_VERSION,
+            "project_id": project_id,
+            "website_url": clicked_signal.get("url"),
+            "clicked_signal_payload": {
+                "signal_id": clicked_signal.get("signal_id"),
+                "signal_type": clicked_signal.get("signal_type"),
+                "title": clicked_signal.get("title"),
+                "category": clicked_signal.get("category"),
+                "evidence": clicked_signal.get("evidence"),
+            },
+            "final_structured_output": res.get("structured", {}),
+            "scoring_inputs": {
+                "impact": res.get("structured", {}).get("final_impact"),
+                "effort": res.get("structured", {}).get("final_effort"),
+                "urgency": res.get("structured", {}).get("final_urgency"),
+                "confidence": res.get("structured", {}).get("final_confidence"),
+            }
+        }
+        # Check if deterministic rule was used
+        reg_key = clicked_signal.get("signal_type") or map_signal_to_registry_key(clicked_signal.get("title", ""), clicked_signal.get("category", ""))
+        rule_key = reg_key
+        if reg_key in ["no_robots_txt", "missing_robots_txt"]:
+            rule_key = "missing_robots_txt"
+        from core.observability import get_feature_flag
+        enable_deterministic = get_feature_flag("ENABLE_DETERMINISTIC_SIGNAL_RULES", True)
+        if enable_deterministic and rule_key in SIGNAL_SPECIFIC_RULES:
+            replay_snapshot["deterministic_rule_key"] = rule_key
+
+        # Complete trace
+        update_run_trace_db(
+            trace_id=trace_id,
+            status="completed",
+            latency_ms=total_latency,
+            metadata={"replay_snapshot": replay_snapshot}
+        )
+
+        # Log structured events
+        log_structured_event(
+            event_name="decision.reached",
+            trace_id=trace_id,
+            user_id=user_id,
+            project_id=project_id,
+            signal_id=signal_id,
+            status="success",
+            latency_ms=total_latency
+        )
+        log_structured_event(
+            event_name="final.answer",
+            trace_id=trace_id,
+            user_id=user_id,
+            project_id=project_id,
+            signal_id=signal_id,
+            status="success"
+        )
+        return res
+
+    except Exception as e:
+        total_latency = int((time.time() - start_time) * 1000)
+        logger.exception(f"Error in boardroom swarm workflow: {e}")
+
+        # Emit stream.failed on the bus
+        if bus:
+            bus.emit("stream.failed", {
+                "error": str(e),
+                "trace_id": trace_id
+            })
+            bus.emit("stream.end", {})
+
+        # Update run trace to failed
+        update_run_trace_db(
+            trace_id=trace_id,
+            status="failed",
+            latency_ms=total_latency,
+            error_type=type(e).__name__,
+            error_message=str(e)
+        )
+
+        # Log structured event
+        log_structured_event(
+            event_name="stream.failed",
+            trace_id=trace_id,
+            user_id=user_id,
+            project_id=project_id,
+            signal_id=signal_id,
+            status="failed",
+            latency_ms=total_latency,
+            error_type=type(e).__name__,
+            error_message=str(e)
+        )
+        raise e
+
+
+def _run_swarm_signal_workflow_impl(
+    clicked_signal: dict,
+    message: str,
+    conversation_id: str,
+    bus: Optional[EventBus] = None,
+    trace_id: Optional[str] = None
+) -> dict:
     ctx = get_context(conversation_id)
     memory = get_memory(conversation_id)
     memory.store(message, role="user", mem_type="conversation")
 
     start_time = time.time()
+
+    signal_id = clicked_signal.get("signal_id")
+    title = clicked_signal.get("title", "")
+    description = clicked_signal.get("description", "")
+    category = clicked_signal.get("category", "")
+    detector = clicked_signal.get("detector", "seo")
+    severity = clicked_signal.get("severity", "medium")
+    url = clicked_signal.get("url", "")
+    evidence = clicked_signal.get("evidence", [])
+    project_id = clicked_signal.get("project_id") or ctx.project_id
+    user_id = getattr(ctx, "user_id", None)
 
     # ============================================
     # STEP 1: context_builder

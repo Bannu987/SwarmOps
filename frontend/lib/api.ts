@@ -43,7 +43,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 
-export async function sendChat(message: string, conversationId?: string, projectId?: string, clickedSignal?: any) {
+export async function sendChat(message: string, conversationId?: string, projectId?: string, clickedSignal?: any, traceId?: string) {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}/api/chat`, {
     method: "POST",
@@ -52,7 +52,8 @@ export async function sendChat(message: string, conversationId?: string, project
       message, 
       conversation_id: conversationId, 
       project_id: projectId,
-      clicked_signal: clickedSignal
+      clicked_signal: clickedSignal,
+      trace_id: traceId
     }),
   })
   return res.json()
@@ -255,7 +256,8 @@ export async function streamChat(
   conversationId: string,
   onEvent: (event: any) => void,
   projectId?: string,
-  clickedSignal?: any
+  clickedSignal?: any,
+  traceId?: string
 ) {
   const headers = await authHeaders()
   const res = await fetch(`${API_URL}/api/chat/stream`, {
@@ -265,7 +267,8 @@ export async function streamChat(
       message, 
       conversation_id: conversationId, 
       project_id: projectId,
-      clicked_signal: clickedSignal
+      clicked_signal: clickedSignal,
+      trace_id: traceId
     }),
   })
 

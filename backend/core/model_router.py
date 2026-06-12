@@ -40,9 +40,11 @@ class ModelRouter:
         json_mode: bool = False,
         user_message: str = "",       # used for tier classification
         is_synthesis: bool = False,   # synthesis is always Tier 3
+        trace_id: Optional[str] = None,
     ) -> str:
         """Call a model via OpenRouter with tier-based routing."""
         from .tier_router import classify_task, select_model, fallback_chain
+        from core.observability import log_structured_event, get_feature_flag
 
         masked_key = "MISSING"
         if self.api_key:
@@ -57,19 +59,42 @@ class ModelRouter:
         selected_model = select_model(tier, prompt_text=text_context)
         fallbacks = fallback_chain(tier, prompt_text=text_context)
 
-        # Build sequence of models to attempt defensively if 404 occurs
+        # Build sequence of models to attempt defensively
         models_to_try = [selected_model]
-        for f in fallbacks:
-            if f not in models_to_try:
-                models_to_try.append(f)
+        
+        # Check feature flag for fallback
+        enable_fallback = get_feature_flag("ENABLE_MODEL_FALLBACK", True)
+        if enable_fallback:
+            for f in fallbacks:
+                if f not in models_to_try:
+                    models_to_try.append(f)
 
         logger.info(
             f"[MODEL ROUTER DIAGNOSTICS] Provider: openrouter | Agent: {agent_id} | Tier: {tier} | "
             f"Selected Model: {selected_model} | Fallback Chain: {models_to_try} | API Key status: Present ({masked_key})"
         )
 
+        if trace_id:
+            log_structured_event(
+                event_name="model.selected",
+                trace_id=trace_id,
+                status="success",
+                model_name=selected_model,
+                metadata={"agent_id": agent_id, "tier": tier}
+            )
+
         if not self.api_key:
             logger.error("[MODEL ROUTER DIAGNOSTICS] OpenRouter API key is missing or not configured!")
+            if trace_id:
+                log_structured_event(
+                    event_name="model.failed",
+                    trace_id=trace_id,
+                    status="failed",
+                    model_name=selected_model,
+                    error_type="api_key_missing",
+                    error_message="OpenRouter API key is missing",
+                    metadata={"agent_id": agent_id}
+                )
             return "[OpenRouter API key not configured]"
 
         messages = []
@@ -87,6 +112,7 @@ class ModelRouter:
         current_model_index = 0
         attempt = 0
         max_attempts = 4  # Allow up to 4 total attempts to try different models in the chain
+        model_start_time = time.time()
 
         while attempt < max_attempts and current_model_index < len(models_to_try):
             active_model = models_to_try[current_model_index]
@@ -156,10 +182,29 @@ class ModelRouter:
                                 f"[MODEL ROUTER DIAGNOSTICS] Model '{active_model}' is unavailable/404. "
                                 f"Bypassing retries and falling back directly to: '{next_model}'"
                             )
+                            if trace_id:
+                                log_structured_event(
+                                    event_name="model.fallback_triggered",
+                                    trace_id=trace_id,
+                                    status="success",
+                                    model_name=next_model,
+                                    fallback_reason=f"Model {active_model} returned 404/unavailable",
+                                    metadata={"agent_id": agent_id, "previous_model": active_model}
+                                )
                             attempt += 1
                             continue
                         else:
                             logger.error("[MODEL ROUTER DIAGNOSTICS] Model unavailable and no further fallbacks exist.")
+                            if trace_id:
+                                log_structured_event(
+                                    event_name="model.failed",
+                                    trace_id=trace_id,
+                                    status="failed",
+                                    model_name=active_model,
+                                    error_type="model_unavailable",
+                                    error_message=f"Model unavailable {status}",
+                                    metadata={"agent_id": agent_id}
+                                )
                             return f"[Model unavailable {status}]"
 
                     # For other errors (e.g. 500, 502), do standard exponential backoff retry
@@ -169,6 +214,16 @@ class ModelRouter:
                         time.sleep(sleep_time)
                         attempt += 1
                         continue
+                    if trace_id:
+                        log_structured_event(
+                            event_name="model.failed",
+                            trace_id=trace_id,
+                            status="failed",
+                            model_name=active_model,
+                            error_type="http_error",
+                            error_message=f"Model error {status}",
+                            metadata={"agent_id": agent_id}
+                        )
                     return f"[Model error {status}]"
 
                 data = response.json()
@@ -183,6 +238,15 @@ class ModelRouter:
                         f"(Started as: {selected_model}) | Tokens: {usage.get('total_tokens', 0)} | "
                         f"Response Preview: {raw_preview}"
                     )
+                    if trace_id:
+                        log_structured_event(
+                            event_name="model.succeeded",
+                            trace_id=trace_id,
+                            status="success",
+                            latency_ms=int((time.time() - model_start_time) * 1000),
+                            model_name=actual_model,
+                            metadata={"agent_id": agent_id, "tokens_in": usage.get("prompt_tokens", 0), "tokens_out": usage.get("completion_tokens", 0)}
+                        )
                     return text
 
                 if attempt < max_attempts - 1:
@@ -190,6 +254,16 @@ class ModelRouter:
                     time.sleep(1)
                     attempt += 1
                     continue
+                if trace_id:
+                    log_structured_event(
+                        event_name="model.failed",
+                        trace_id=trace_id,
+                        status="failed",
+                        model_name=active_model,
+                        error_type="empty_response",
+                        error_message="Response content was empty",
+                        metadata={"agent_id": agent_id}
+                    )
                 return "[No response]"
 
             except httpx.TimeoutException:
@@ -197,6 +271,16 @@ class ModelRouter:
                 if attempt < max_attempts - 1:
                     attempt += 1
                     continue
+                if trace_id:
+                    log_structured_event(
+                        event_name="model.failed",
+                        trace_id=trace_id,
+                        status="failed",
+                        model_name=active_model,
+                        error_type="timeout",
+                        error_message="Request timed out",
+                        metadata={"agent_id": agent_id}
+                    )
                 return "[Request timed out]"
             except Exception as e:
                 logger.error(
@@ -206,9 +290,28 @@ class ModelRouter:
                 if attempt < max_attempts - 1:
                     attempt += 1
                     continue
+                if trace_id:
+                    log_structured_event(
+                        event_name="model.failed",
+                        trace_id=trace_id,
+                        status="failed",
+                        model_name=active_model,
+                        error_type=type(e).__name__,
+                        error_message=str(e),
+                        metadata={"agent_id": agent_id}
+                    )
                 return f"[Error: {str(e)[:80]}]"
 
-        return "[All retries and model fallbacks failed]"
+        if trace_id:
+            log_structured_event(
+                event_name="model.failed",
+                trace_id=trace_id,
+                status="failed",
+                model_name=selected_model,
+                error_type="all_retries_failed",
+                error_message="All retries and model fallbacks failed",
+                metadata={"agent_id": agent_id}
+            )
 
 
 

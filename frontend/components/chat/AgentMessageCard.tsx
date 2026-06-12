@@ -434,6 +434,55 @@ export function AgentMessageCard({ message }: Props) {
           </div>
         </div>
       )}
+      {/* Collapsible Run Details Debug Panel */}
+      {showDetails && (
+        <div className="mx-5 mb-5 p-4 rounded-xl border border-white/5 bg-black/30 font-mono text-[10px] space-y-2 animate-fade-in text-muted-foreground">
+          <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-2">
+            <span className="text-white font-semibold">SWARMOPS RUN DETAILS</span>
+            <span className="text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.2 rounded text-[8px]">DEBUG MODE</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2.5">
+            <div className="flex items-center justify-between gap-4">
+              <span>TRACE ID:</span>
+              <span className="text-white select-all">{message.trace_id || "N/A"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span>WORKFLOW VERSION:</span>
+              <span className="text-white">{message.workflow_version || "1.5.0"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span>PROMPT VERSION:</span>
+              <span className="text-white">{message.prompt_version || "1.1.0"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span>MODEL USED:</span>
+              <span className="text-white">{message.model_name || "openai/gpt-oss-120b:free"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span>LAST SSE EVENT:</span>
+              <span className="text-primary uppercase">{message.last_event || "N/A"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span>STREAM STATUS:</span>
+              <span className={`uppercase font-semibold ${message.stream_status === "completed" ? "text-emerald-400" : message.stream_status === "failed" ? "text-rose-400" : "text-amber-400"}`}>
+                {message.stream_status || "UNKNOWN"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span>ACTION PLAN:</span>
+              <span className="text-white uppercase">{approvalStatus === "success" ? "CREATED" : approvalStatus === "duplicate" ? "DUPLICATE GATED" : approvalStatus === "loading" ? "CREATING" : "PENDING APPROVAL"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span>VERIFICATION STATUS:</span>
+              <span className="text-white uppercase">{approvalStatus === "success" ? "PENDING VERIFICATION" : "N/A"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 md:col-span-2 border-t border-white/5 pt-2 mt-1">
+              <span>TIMESTAMP:</span>
+              <span className="text-white">{message.timestamp ? new Date(message.timestamp).toLocaleString() : new Date().toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="px-5 py-2.5 border-t border-white/5 bg-white/[0.01] flex items-center justify-between">

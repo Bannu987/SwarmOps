@@ -40,9 +40,11 @@ class EventBus:
     Per-stream event bus. Each chat request creates one bus.
     Workflow code emits events; the SSE endpoint reads from the queue.
     """
-    def __init__(self):
+    def __init__(self, trace_id: Optional[str] = None):
         self.queue: asyncio.Queue = asyncio.Queue()
         self._closed = False
+        self.trace_id = trace_id or str(uuid.uuid4())
+        self.sequence_no = 0
         try:
             self.loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -52,11 +54,64 @@ class EventBus:
         """Emit an event. Thread-safe wrapper."""
         if self._closed:
             return
+        
+        payload = payload or {}
+        if "trace_id" not in payload:
+            payload["trace_id"] = self.trace_id
+            
         event = SwarmEvent(
             event_type=event_type,
-            payload=payload or {},
+            payload=payload,
             agent_id=agent_id,
         )
+        
+        self.sequence_no += 1
+        seq_no = self.sequence_no
+        
+        # Defensively write to stream_events in background
+        def _write_db(s_no, ev_type, pld):
+            try:
+                from .supabase_client import get_admin_client
+                admin = get_admin_client()
+                if admin:
+                    # serialize payload to estimate size
+                    pld_str = json.dumps(pld)
+                    admin.table("stream_events").insert({
+                        "trace_id": self.trace_id,
+                        "channel": "boardroom_chat",
+                        "event_type": ev_type,
+                        "sequence_no": s_no,
+                        "payload_size": len(pld_str.encode("utf-8")),
+                        "connection_status": "open",
+                        "metadata": pld
+                    }).execute()
+            except Exception as db_err:
+                logger.debug(f"Could not log stream event to database: {db_err}")
+
+        # Import structured logger and log
+        try:
+            from core.observability import log_structured_event
+            mapped_event_name = f"stream_event.{event_type}"
+            if event_type == "stream.started":
+                mapped_event_name = "stream.started"
+            elif event_type == "stream.end":
+                mapped_event_name = "stream.ended"
+            elif event_type in ("stream.failed", "error"):
+                mapped_event_name = "stream.failed"
+
+            log_structured_event(
+                event_name=mapped_event_name,
+                trace_id=self.trace_id,
+                status="failed" if "failed" in mapped_event_name or "error" in event_type else "success",
+                metadata={"sequence_no": seq_no, "event_type": event_type, "agent_id": agent_id}
+            )
+        except Exception as log_err:
+            logger.debug(f"Could not print structured log: {log_err}")
+
+        import threading
+        t = threading.Thread(target=_write_db, args=(seq_no, event_type, payload))
+        t.daemon = True
+        t.start()
         
         def _put():
             try:
@@ -106,9 +161,9 @@ class EventBus:
 _active_buses: Dict[str, EventBus] = {}
 
 
-def create_bus(request_id: str) -> EventBus:
+def create_bus(request_id: str, trace_id: Optional[str] = None) -> EventBus:
     """Create a new event bus for a request."""
-    bus = EventBus()
+    bus = EventBus(trace_id=trace_id)
     _active_buses[request_id] = bus
     return bus
 

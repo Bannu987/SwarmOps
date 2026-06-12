@@ -1040,60 +1040,16 @@ Respond ONLY with the JSON object. Do not include markdown code fences or other 
         bus.emit("phase.completed", {"phase": "boardroom_decision"})
 
     # ============================================
-    # STEP 5: action_plan_generation
+    # STEP 5: action_plan_generation (Delegated to user approval)
     # ============================================
     if bus:
         bus.emit("phase.started", {"phase": "action_plan_generation"})
 
     action_plan_id = None
-    admin = get_admin_client()
-    if admin and project_id and user_id:
-        try:
-            est_effort = map_to_text(boardroom_json.get("final_effort", 3.0))
-            exp_impact = map_to_text(boardroom_json.get("final_impact", 5.0))
-
-            plan_insert = admin.table("action_plans").insert({
-                "user_id": user_id,
-                "project_id": project_id,
-                "source_type": "swarm_decision",
-                "source_id": signal_id,
-                "title": boardroom_json.get("action_title", f"Resolve: {title}"),
-                "objective": boardroom_json.get("action_description", description),
-                "plan_type": "seo_growth" if category.lower() == "seo" else "general_strategy",
-                "priority": priority_bucket.lower(),
-                "status": "pending",
-                "estimated_effort": est_effort,
-                "expected_impact": exp_impact,
-                "confidence": boardroom_json.get("final_confidence", 9.0) / 10.0,
-                "tasks": boardroom_json.get("checklist", []),
-                "kpis": [{"kpi": "Signal Cleared", "target": "Resolved"}],
-            }).execute()
-
-            if plan_insert.data:
-                action_plan_id = plan_insert.data[0]["id"]
-                try:
-                    from .webhooks import trigger_n8n_webhook
-                    trigger_n8n_webhook(plan_insert.data[0])
-                except Exception as web_err:
-                    logger.warning(f"Could not trigger n8n webhook: {web_err}")
-                
-                # Insert checklist items into action_items
-                checklist_items = boardroom_json.get("checklist", [])
-                for idx, item in enumerate(checklist_items):
-                    try:
-                        admin.table("action_items").insert({
-                            "plan_id": action_plan_id,
-                            "title": item,
-                            "status": "pending",
-                            "assigned_to": "nexus" if idx == 0 else "user"
-                        }).execute()
-                    except Exception as item_err:
-                        logger.debug(f"action_items insert failed (table might be missing): {item_err}")
-        except Exception as plan_err:
-            logger.warning(f"Could not save action plan to Supabase (migration might be pending): {plan_err}")
+    logger.info("[ACTION PLAN] Bypassing automatic action plan generation. Delegating to user approval flow.")
 
     if bus:
-        bus.emit("phase.completed", {"phase": "action_plan_generation", "action_plan_id": action_plan_id})
+        bus.emit("phase.completed", {"phase": "action_plan_generation", "action_plan_id": None})
 
     # ============================================
     # STEP 6: save_agent_run
@@ -1101,6 +1057,7 @@ Respond ONLY with the JSON object. Do not include markdown code fences or other 
     if bus:
         bus.emit("phase.started", {"phase": "save_agent_run"})
 
+    admin = get_admin_client()
     if admin and project_id and user_id:
         try:
             admin.table("agent_runs").insert({
@@ -1244,7 +1201,11 @@ Sitemap: https://shravanpayyavula.me/sitemap.xml
             "decision_id": str(uuid.uuid4())[:8],
             "message_id": str(uuid.uuid4())[:8],
             "answer": final_markdown,
-            "answer_len": len(final_markdown)
+            "answer_len": len(final_markdown),
+            "boardroom_json": boardroom_json,
+            "signal_id": signal_id,
+            "project_id": project_id,
+            "user_id": user_id
         })
         bus.emit("stream.end", {})
 
@@ -1257,9 +1218,8 @@ Sitemap: https://shravanpayyavula.me/sitemap.xml
         "agents_used": ["nexus"] + specialist_ids,
         "latency_ms": total_latency,
         "confidence": boardroom_json.get("final_confidence", 9.0) / 10.0,
-        "structured": {
-            "decision": boardroom_json,
-            "specialists": specialist_reviews,
-            "nexus": boardroom_json,
-        }
+        "structured": boardroom_json,
+        "signal_id": signal_id,
+        "project_id": project_id,
+        "user_id": user_id
     }

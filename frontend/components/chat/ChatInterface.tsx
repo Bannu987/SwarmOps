@@ -188,6 +188,7 @@ export function ChatInterface() {
       content: "SwarmOps is preparing the brief...",
       agents_used: ["nexus"],
       timestamp: Date.now(),
+      clicked_signal: currentSignalContext || undefined,
     }
     
     setMessages((prev) => [...prev, userMsg, initialAssistantMsg])

@@ -10,6 +10,7 @@ export interface Message {
   attachments?: FileAttachment[]
   created_at?: string
   timestamp?: number
+  clicked_signal?: any
 }
 
 export interface FileAttachment {

@@ -457,7 +457,7 @@ export interface ActionPlan {
   objective: string
   plan_type: "seo_growth" | "paid_ads" | "lead_generation" | "content_calendar" | "crm_lifecycle" | "product_launch" | "competitor_attack" | "conversion_rate_optimization" | "general_strategy"
   priority: "high" | "medium" | "low"
-  status: "pending" | "in_progress" | "completed" | "blocked" | "dismissed"
+  status: "pending" | "approved" | "in_progress" | "verified" | "rejected" | "completed" | "blocked" | "dismissed"
   owner_label: string
   due_date: string | null
   estimated_effort: "low" | "medium" | "high"
@@ -468,6 +468,13 @@ export interface ActionPlan {
   dependencies: string[]
   risks: ActionPlanRisk[]
   created_at: string
+  signal_id?: string
+  signal_key?: string
+  priority_score?: number
+  recommended_fix?: string
+  evidence?: any
+  implementation_steps?: string
+  verification_steps?: string
 }
 
 export async function listActionPlans(projectId: string, status: string = "all") {
@@ -503,5 +510,45 @@ export async function deleteActionPlan(planId: string) {
     headers,
   })
   return res.json() as Promise<{ success: boolean }>
+}
+
+export async function createActionPlanFromBoardroom(data: {
+  project_id: string
+  signal_id: string
+  signal_key: string
+  title: string
+  priority_bucket: string
+  priority_score: number
+  owner: string
+  recommended_fix: string
+  evidence: any
+  implementation_steps: string
+  verification_steps: string
+  checklist_items: string[]
+  expected_impact: string
+  effort: string
+}) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/action-plans/from-boardroom`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(data),
+  })
+  if (res.status === 409) {
+    return { duplicate: true }
+  }
+  if (!res.ok) {
+    throw new Error(`HTTP error ${res.status}`)
+  }
+  return res.json() as Promise<ActionPlan>
+}
+
+export async function verifyActionPlanCompletion(planId: string) {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_URL}/api/action-plans/${planId}/verify`, {
+    method: "POST",
+    headers,
+  })
+  return res.json() as Promise<{ success: boolean; message: string; status?: string }>
 }
 

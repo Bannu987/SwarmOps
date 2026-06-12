@@ -1,9 +1,11 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Markdown } from "./Markdown"
 import { getAgentConfig } from "@/lib/constants/agents"
-import { Copy, Check, ChevronDown, ChevronUp, Clock, Sparkles, CheckCircle2, AlertTriangle, Scale, Activity } from "lucide-react"
+import { Copy, Check, ChevronDown, ChevronUp, Clock, Sparkles, CheckCircle2, AlertTriangle, Scale, Activity, ArrowUpRight, Loader2, AlertCircle } from "lucide-react"
+import { createActionPlanFromBoardroom } from "@/lib/api"
 import type { Message } from "@/types"
 
 interface Props {
@@ -106,6 +108,65 @@ function parseTelemetry(content: string): TelemetryItem[] {
 export function AgentMessageCard({ message }: Props) {
   const [copied, setCopied] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
+  const [approvalStatus, setApprovalStatus] = useState<"idle" | "loading" | "success" | "duplicate" | "error">("idle")
+  const [actionPlanId, setActionPlanId] = useState<string | null>(null)
+
+  const handleApproveActionPlan = async () => {
+    const sig = message.clicked_signal
+    if (!sig) return
+
+    setApprovalStatus("loading")
+    try {
+      const isRobots = sig.signal_type === "missing_robots_txt" || sig.signal_type === "no_robots_txt"
+      
+      const payload = {
+        project_id: sig.project_id || "",
+        signal_id: sig.signal_id || "",
+        signal_key: sig.signal_type || "",
+        title: isRobots ? "Add robots.txt file" : `Resolve: ${sig.title}`,
+        priority_bucket: sig.severity || "medium",
+        priority_score: isRobots ? 2.95 : 5.0,
+        owner: isRobots ? "Engineering" : "Nexus",
+        recommended_fix: isRobots 
+          ? "Create a public/robots.txt file to allow search crawler access and declare sitemap." 
+          : sig.description,
+        evidence: sig.evidence || null,
+        implementation_steps: isRobots 
+          ? "Create public/robots.txt containing: User-agent: * Allow: / Sitemap: https://shravanpayyavula.me/sitemap.xml" 
+          : "Perform standard source code optimization.",
+        verification_steps: isRobots 
+          ? "Verify that /robots.txt returns an HTTP 200 OK status code." 
+          : "Re-run the scan engine and confirm the signal is cleared.",
+        checklist_items: isRobots ? [
+          "Create public/robots.txt",
+          "Add User-agent: *",
+          "Add Allow: /",
+          "Add sitemap reference",
+          "Deploy frontend",
+          "Verify /robots.txt returns HTTP 200",
+          "Re-scan in SwarmOps",
+          "Mark signal as resolved"
+        ] : [
+          `Audit and implement fix for ${sig.title}`,
+          "Deploy implementation updates",
+          "Re-scan domain to confirm completion"
+        ],
+        expected_impact: isRobots ? "low" : "medium",
+        effort: isRobots ? "low" : "medium"
+      }
+
+      const res = await createActionPlanFromBoardroom(payload)
+      if ("duplicate" in res) {
+        setApprovalStatus("duplicate")
+      } else {
+        setActionPlanId(res.id)
+        setApprovalStatus("success")
+      }
+    } catch (err) {
+      console.error("Failed to approve action plan:", err)
+      setApprovalStatus("error")
+    }
+  }
 
   const primaryAgent = message.agents_used?.[0] || "nexus"
   const agentCfg = getAgentConfig(primaryAgent)
@@ -285,6 +346,94 @@ export function AgentMessageCard({ message }: Props) {
           </div>
         )}
       </div>
+
+      {/* Boardroom Approval Panel */}
+      {message.clicked_signal && !isTelemetry && message.workflow === "signal_analysis" && (
+        <div className="mx-5 mb-5 p-4 rounded-xl border border-white/5 bg-white/[0.02] shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4 animate-fade-in">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 text-[9px] font-mono tracking-wider text-primary uppercase font-bold">
+              <Sparkles className="w-3 h-3" />
+              Boardroom Recommendation
+            </div>
+            <h4 className="text-white text-xs font-semibold font-sans mt-0.5">
+              Action Plan: {message.clicked_signal.signal_type === "missing_robots_txt" || message.clicked_signal.signal_type === "no_robots_txt" ? "Add robots.txt file" : `Resolve: ${message.clicked_signal.title}`}
+            </h4>
+            <p className="text-[10px] text-muted-foreground leading-relaxed max-w-xl">
+              This boardroom consensus recommendation can be compiled directly into a structured checklist plan on the Operations Floor.
+            </p>
+          </div>
+
+          <div className="flex-shrink-0 flex items-center gap-2">
+            {approvalStatus === "idle" && (
+              <>
+                <button
+                  onClick={handleApproveActionPlan}
+                  className="px-3.5 py-1.8 bg-primary hover:bg-primary/95 hover:scale-[1.02] active:scale-95 text-black font-semibold rounded-lg text-[10px] font-mono uppercase tracking-wider transition-all duration-300 shadow-lg flex items-center gap-1.5"
+                >
+                  Approve Action Plan
+                </button>
+                <button
+                  onClick={handleApproveActionPlan}
+                  className="px-3.5 py-1.8 border border-white/10 hover:bg-white/5 text-white rounded-lg text-[10px] font-mono uppercase tracking-wider transition-all duration-300 flex items-center gap-1.5"
+                >
+                  Add to Operations Floor
+                </button>
+              </>
+            )}
+
+            {approvalStatus === "loading" && (
+              <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground uppercase tracking-wider py-2">
+                <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+                <span>Creating Action Plan...</span>
+              </div>
+            )}
+
+            {approvalStatus === "success" && (
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-[10px] font-mono uppercase tracking-wider font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  Added to Operations Floor
+                </span>
+                <Link
+                  href="/action-plans"
+                  className="px-3.5 py-1.8 border border-white/10 hover:bg-white/5 text-white rounded-lg text-[10px] font-mono uppercase tracking-wider transition-all duration-300 flex items-center gap-1"
+                >
+                  Open in Operations Floor
+                  <ArrowUpRight className="w-3 h-3 text-muted-foreground" />
+                </Link>
+              </div>
+            )}
+
+            {approvalStatus === "duplicate" && (
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg text-[10px] font-mono uppercase tracking-wider font-semibold">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                  Action plan already exists
+                </span>
+                <Link
+                  href="/action-plans"
+                  className="px-3.5 py-1.8 border border-white/10 hover:bg-white/5 text-white rounded-lg text-[10px] font-mono uppercase tracking-wider transition-all duration-300 flex items-center gap-1"
+                >
+                  Open in Operations Floor
+                  <ArrowUpRight className="w-3 h-3 text-muted-foreground" />
+                </Link>
+              </div>
+            )}
+
+            {approvalStatus === "error" && (
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-rose-400 font-mono uppercase tracking-wider">Failed to create plan</span>
+                <button
+                  onClick={handleApproveActionPlan}
+                  className="px-3 py-1 border border-rose-500/20 hover:bg-rose-500/10 text-rose-300 rounded-lg text-[9px] font-mono uppercase tracking-wider transition"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="px-5 py-2.5 border-t border-white/5 bg-white/[0.01] flex items-center justify-between">

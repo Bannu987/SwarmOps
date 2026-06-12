@@ -74,12 +74,15 @@ async def test_workflow():
     
     # Run in thread executor
     def run_thread():
-        return run_swarm_signal_workflow(
-            clicked_signal=clicked_signal,
-            message="Analyze and address this signal: No robots.txt file",
-            conversation_id="test_conv",
-            bus=bus
-        )
+        from unittest.mock import patch, MagicMock
+        with patch("core.swarm_workflow.get_admin_client") as mock_admin:
+            mock_admin.return_value = MagicMock()
+            return run_swarm_signal_workflow(
+                clicked_signal=clicked_signal,
+                message="Analyze and address this signal: No robots.txt file",
+                conversation_id="test_conv",
+                bus=bus
+            )
     
     future = loop.run_in_executor(executor, run_thread)
     
@@ -135,11 +138,14 @@ async def test_workflow():
 
     # Test the follow-up handler
     print("Testing follow-up handler for create robots.txt...")
-    follow_up_res = run_swarm_signal_workflow(
-        clicked_signal=clicked_signal,
-        message="create robots.txt file",
-        conversation_id="test_conv"
-    )
+    from unittest.mock import patch, MagicMock
+    with patch("core.swarm_workflow.get_admin_client") as mock_admin:
+        mock_admin.return_value = MagicMock()
+        follow_up_res = run_swarm_signal_workflow(
+            clicked_signal=clicked_signal,
+            message="create robots.txt file",
+            conversation_id="test_conv"
+        )
     follow_up_out = follow_up_res["response"]
     assert "public/robots.txt" in follow_up_out, "Follow-up failed to return file path"
     assert "User-agent: *" in follow_up_out, "Follow-up failed to return file contents"
@@ -180,9 +186,173 @@ def test_webhook_trigger():
             assert "X-SwarmOps-Signature" in kwargs["headers"]
             print("Webhook trigger test passed successfully!")
 
+def test_action_plans_api():
+    from fastapi.testclient import TestClient
+    from main import app
+    from unittest.mock import patch, MagicMock
+
+    client = TestClient(app)
+
+    # Mock user object
+    mock_user = MagicMock()
+    mock_user.id = "test-user-id"
+
+    with patch("main.get_user_from_token", return_value=mock_user) as mock_get_user, \
+         patch("main.get_admin_client") as mock_get_admin:
+         
+         # Mock admin client database interactions
+         mock_db = MagicMock()
+         mock_get_admin.return_value = mock_db
+         
+         # 1. Test POST /api/action-plans/from-boardroom - Successful creation
+         mock_select_res = MagicMock()
+         mock_select_res.data = [] # No duplicate
+         
+         mock_insert_res = MagicMock()
+         mock_insert_res.data = [{"id": "new-plan-id", "title": "Test Robots.txt"}]
+         
+         mock_table_plan = MagicMock()
+         mock_table_projects = MagicMock()
+         
+         def mock_table(table_name):
+             if table_name == "action_plans":
+                 return mock_table_plan
+             elif table_name == "projects":
+                 return mock_table_projects
+             return MagicMock()
+             
+         mock_db.table.side_effect = mock_table
+         
+         mock_table_plan.select.return_value = mock_table_plan
+         mock_table_plan.eq.return_value = mock_table_plan
+         mock_table_plan.insert.return_value = mock_table_plan
+         
+         # Mock projects query so that project ownership check succeeds
+         mock_proj_res = MagicMock()
+         mock_proj_res.data = [{"id": "test-project-id"}]
+         mock_table_projects.select.return_value = mock_table_projects
+         mock_table_projects.eq.return_value = mock_table_projects
+         mock_table_projects.execute.return_value = mock_proj_res
+         
+         def mock_execute(*args, **kwargs):
+             if mock_table_plan.insert.called:
+                 return mock_insert_res
+             return mock_select_res
+             
+         mock_table_plan.execute.side_effect = mock_execute
+         
+         payload = {
+             "project_id": "test-project-id",
+             "signal_id": "test-signal-id",
+             "signal_key": "missing_robots_txt",
+             "title": "Add robots.txt file",
+             "priority_bucket": "Low",
+             "priority_score": 1.5,
+             "owner": "SEO Specialist",
+             "recommended_fix": "Add robots.txt",
+             "evidence": "404 not found",
+             "implementation_steps": "Create file",
+             "verification_steps": "Check /robots.txt",
+             "checklist_items": ["Create file", "Deploy file"],
+             "expected_impact": "low",
+             "effort": "low"
+         }
+         
+         resp = client.post(
+             "/api/action-plans/from-boardroom",
+             json=payload,
+             headers={"Authorization": "Bearer test-token"}
+         )
+         
+         assert resp.status_code == 200
+         data = resp.json()
+         assert data["id"] == "new-plan-id"
+         print("POST /api/action-plans/from-boardroom success test passed!")
+         
+         # Reset mocks for duplicate check
+         mock_table_plan.insert.reset_mock()
+         mock_select_res.data = [{"id": "existing-plan-id"}] # Duplicate exists
+         
+         resp = client.post(
+             "/api/action-plans/from-boardroom",
+             json=payload,
+             headers={"Authorization": "Bearer test-token"}
+         )
+         
+         assert resp.status_code == 409
+         print("POST /api/action-plans/from-boardroom duplicate (409) test passed!")
+
+         # 2. Test POST /api/action-plans/{plan_id}/verify
+         mock_table_plan.insert.reset_mock()
+         mock_table_plan.select.reset_mock()
+         mock_table_plan.eq.reset_mock()
+         mock_table_plan.execute.side_effect = None
+         
+         mock_plan_data = {
+             "id": "new-plan-id",
+             "project_id": "test-project-id",
+             "user_id": "test-user-id",
+             "title": "Add robots.txt file",
+             "signal_key": "missing_robots_txt",
+             "tasks": [{"id": "task1", "title": "Create robots.txt", "status": "pending"}]
+         }
+         mock_project_data = {
+             "website_url": "https://shravanpayyavula.me"
+         }
+         
+         mock_select_res_plan = MagicMock()
+         mock_select_res_plan.data = [mock_plan_data]
+         
+         mock_select_res_proj = MagicMock()
+         mock_select_res_proj.data = [mock_project_data]
+         
+         mock_table_projects = MagicMock()
+         
+         def mock_table(table_name):
+             if table_name == "action_plans":
+                 return mock_table_plan
+             elif table_name == "projects":
+                 return mock_table_projects
+             return MagicMock()
+             
+         mock_db.table.side_effect = mock_table
+         
+         mock_table_plan.select.return_value = mock_table_plan
+         mock_table_plan.update.return_value = mock_table_plan
+         mock_table_plan.eq.return_value = mock_table_plan
+         mock_table_plan.execute.return_value = mock_select_res_plan
+         
+         mock_table_projects.select.return_value = mock_table_projects
+         mock_table_projects.eq.return_value = mock_table_projects
+         mock_table_projects.execute.return_value = mock_select_res_proj
+         
+         with patch("httpx.AsyncClient.get") as mock_http_get:
+             mock_http_resp = MagicMock()
+             mock_http_resp.status_code = 200
+             mock_http_get.return_value = mock_http_resp
+             
+             resp = client.post(
+                 "/api/action-plans/new-plan-id/verify",
+                 headers={"Authorization": "Bearer test-token"}
+             )
+             
+             assert resp.status_code == 200
+             data = resp.json()
+             assert data["success"] is True
+             assert data["status"] == "verified"
+             
+             # Check that tasks status was updated to completed
+             mock_table_plan.update.assert_called_once()
+             args, kwargs = mock_table_plan.update.call_args
+             assert args[0]["status"] == "verified"
+             assert args[0]["tasks"][0]["status"] == "completed"
+             
+             print("POST /api/action-plans/{plan_id}/verify success test passed!")
+
 if __name__ == "__main__":
     test_normalization()
     test_scoring()
     test_crawl_safety()
     test_webhook_trigger()
+    test_action_plans_api()
     asyncio.run(test_workflow())

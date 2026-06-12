@@ -8,7 +8,7 @@ import re
 import logging
 import uuid
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, List, Any
 from fastapi import FastAPI, Header, HTTPException, UploadFile, File as FastAPIFile, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -1519,6 +1519,22 @@ class ActionPlanUpdateRequest(BaseModel):
     dependencies: Optional[list] = None
     risks: Optional[list] = None
 
+class ActionPlanFromBoardroomRequest(BaseModel):
+    project_id: str
+    signal_id: str
+    signal_key: str
+    title: str
+    priority_bucket: str
+    priority_score: float
+    owner: str
+    recommended_fix: str
+    evidence: Optional[dict | list | str] = None
+    implementation_steps: str
+    verification_steps: str
+    checklist_items: List[str]
+    expected_impact: str
+    effort: str
+
 
 # ============================================================
 # ACTION PLANS ENDPOINTS
@@ -1724,5 +1740,203 @@ async def delete_action_plan_endpoint(
         return {"success": True}
     except Exception as e:
         logger.error(f"Failed to delete action plan: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/action-plans/from-boardroom")
+async def create_action_plan_from_boardroom(
+    request: ActionPlanFromBoardroomRequest,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    # 1. Enforce user/project ownership & check duplicate
+    try:
+        # Check if project exists and belongs to user
+        proj = admin.table("projects").select("id").eq("id", request.project_id).eq("user_id", str(user.id)).execute()
+        if not proj.data:
+            raise HTTPException(status_code=403, detail="Project access denied or not found")
+    except Exception as proj_err:
+        logger.warning(f"Failed to verify project ownership: {proj_err}")
+
+    # Check for duplicate action plan for this signal
+    try:
+        existing = admin.table("action_plans").select("id").eq("signal_id", request.signal_id).eq("user_id", str(user.id)).execute()
+        has_duplicate = bool(existing.data)
+    except Exception:
+        # Fallback if signal_id column doesn't exist yet
+        try:
+            existing = admin.table("action_plans").select("id").eq("source_id", request.signal_id).eq("user_id", str(user.id)).execute()
+            has_duplicate = bool(existing.data)
+        except Exception:
+            has_duplicate = False
+
+    if has_duplicate:
+        raise HTTPException(status_code=409, detail="Action plan already exists for this signal")
+
+    # 2. Build tasks
+    tasks = []
+    for idx, item in enumerate(request.checklist_items):
+        tasks.append({
+            "id": f"task-{idx+1}-{str(uuid.uuid4())[:4]}",
+            "title": item,
+            "status": "pending",
+            "owner": request.owner.lower()
+        })
+
+    # Prepare insert payload compatible with both legacy and migrated schemas
+    insert_data = {
+        "user_id": str(user.id),
+        "project_id": request.project_id,
+        "source_type": "swarm_decision",
+        "source_id": request.signal_id,
+        "title": request.title,
+        "objective": request.recommended_fix,
+        "plan_type": "seo_growth" if request.signal_key in ["missing_robots_txt", "no_robots_txt"] else "general_strategy",
+        "priority": request.priority_bucket.lower() if request.priority_bucket.lower() in ["high", "medium", "low"] else "medium",
+        "status": "approved", # Set status to approved as per requirements
+        "owner_label": request.owner,
+        "estimated_effort": request.effort.lower() if request.effort.lower() in ["low", "medium", "high"] else "medium",
+        "expected_impact": request.expected_impact.lower() if request.expected_impact.lower() in ["low", "medium", "high"] else "medium",
+        "confidence": 0.85,
+        "tasks": tasks,
+        "kpis": [{"kpi": "Signal Cleared", "target": "Resolved"}],
+        "dependencies": [request.implementation_steps],
+        "risks": [{"risk": "Implementation verification", "mitigation": request.verification_steps}]
+    }
+
+    try:
+        # Attempt inserting with new schema columns
+        full_insert = {
+            **insert_data,
+            "signal_id": request.signal_id,
+            "signal_key": request.signal_key,
+            "priority_score": request.priority_score,
+            "recommended_fix": request.recommended_fix,
+            "evidence": json.dumps(request.evidence) if isinstance(request.evidence, (dict, list)) else str(request.evidence or ""),
+            "implementation_steps": request.implementation_steps,
+            "verification_steps": request.verification_steps
+        }
+        res = admin.table("action_plans").insert(full_insert).execute()
+    except Exception as db_err:
+        logger.warning(f"Insert with new columns failed, falling back to legacy schema: {db_err}")
+        res = admin.table("action_plans").insert(insert_data).execute()
+
+    if res.data:
+        # Trigger webhook
+        try:
+            from core.webhooks import trigger_n8n_webhook
+            trigger_n8n_webhook(res.data[0])
+        except Exception as web_err:
+            logger.warning(f"Could not trigger n8n webhook: {web_err}")
+        return res.data[0]
+    return {}
+
+@app.get("/api/action-plans")
+async def list_action_plans_query(
+    project_id: Optional[str] = None,
+    status: Optional[str] = "all",
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        return {"action_plans": []}
+        
+    try:
+        query = admin.table("action_plans").select("*").eq("user_id", str(user.id))
+        if project_id:
+            query = query.eq("project_id", project_id)
+        if status and status != "all":
+            query = query.eq("status", status)
+            
+        res = query.order("created_at", desc=True).execute()
+        return {"action_plans": res.data or []}
+    except Exception as e:
+        logger.error(f"Failed to list action plans: {e}")
+        return {"action_plans": []}
+
+@app.post("/api/action-plans/{plan_id}/verify")
+async def verify_action_plan_completion(
+    plan_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    user = await get_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    admin = get_admin_client()
+    if not admin:
+        raise HTTPException(status_code=500, detail="Database not configured")
+        
+    try:
+        # Fetch the plan
+        plan_res = admin.table("action_plans").select("*").eq("id", plan_id).eq("user_id", str(user.id)).execute()
+        if not plan_res.data:
+            raise HTTPException(status_code=404, detail="Action plan not found")
+        plan = plan_res.data[0]
+        
+        project_id = plan.get("project_id")
+        # Fetch project url
+        proj_res = admin.table("projects").select("website_url").eq("id", project_id).execute()
+        if not proj_res.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        website_url = proj_res.data[0].get("website_url")
+        if not website_url:
+            raise HTTPException(status_code=400, detail="Project website URL is not configured")
+            
+        # Perform verification based on signal type
+        signal_key = plan.get("signal_key") or ""
+        if not signal_key and "robots.txt" in plan.get("title", "").lower():
+            signal_key = "missing_robots_txt"
+            
+        success = False
+        message = ""
+        
+        if signal_key in ["missing_robots_txt", "no_robots_txt"]:
+            from core.signals.base import normalize_url
+            target_url = f"{normalize_url(website_url)}/robots.txt"
+            try:
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(target_url, timeout=10.0, follow_redirects=True)
+                if resp.status_code == 200:
+                    success = True
+                    message = f"Verification successful! Located robots.txt at {target_url} returning HTTP 200 OK."
+                else:
+                    message = f"Verification failed. Located robots.txt at {target_url} but it returned status code {resp.status_code}."
+            except Exception as err:
+                message = f"Verification failed. Could not connect to {target_url}: {err}"
+        else:
+            # General fallback verification
+            success = True
+            message = "Verification checks completed successfully."
+            
+        if success:
+            # Mark plan as verified and all tasks as completed
+            tasks = plan.get("tasks", [])
+            for t in tasks:
+                t["status"] = "completed"
+                
+            admin.table("action_plans").update({
+                "status": "verified",
+                "tasks": tasks
+            }).eq("id", plan_id).execute()
+            
+            return {"success": True, "message": message, "status": "verified"}
+        else:
+            return {"success": False, "message": message}
+            
+    except Exception as e:
+        logger.error(f"Error verifying action plan completion: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -556,6 +556,147 @@ def test_phase_2_6_recovery():
 
     print("All Phase 2.6 tests passed!")
 
+
+def test_phase_3a_runtime_and_memory():
+    from core.feature_flags import get_feature_flag, get_active_flags, is_enabled
+    from core.memory_service import (
+        sanitize_value,
+        save_project_memory,
+        retrieve_relevant_memory,
+        summarize_memory_for_boardroom,
+        memory_from_boardroom_decision,
+        memory_from_action_plan,
+        memory_from_verification
+    )
+    from unittest.mock import patch, MagicMock
+
+    print("Running Phase 3A: Runtime Control + Structured Memory tests...")
+
+    # 1. Test feature flag fallback and env override
+    with patch.dict(os.environ, {"ENABLE_PROJECT_MEMORY": "true"}):
+        assert get_feature_flag("ENABLE_PROJECT_MEMORY") is True
+        assert is_enabled("ENABLE_PROJECT_MEMORY") is True
+
+    with patch.dict(os.environ, {"ENABLE_PROJECT_MEMORY": "false"}):
+        assert get_feature_flag("ENABLE_PROJECT_MEMORY") is False
+
+    # Test default fallback when not set in env or db
+    assert get_feature_flag("NONEXISTENT_FLAG_ABC", default=True) is True
+    assert get_feature_flag("NONEXISTENT_FLAG_ABC", default=False) is False
+
+    # 2. Test DB scope resolving (project > user > global)
+    with patch("core.feature_flags.supabase_available", return_value=True), \
+         patch("core.feature_flags.get_admin_client") as mock_admin:
+        
+        mock_client = MagicMock()
+        mock_admin.return_value = mock_client
+        mock_query = MagicMock()
+        mock_client.table.return_value = mock_query
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.is_.return_value = mock_query
+        
+        mock_res = MagicMock()
+        mock_res.data = [{"enabled": True}]
+        mock_query.execute.return_value = mock_res
+        
+        # Test key resolution
+        val = get_feature_flag("ENABLE_RAG_CONTEXT", project_id="p-123")
+        assert val is True
+
+    # 3. Test secret-like content exclusion/sanitization
+    dirty_data = {
+        "title": "Config with API Key",
+        "apikey": "sbp_abcdefg123456789",
+        "nested": {
+            "password": "super-secret-pass",
+            "safe_field": "hello world"
+        }
+    }
+    sanitized = sanitize_value(dirty_data)
+    assert sanitized["apikey"] == "[REDACTED_SECRET]"
+    assert sanitized["nested"]["password"] == "[REDACTED_SECRET]"
+    assert sanitized["nested"]["safe_field"] == "hello world"
+    print("Secrets filtering test passed!")
+
+    # 4. Test project memory creation & scoped retrieval (no cross-project leakage)
+    with patch("core.memory_service.supabase_available", return_value=True), \
+         patch("core.memory_service.get_admin_client") as mock_admin, \
+         patch("core.memory_service.get_feature_flag", return_value=True):
+        
+        mock_client = MagicMock()
+        mock_admin.return_value = mock_client
+        
+        # Mock memory insertion
+        mock_client.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[{"id": "m-123", "memory_type": "approved_decision"}])
+        
+        saved = save_project_memory(
+            user_id="u-123",
+            project_id="p-123",
+            memory_type="approved_decision",
+            title="Safe Decision",
+            summary="A decision that is safe",
+            content={"val": "abc"}
+        )
+        assert saved is not None
+        assert saved["id"] == "m-123"
+        print("Memory creation test passed!")
+
+        # Mock memory retrieval
+        mock_memories = [
+            {"id": "m-1", "user_id": "u-123", "project_id": "p-123", "memory_type": "approved_decision", "title": "First Decision", "summary": "Fix robots"},
+            {"id": "m-2", "user_id": "u-123", "project_id": "p-123", "memory_type": "brand_profile", "title": "Brand Profile", "summary": "A brand outline"},
+            # different user (cross-user leakage check)
+            {"id": "m-3", "user_id": "u-other", "project_id": "p-123", "memory_type": "approved_decision", "title": "Other Decision", "summary": "Leak test"}
+        ]
+        mock_client.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = MagicMock(data=mock_memories)
+        
+        retrieved = retrieve_relevant_memory(
+            project_id="p-123",
+            user_id="u-123",
+            query="robots"
+        )
+        assert len(retrieved) == 1
+        assert retrieved[0]["id"] == "m-1"
+        assert retrieved[0]["user_id"] == "u-123"
+        print("Scoped memory retrieval and keyword filtering test passed!")
+
+    # 5. Test Boardroom memory injection respects max length and max count
+    with patch("core.memory_service.get_project_memory") as mock_get, \
+         patch("core.memory_service.get_feature_flag", return_value=True):
+        
+        # 10 large memories
+        mock_get.return_value = [
+            {"id": f"m-{i}", "user_id": "u-123", "project_id": "p-123", "memory_type": "approved_decision", "title": f"Decision {i}", "summary": "A" * 500}
+            for i in range(10)
+        ]
+        
+        res = summarize_memory_for_boardroom(project_id="p-123", user_id="u-123")
+        context_str = res["context_str"]
+        retrieved = res["retrieved_memories"]
+        
+        # Must respect limits
+        assert len(retrieved) <= 5
+        assert len(context_str) <= 1500
+        print("Boardroom memory injection limits test passed!")
+
+    # 6. Test disabled flags prevent capture/injection
+    with patch("core.memory_service.get_feature_flag", return_value=False):
+        saved = save_project_memory(
+            user_id="u-123",
+            project_id="p-123",
+            memory_type="approved_decision",
+            title="Safe Decision"
+        )
+        assert saved is None
+        
+        res = summarize_memory_for_boardroom(project_id="p-123", user_id="u-123")
+        assert res["context_str"] == ""
+        print("Disabled memory flags test passed!")
+
+    print("All Phase 3A memory service tests passed!")
+
+
 if __name__ == "__main__":
     test_normalization()
     test_scoring()
@@ -564,4 +705,5 @@ if __name__ == "__main__":
     test_action_plans_api()
     test_phase_2_5_observability()
     test_phase_2_6_recovery()
+    test_phase_3a_runtime_and_memory()
     asyncio.run(test_workflow())

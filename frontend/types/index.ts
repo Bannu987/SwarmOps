@@ -19,6 +19,7 @@ export interface Message {
   stream_status?: string
   action_plan_status?: string
   verification_status?: string
+  retrieved_memories?: Array<{ id: string; memory_type: string; title: string; source_id?: string }>
 }
 
 export interface FileAttachment {

@@ -617,6 +617,8 @@ def run_swarm_signal_workflow(
         metadata={"signal_type": clicked_signal.get("signal_type")}
     )
 
+    from core.feature_flags import snapshot_active_flags
+    active_flags = snapshot_active_flags(user_id=user_id, project_id=project_id)
     create_run_trace_db(
         trace_id=trace_id,
         user_id=user_id,
@@ -624,7 +626,11 @@ def run_swarm_signal_workflow(
         run_type="signal_analysis",
         model_name="openai/gpt-oss-120b:free",
         provider="openrouter",
-        metadata={"signal_type": clicked_signal.get("signal_type"), "conversation_id": conversation_id}
+        metadata={
+            "signal_type": clicked_signal.get("signal_type"),
+            "conversation_id": conversation_id,
+            "active_flags": active_flags
+        }
     )
 
     try:
@@ -661,7 +667,8 @@ def run_swarm_signal_workflow(
                 "effort": res.get("structured", {}).get("final_effort"),
                 "urgency": res.get("structured", {}).get("final_urgency"),
                 "confidence": res.get("structured", {}).get("final_confidence"),
-            }
+            },
+            "retrieved_memories": res.get("retrieved_memories", [])
         }
         # Check if deterministic rule was used
         reg_key = clicked_signal.get("signal_type") or map_signal_to_registry_key(clicked_signal.get("title", ""), clicked_signal.get("category", ""))
@@ -680,6 +687,22 @@ def run_swarm_signal_workflow(
             latency_ms=total_latency,
             metadata={"replay_snapshot": replay_snapshot}
         )
+
+        # Auto-capture memory from boardroom decision
+        try:
+            from core.memory_service import memory_from_boardroom_decision
+            memory_from_boardroom_decision(
+                user_id=user_id,
+                project_id=project_id,
+                signal_title=clicked_signal.get("title", ""),
+                final_decision=res.get("structured", {}).get("final_decision", ""),
+                priority=str(res.get("structured", {}).get("priority_score", "")),
+                checklist=res.get("structured", {}).get("checklist", []),
+                trace_id=trace_id,
+                source_id=signal_id
+            )
+        except Exception as mem_err:
+            logger.warning(f"Failed to auto-capture memory from boardroom decision: {mem_err}")
 
         # Log structured events
         log_structured_event(
@@ -1064,6 +1087,17 @@ TEXT TO REPAIR:
         bus.emit("phase.started", {"phase": "boardroom_decision", "agent_id": "nexus"})
         bus.emit("agent.started", {"agent_id": "nexus", "role": "synthesizer"}, agent_id="nexus")
 
+    # Retrieve and inject memory context
+    memory_context_str = ""
+    retrieved_memories = []
+    try:
+        from core.memory_service import summarize_memory_for_boardroom
+        mem_res = summarize_memory_for_boardroom(project_id=project_id, user_id=user_id, trace_id=trace_id)
+        memory_context_str = mem_res.get("context_str", "")
+        retrieved_memories = mem_res.get("retrieved_memories", [])
+    except Exception as mem_err:
+        logger.warning(f"Failed to retrieve project memory for injection: {mem_err}")
+
     if is_deterministic:
         rule = SIGNAL_SPECIFIC_RULES[rule_key]
         boardroom_json = {
@@ -1092,7 +1126,7 @@ TEXT TO REPAIR:
 
         boardroom_prompt = f"""
 You are Nexus, the Chief Boardroom Decision Agent. Synthesize the boardroom specialist reviews and reach a final consensus on the clicked signal.
-
+{memory_context_str}
 STRICT WORDING CONSTRAINTS:
 1. Do NOT mention upstream rate limits, fallback providers, offline modes, or system failures.
 2. robots.txt controls crawler access, not indexing.
@@ -1137,7 +1171,10 @@ Respond ONLY with the JSON object. Do not include markdown code fences or other 
             agent_id="nexus",
             system=get_prompt("nexus") + "\n\nALWAYS return JSON only.",
             temperature=0.3,
-            json_mode=True
+            json_mode=True,
+            user_id=user_id,
+            project_id=project_id,
+            trace_id=trace_id
         )
 
         boardroom_json = _safe_parse_json(raw_boardroom)
@@ -1150,7 +1187,10 @@ Respond ONLY with the JSON object. Do not include markdown code fences or other 
                 agent_id="nexus",
                 system="Return ONLY valid JSON.",
                 temperature=0.1,
-                json_mode=True
+                json_mode=True,
+                user_id=user_id,
+                project_id=project_id,
+                trace_id=trace_id
             )
             boardroom_json = _safe_parse_json(raw_repaired_br)
 
@@ -1386,5 +1426,6 @@ Sitemap: https://shravanpayyavula.me/sitemap.xml
         "structured": boardroom_json,
         "signal_id": signal_id,
         "project_id": project_id,
-        "user_id": user_id
+        "user_id": user_id,
+        "retrieved_memories": retrieved_memories
     }

@@ -41,6 +41,8 @@ class ModelRouter:
         user_message: str = "",       # used for tier classification
         is_synthesis: bool = False,   # synthesis is always Tier 3
         trace_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> str:
         """Call a model via OpenRouter with tier-based routing."""
         from .tier_router import classify_task, select_model, fallback_chain
@@ -63,7 +65,7 @@ class ModelRouter:
         models_to_try = [selected_model]
         
         # Check feature flag for fallback
-        enable_fallback = get_feature_flag("ENABLE_MODEL_FALLBACK", True)
+        enable_fallback = get_feature_flag("ENABLE_MODEL_FALLBACK", default=True, user_id=user_id, project_id=project_id)
         if enable_fallback:
             for f in fallbacks:
                 if f not in models_to_try:

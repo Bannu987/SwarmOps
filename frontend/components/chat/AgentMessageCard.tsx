@@ -476,6 +476,33 @@ export function AgentMessageCard({ message }: Props) {
               <span>VERIFICATION STATUS:</span>
               <span className="text-white uppercase">{approvalStatus === "success" ? "PENDING VERIFICATION" : "N/A"}</span>
             </div>
+            {message.retrieved_memories && message.retrieved_memories.length > 0 && (
+              <div className="md:col-span-2 border-t border-white/5 pt-2.5 mt-1 space-y-1.5">
+                <span className="text-white font-semibold block uppercase text-[9px] tracking-wider">PROJECT MEMORY APPLIED</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
+                  <div className="flex items-center justify-between gap-4">
+                    <span>MEMORIES RETRIEVED:</span>
+                    <span className="text-emerald-400 font-semibold">{message.retrieved_memories.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>RETRIEVAL REASON:</span>
+                    <span className="text-white">Boardroom context injection</span>
+                  </div>
+                  <div className="flex items-start justify-between gap-4 md:col-span-2">
+                    <span>MEMORY TYPES:</span>
+                    <span className="text-white text-right">
+                      {Array.from(new Set(message.retrieved_memories.map(m => m.memory_type))).join(", ")}
+                    </span>
+                  </div>
+                  <div className="flex items-start justify-between gap-4 md:col-span-2">
+                    <span>SOURCE REFERENCES:</span>
+                    <span className="text-white text-right">
+                      {message.retrieved_memories.map(m => m.source_id || "N/A").join(", ")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-4 md:col-span-2 border-t border-white/5 pt-2 mt-1">
               <span>TIMESTAMP:</span>
               <span className="text-white">{message.timestamp ? new Date(message.timestamp).toLocaleString() : new Date().toLocaleString()}</span>

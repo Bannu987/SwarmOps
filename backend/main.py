@@ -1762,13 +1762,13 @@ async def create_action_plan_from_boardroom(
     from core.observability import get_feature_flag, log_structured_event, WORKFLOW_VERSION, BOARDROOM_PROMPT_VERSION, ACTION_PLAN_SCHEMA_VERSION
     from datetime import datetime, timezone
     
-    # Check feature flag
-    if not get_feature_flag("ENABLE_ACTION_PLAN_CREATION", True):
-        raise HTTPException(status_code=400, detail="Action plan creation is currently disabled by administrator flag.")
-
     user = await get_user(authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Check feature flag
+    if not get_feature_flag("ENABLE_ACTION_PLAN_CREATION", default=True, user_id=str(user.id), project_id=request.project_id):
+        raise HTTPException(status_code=400, detail="Action plan creation is currently disabled by administrator flag.")
         
     admin = get_admin_client()
     if not admin:
@@ -1886,6 +1886,24 @@ async def create_action_plan_from_boardroom(
     if res.data:
         plan_id = res.data[0].get("id")
         
+        # Auto-capture memory from action plan
+        try:
+            from core.memory_service import memory_from_action_plan
+            memory_from_action_plan(
+                user_id=str(user.id),
+                project_id=request.project_id,
+                action_title=request.title,
+                action_description=request.recommended_fix,
+                owner=request.owner,
+                priority=request.priority_bucket,
+                checklist=request.checklist_items,
+                source_signal_id=request.signal_id,
+                trace_id=trace_id,
+                action_plan_id=plan_id
+            )
+        except Exception as mem_err:
+            logger.warning(f"Failed to auto-capture memory from action plan: {mem_err}")
+        
         # Log action_plan.created structured event
         log_structured_event(
             event_name="action_plan.created",
@@ -1940,10 +1958,6 @@ async def verify_action_plan_completion(
 ):
     from core.observability import get_feature_flag, log_structured_event
 
-    # Check feature flag
-    if not get_feature_flag("ENABLE_AUTO_VERIFICATION", True):
-        raise HTTPException(status_code=400, detail="Action plan verification is currently disabled by administrator flag.")
-
     user = await get_user(authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -1959,9 +1973,13 @@ async def verify_action_plan_completion(
             raise HTTPException(status_code=404, detail="Action plan not found")
         plan = plan_res.data[0]
         
-        trace_id = plan.get("trace_id") or str(uuid.uuid4())
         project_id = plan.get("project_id")
+        trace_id = plan.get("trace_id") or str(uuid.uuid4())
         signal_id = plan.get("source_id") or plan.get("signal_id")
+
+        # Check feature flag (scoped to user and project)
+        if not get_feature_flag("ENABLE_AUTO_VERIFICATION", default=True, user_id=str(user.id), project_id=project_id):
+            raise HTTPException(status_code=400, detail="Action plan verification is currently disabled by administrator flag.")
 
         # Log action_plan.verify_requested structured event
         log_structured_event(
@@ -2009,7 +2027,22 @@ async def verify_action_plan_completion(
             # General fallback verification
             success = True
             message = "Verification checks completed successfully."
-            
+        # Auto-capture memory from verification
+        try:
+            from core.memory_service import memory_from_verification
+            memory_from_verification(
+                user_id=str(user.id),
+                project_id=project_id,
+                action_title=plan.get("title", ""),
+                verification_status="passed" if success else "failed",
+                verification_method="url_check" if signal_key in ["missing_robots_txt", "no_robots_txt"] else "general",
+                result_message=message,
+                action_plan_id=plan_id,
+                trace_id=trace_id
+            )
+        except Exception as mem_err:
+            logger.warning(f"Failed to auto-capture memory from verification: {mem_err}")
+
         if success:
             # Mark plan as verified and all tasks as completed
             tasks = plan.get("tasks", [])
@@ -2062,6 +2095,8 @@ async def verify_action_plan_completion(
             return {"success": False, "message": message}
             
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         logger.error(f"Error verifying action plan completion: {e}")
         # Log action_plan.verification_failed structured event on exception
         log_structured_event(
@@ -2094,7 +2129,8 @@ async def get_run_trace(
     """
     from core.observability import get_feature_flag, get_run_trace_db
 
-    if not get_feature_flag("ENABLE_TRACE_LOGGING", True):
+    # Check global/env first
+    if not get_feature_flag("ENABLE_TRACE_LOGGING", default=True):
         raise HTTPException(status_code=400, detail="Trace logging is disabled.")
 
     user = await get_user(authorization)
@@ -2104,6 +2140,10 @@ async def get_run_trace(
     trace = get_run_trace_db(trace_id, user_id=str(user.id))
     if not trace:
         raise HTTPException(status_code=404, detail="Run trace not found")
+
+    project_id = trace.get("project_id")
+    if not get_feature_flag("ENABLE_TRACE_LOGGING", default=True, user_id=str(user.id), project_id=project_id):
+        raise HTTPException(status_code=400, detail="Trace logging is disabled.")
 
     # Build safe response (no secrets)
     response = {
@@ -2117,6 +2157,7 @@ async def get_run_trace(
         "model_name": trace.get("model_name"),
         "provider": trace.get("provider"),
         "latency_ms": trace.get("latency_ms"),
+        "active_flags": (trace.get("metadata") or {}).get("active_flags") or {}
     }
 
     # Include replay_snapshot only if the run completed
@@ -2148,6 +2189,7 @@ async def get_run_trace(
             "agents_consulted": snapshot.get("agents_consulted"),
             "action_plan_created": snapshot.get("action_plan_created", False),
             "latency_ms": snapshot.get("latency_ms") or trace.get("latency_ms"),
+            "retrieved_memories": snapshot.get("retrieved_memories") or [],
 
             # Key decision fields (mapped from actual LLM output keys)
             "title": fso.get("action_title") or fso.get("title"),

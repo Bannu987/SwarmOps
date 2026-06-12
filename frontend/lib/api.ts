@@ -570,6 +570,7 @@ export interface RunTraceResponse {
   model_name: string
   provider: string | null
   latency_ms: number | null
+  active_flags?: Record<string, boolean>
   replay_snapshot?: {
     // Raw structured output
     final_structured_output?: Record<string, any>
@@ -580,6 +581,7 @@ export interface RunTraceResponse {
     agents_consulted?: string[]
     action_plan_created?: boolean
     latency_ms?: number
+    retrieved_memories?: Array<{ id: string; memory_type: string; title: string; source_id?: string }>
     // Key decision fields (mapped from LLM output)
     title?: string
     priority_score?: number

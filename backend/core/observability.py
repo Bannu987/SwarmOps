@@ -14,11 +14,9 @@ VERIFICATION_RULES_VERSION = "1.1.0"
 WORKFLOW_VERSION = "1.5.0"
 
 # 8. FEATURE FLAGS
-def get_feature_flag(name: str, default: bool = True) -> bool:
-    val = os.environ.get(name)
-    if val is None:
-        return default
-    return val.lower() in ("true", "1", "yes", "on")
+def get_feature_flag(name: str, default: bool = True, user_id: Optional[str] = None, project_id: Optional[str] = None) -> bool:
+    from core.feature_flags import get_feature_flag as gf
+    return gf(name, user_id=user_id, project_id=project_id, default=default)
 
 def log_structured_event(
     event_name: str,
@@ -189,7 +187,7 @@ def get_run_trace_db(
     user_id: Optional[str] = None
 ) -> Optional[Dict]:
     """Fetch a run trace by trace_id. Optionally filter by user_id for ownership."""
-    if not get_feature_flag("ENABLE_TRACE_LOGGING", True):
+    if not get_feature_flag("ENABLE_TRACE_LOGGING", default=True, user_id=user_id):
         return None
 
     try:

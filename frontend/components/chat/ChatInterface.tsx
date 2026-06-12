@@ -140,17 +140,27 @@ export function ChatInterface() {
     const structured = snapshot.final_structured_output || {}
     const parts: string[] = []
 
-    if (structured.title) parts.push(`## ${structured.title}`)
-    if (structured.priority_bucket) parts.push(`**Priority:** ${structured.priority_bucket}`)
-    if (structured.priority_score) parts.push(`**Priority Score:** ${structured.priority_score}/100`)
-    if (structured.recommended_fix) parts.push(`\n### Recommended Fix\n${structured.recommended_fix}`)
-    if (structured.implementation_steps) parts.push(`\n### Implementation Steps\n${structured.implementation_steps}`)
-    if (structured.verification_steps) parts.push(`\n### Verification Steps\n${structured.verification_steps}`)
-    if (structured.evidence) {
-      const evidenceStr = typeof structured.evidence === "string"
-        ? structured.evidence
-        : JSON.stringify(structured.evidence, null, 2)
-      parts.push(`\n### Evidence\n${evidenceStr}`)
+    // Use normalized convenience fields first, then fall back to raw structured output keys
+    const title = snapshot.title || structured.action_title || structured.title
+    const bucket = snapshot.priority_bucket || structured.final_priority_bucket || structured.priority_bucket
+    const score = snapshot.priority_score ?? structured.priority_score
+    const fix = snapshot.action_description || structured.action_description || structured.recommended_fix
+    const summary = snapshot.executive_summary || structured.executive_summary
+    const decision = snapshot.final_decision || structured.final_decision
+    const checklist = snapshot.checklist || structured.checklist
+    const verification = snapshot.verification_method || structured.verification_method || structured.verification_steps
+    const confidence = snapshot.confidence ?? structured.final_confidence
+
+    if (title) parts.push(`## ${title}`)
+    if (summary) parts.push(`\n${summary}`)
+    if (bucket) parts.push(`\n**Priority:** ${bucket}`)
+    if (score) parts.push(`**Priority Score:** ${score}/10`)
+    if (confidence) parts.push(`**Confidence:** ${confidence}/10`)
+    if (fix) parts.push(`\n### Recommended Fix\n${fix}`)
+    if (decision) parts.push(`\n### Final Decision\n${decision}`)
+    if (verification) parts.push(`\n### Verification\n${typeof verification === "string" ? verification : JSON.stringify(verification, null, 2)}`)
+    if (checklist && Array.isArray(checklist)) {
+      parts.push(`\n### Checklist\n${checklist.map((item: string) => `- [ ] ${item}`).join("\n")}`)
     }
 
     if (parts.length === 0) {

@@ -571,13 +571,24 @@ export interface RunTraceResponse {
   provider: string | null
   latency_ms: number | null
   replay_snapshot?: {
+    // Raw structured output
     final_structured_output?: Record<string, any>
     scoring_inputs?: Record<string, any>
-    action_plan_created?: boolean
+    // Normalized convenience fields
     final_answer_available?: boolean
-    agents_consulted?: string[]
     confidence?: number
+    agents_consulted?: string[]
+    action_plan_created?: boolean
     latency_ms?: number
+    // Key decision fields (mapped from LLM output)
+    title?: string
+    priority_score?: number
+    priority_bucket?: string
+    action_description?: string
+    executive_summary?: string
+    checklist?: string[]
+    verification_method?: string
+    final_decision?: string
   }
 }
 

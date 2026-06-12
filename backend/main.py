@@ -2123,15 +2123,41 @@ async def get_run_trace(
     metadata = trace.get("metadata") or {}
     if trace.get("status") == "completed" and metadata.get("replay_snapshot"):
         snapshot = metadata["replay_snapshot"]
-        # Filter to safe fields only
+        fso = snapshot.get("final_structured_output") or {}
+
+        # Normalize convenience fields from actual structured output keys
+        confidence = (
+            snapshot.get("confidence")
+            or fso.get("final_confidence")
+            or (snapshot.get("scoring_inputs") or {}).get("confidence")
+        )
+        if confidence is not None:
+            try:
+                confidence = float(confidence)
+            except (ValueError, TypeError):
+                confidence = None
+
         response["replay_snapshot"] = {
-            "final_structured_output": snapshot.get("final_structured_output"),
+            # Raw structured output (all LLM decision fields)
+            "final_structured_output": fso,
             "scoring_inputs": snapshot.get("scoring_inputs"),
-            "action_plan_created": snapshot.get("action_plan_created"),
-            "final_answer_available": snapshot.get("final_answer_available"),
+
+            # Normalized convenience fields
+            "final_answer_available": bool(fso),
+            "confidence": confidence,
             "agents_consulted": snapshot.get("agents_consulted"),
-            "confidence": snapshot.get("confidence"),
-            "latency_ms": snapshot.get("latency_ms"),
+            "action_plan_created": snapshot.get("action_plan_created", False),
+            "latency_ms": snapshot.get("latency_ms") or trace.get("latency_ms"),
+
+            # Key decision fields (mapped from actual LLM output keys)
+            "title": fso.get("action_title") or fso.get("title"),
+            "priority_score": fso.get("priority_score"),
+            "priority_bucket": fso.get("final_priority_bucket") or fso.get("priority_bucket"),
+            "action_description": fso.get("action_description") or fso.get("recommended_fix"),
+            "executive_summary": fso.get("executive_summary"),
+            "checklist": fso.get("checklist"),
+            "verification_method": fso.get("verification_method") or fso.get("verification_steps"),
+            "final_decision": fso.get("final_decision"),
         }
 
     return response
